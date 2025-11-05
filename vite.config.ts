@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icon.svg"],
+      includeAssets: ["logo.png", "logo-512.png", "logo-192.png", "logo-64.png"],
       manifest: {
         name: "Barefoot Blender",
         short_name: "Blender",
@@ -18,14 +18,19 @@ export default defineConfig({
         orientation: "portrait",
         icons: [
           {
-            src: "icon.svg",
+            src: "logo-192.png",
             sizes: "192x192",
-            type: "image/svg+xml"
+            type: "image/png"
           },
           {
-            src: "icon.svg",
+            src: "logo-512.png",
             sizes: "512x512",
-            type: "image/svg+xml"
+            type: "image/png"
+          },
+          {
+            src: "logo.png",
+            sizes: "1024x1024",
+            type: "image/png"
           }
         ]
       }

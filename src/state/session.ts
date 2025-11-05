@@ -35,13 +35,23 @@ export type UtilityInputs = {
   densityDepth: number;
 };
 
+export type TopOffInput = {
+  startO2: number;
+  startHe: number;
+  startPressure: number;
+  finalPressure: number;
+  topGasId: string;
+};
+
 export type SessionState = {
   standardBlend: StandardBlendInput;
   multiGas: MultiGasInput;
   utilities: UtilityInputs;
+  topOff: TopOffInput;
   setStandardBlend: (value: StandardBlendInput) => void;
   setMultiGas: (value: MultiGasInput) => void;
   setUtilities: (value: Partial<UtilityInputs>) => void;
+  setTopOff: (value: TopOffInput) => void;
 };
 
 type SessionSetter = (
@@ -83,6 +93,13 @@ const defaultValues = {
     densityO2: 21,
     densityHe: 35,
     densityDepth: 150
+  },
+  topOff: {
+    startO2: 32,
+    startHe: 0,
+    startPressure: 500,
+    finalPressure: 3000,
+    topGasId: "air"
   }
 };
 
@@ -90,10 +107,12 @@ const sessionCreator = (set: SessionSetter): SessionState => ({
   standardBlend: { ...defaultValues.standardBlend },
   multiGas: { ...defaultValues.multiGas },
   utilities: { ...defaultValues.utilities },
+  topOff: { ...defaultValues.topOff },
   setStandardBlend: (value) => set({ standardBlend: value }),
   setMultiGas: (value) => set({ multiGas: value }),
   setUtilities: (value) =>
-    set((state) => ({ utilities: { ...state.utilities, ...value } }))
+    set((state) => ({ utilities: { ...state.utilities, ...value } })),
+  setTopOff: (value) => set({ topOff: value })
 });
 
 export const useSessionStore = create<SessionState>()(

@@ -1,5 +1,5 @@
 import type { DepthUnit, GasDefinition, PressureUnit } from "../state/settings";
-import type { StandardBlendInput, MultiGasInput } from "../state/session";
+import type { StandardBlendInput, MultiGasInput, TopOffInput } from "../state/session";
 import { depthPerAtm, fromDisplayPressure } from "./units";
 
 export type GasSelection = {
@@ -29,6 +29,17 @@ export type TopOffProjectionRow = {
   oxygen: number | null;
   topGas: number | null;
   feasible: boolean;
+};
+
+export type TopOffResult = {
+  success: boolean;
+  finalO2: number;
+  finalHe: number;
+  finalN2: number;
+  finalPressure: number;
+  addedPressure: number;
+  warnings: string[];
+  errors: string[];
 };
 
 type BlendInputs = {
@@ -380,6 +391,138 @@ export const projectTopOffChart = (
       feasible: true
     };
   });
+};
+
+export const calculateTopOffBlend = (
+  settings: { pressureUnit: PressureUnit },
+  inputs: TopOffInput,
+  topGas: GasSelection
+): TopOffResult => {
+  const startPressurePsi = fromDisplayPressure(inputs.startPressure, settings.pressureUnit);
+  const finalPressurePsi = fromDisplayPressure(inputs.finalPressure, settings.pressureUnit);
+
+  if (finalPressurePsi <= tolerance) {
+    return {
+      success: false,
+      finalO2: 0,
+      finalHe: 0,
+      finalN2: 0,
+      finalPressure: finalPressurePsi,
+      addedPressure: 0,
+      warnings: [],
+      errors: ["Final pressure must be greater than zero."]
+    };
+  }
+
+  if (startPressurePsi < 0) {
+    return {
+      success: false,
+      finalO2: 0,
+      finalHe: 0,
+      finalN2: 0,
+      finalPressure: finalPressurePsi,
+      addedPressure: 0,
+      warnings: [],
+      errors: ["Start pressure cannot be negative."]
+    };
+  }
+
+  const addedPressurePsi = finalPressurePsi - startPressurePsi;
+  if (addedPressurePsi < -tolerance) {
+    return {
+      success: false,
+      finalO2: 0,
+      finalHe: 0,
+      finalN2: 0,
+      finalPressure: finalPressurePsi,
+      addedPressure: 0,
+      warnings: [],
+      errors: ["Final pressure is below current pressure. Bleed-down required."]
+    };
+  }
+
+  const startCheck = sanitizeMix(inputs.startO2, inputs.startHe);
+  if (!startCheck.valid) {
+    return {
+      success: false,
+      finalO2: 0,
+      finalHe: 0,
+      finalN2: 0,
+      finalPressure: finalPressurePsi,
+      addedPressure: 0,
+      warnings: [],
+      errors: [startCheck.message ?? "Invalid start mix."]
+    };
+  }
+
+  const topCheck = sanitizeMix(topGas.o2, topGas.he);
+  if (!topCheck.valid) {
+    return {
+      success: false,
+      finalO2: 0,
+      finalHe: 0,
+      finalN2: 0,
+      finalPressure: finalPressurePsi,
+      addedPressure: 0,
+      warnings: [],
+      errors: [topCheck.message ?? "Invalid top-off mix."]
+    };
+  }
+
+  if (startPressurePsi <= tolerance && addedPressurePsi <= tolerance) {
+    return {
+      success: false,
+      finalO2: 0,
+      finalHe: 0,
+      finalN2: 0,
+      finalPressure: finalPressurePsi,
+      addedPressure: 0,
+      warnings: [],
+      errors: ["No gas in cylinder. Add pressure or adjust inputs."]
+    };
+  }
+
+  const totalPressurePsi = Math.max(finalPressurePsi, tolerance);
+  const addedGasPsi = Math.max(0, addedPressurePsi);
+
+  const startO2Fraction = fraction(inputs.startO2);
+  const startHeFraction = fraction(inputs.startHe);
+  const startN2Fraction = Math.max(0, 1 - startO2Fraction - startHeFraction);
+
+  const topO2Fraction = fraction(topGas.o2);
+  const topHeFraction = fraction(topGas.he);
+  const topN2Fraction = Math.max(0, 1 - topO2Fraction - topHeFraction);
+
+  const totalO2 = startPressurePsi * startO2Fraction + addedGasPsi * topO2Fraction;
+  const totalHe = startPressurePsi * startHeFraction + addedGasPsi * topHeFraction;
+  const totalN2 = startPressurePsi * startN2Fraction + addedGasPsi * topN2Fraction;
+
+  const finalO2Fraction = Math.max(0, Math.min(1, totalO2 / totalPressurePsi));
+  const finalHeFraction = Math.max(0, Math.min(1, totalHe / totalPressurePsi));
+  const finalN2Fraction = Math.max(0, Math.min(1, totalN2 / totalPressurePsi));
+
+  const finalO2Percent = finalO2Fraction * 100;
+  const finalHePercent = finalHeFraction * 100;
+  const finalN2Percent = Math.max(0, Math.min(100, finalN2Fraction * 100));
+
+  const warnings: string[] = [];
+  if (finalO2Percent < 18) {
+    warnings.push("Hypoxic mix (<18% O2).");
+  }
+  if (finalO2Percent > 40) {
+    warnings.push("High O2 - fire risk (>40% O2).");
+  }
+
+  return {
+    success: true,
+    finalO2: finalO2Percent,
+    finalHe: finalHePercent,
+    finalN2: finalN2Percent,
+    finalPressure: finalPressurePsi,
+    addedPressure: addedGasPsi,
+    warnings,
+    errors: []
+  };
 };
 
 export const calculateMultiGasBlend = (
