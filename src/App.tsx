@@ -19,17 +19,19 @@ const App = (): JSX.Element => {
       <header className="app-header">
         <div className="app-brand">
           <img className="app-logo" src="/logo-64.png" alt="Barefoot Blender logo" />
-          <div>
+          <div className="app-title-group">
             <div className="app-title">Barefoot Blender</div>
-            <div className="tag">Progressive Web App</div>
+            <div className="app-subtitle">Trimix Gas Blending Toolkit</div>
           </div>
         </div>
-        <button className="settings-button" type="button" onClick={() => setSettingsOpen(true)}>
-          Settings
-        </button>
+        <div className="app-actions">
+          <button className="settings-button" type="button" onClick={() => setSettingsOpen(true)}>
+            Settings
+          </button>
+        </div>
       </header>
 
-      <nav className="tab-bar">
+      <nav className="app-nav">
         <button
           className={`tab-button ${activeTab === "standard" ? "active" : ""}`}
           type="button"

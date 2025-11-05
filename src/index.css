@@ -42,45 +42,65 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
 }
 
 .app-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .app-logo {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
+  width: 96px;
+  height: 96px;
+  border-radius: 20px;
   border: 1px solid rgba(148, 163, 184, 0.4);
   background: rgba(15, 23, 42, 0.9);
   object-fit: cover;
-  box-shadow: 0 6px 16px -12px rgba(56, 189, 248, 0.8);
+  box-shadow: 0 14px 28px -20px rgba(56, 189, 248, 0.85);
+}
+
+.app-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .app-title {
-  font-size: 1.25rem;
+  font-size: 1.4rem;
   font-weight: 600;
 }
 
-.tab-bar {
+.app-subtitle {
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.app-actions {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-nav {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
 .tab-button {
   border: 1px solid rgba(148, 163, 184, 0.4);
   background: rgba(15, 23, 42, 0.6);
   color: #e2e8f0;
-  padding: 8px 16px;
+  padding: 12px 20px;
   border-radius: 9999px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, transform 0.15s ease;
+  width: 100%;
 }
 
 .tab-button.active {
@@ -91,6 +111,7 @@ button {
 
 .tab-button:hover {
   background: rgba(56, 189, 248, 0.2);
+  transform: translateY(-1px);
 }
 
 .content {
