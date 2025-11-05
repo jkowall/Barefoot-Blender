@@ -52,18 +52,16 @@ Barefoot Blender/
 └─ vite.config.ts                 # Build and PWA configuration
 ```
 
-## Cloudflare Pages Deployment
+## Cloudflare Deployment
 
-GitHub Actions in `.github/workflows/deploy.yml` automate linting, building, and publishing to Cloudflare Pages.
+Deployments are handled manually with Wrangler after a local build:
 
-1. Create or select a Cloudflare Pages project for the site.
-2. Add required secrets in the GitHub repository settings:
-	- `CLOUDFLARE_API_TOKEN` – Deployment token scoped to the Pages project.
-	- `CLOUDFLARE_ACCOUNT_ID` – Your Cloudflare account identifier.
-	- `CLOUDFLARE_PROJECT_NAME` – The Pages project slug (e.g., `barefoot-blender`).
-3. Push commits to `main` or trigger the workflow manually. Successful runs upload the `dist/` build output to Pages.
+```bash
+npm run build
+npx wrangler deploy
+```
 
-The workflow uses Node 20, caches npm dependencies, runs `npm run lint`, and executes `npm run build` before deployment.
+Ensure you are authenticated with Cloudflare (`npx wrangler login`) and that `wrangler.jsonc` points to the correct asset directory.
 
 ## Persistence & Offline Behavior
 
