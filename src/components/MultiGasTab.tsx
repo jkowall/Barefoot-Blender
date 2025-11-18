@@ -21,7 +21,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const multiGas = useSessionStore((state: SessionState) => state.multiGas);
   const setMultiGas = useSessionStore((state: SessionState) => state.setMultiGas);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ label: string; amount: number }[] | null>(null);
+  const [result, setResult] = useState<{ label: string; amount: number; total: number }[] | null>(null);
   const [outcomeMeta, setOutcomeMeta] = useState<{ finalO2: number; finalHe: number; warning?: string } | null>(null);
 
   const sanitizeCustomMix = (o2: number, he: number): { o2: number; he: number } => {
@@ -92,10 +92,13 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     }
 
     setError(null);
-    setResult([
-      { label: `Add ${gas1.name}`, amount: outcome.steps[0].amount },
-      { label: `Add ${gas2.name}`, amount: outcome.steps[1].amount }
-    ]);
+    const cumulative: { label: string; amount: number; total: number }[] = [];
+    let runningPsi = 0;
+    outcome.steps.forEach((step) => {
+      runningPsi += step.amount;
+      cumulative.push({ label: `Add ${step.gas}`, amount: step.amount, total: runningPsi });
+    });
+    setResult(cumulative);
     setOutcomeMeta({ finalO2: outcome.finalO2 ?? multiGas.targetO2, finalHe: outcome.finalHe ?? 0, warning: outcome.warning });
   };
 
@@ -259,6 +262,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             {result.map((step, index) => (
               <li key={step.label}>
                 {index + 1}. {step.label}: {formatPressure(step.amount, settings.pressureUnit)}
+                <span className="result-step-total">{"->"} Tank @ {formatPressure(step.total, settings.pressureUnit)}</span>
               </li>
             ))}
           </ol>

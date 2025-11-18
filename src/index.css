@@ -240,6 +240,12 @@ button {
   gap: 6px;
 }
 
+.result-step-total {
+  margin-left: 8px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
 .reverse-block {
   padding: 12px;
   border-radius: 12px;
