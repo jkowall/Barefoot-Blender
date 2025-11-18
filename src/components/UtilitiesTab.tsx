@@ -1,4 +1,4 @@
-import { useMemo, type ChangeEvent } from "react";
+import { useMemo, type ChangeEvent, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState } from "../state/session";
 import {
@@ -65,6 +65,10 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
     setUtilities(patch);
   };
 
+  const selectOnFocus = (event: FocusEvent<HTMLInputElement>): void => {
+    event.target.select();
+  };
+
   return (
     <>
       <section className="card">
@@ -78,6 +82,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               max={100}
               step={0.1}
               value={utilities.modGasO2}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ modGasO2: clampPercent(Number(event.target.value)) })}
             />
           </div>
@@ -88,6 +93,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               min={0}
               step={0.1}
               value={utilities.modMaxPPO2}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ modMaxPPO2: Math.max(0, Number(event.target.value)) })}
             />
           </div>
@@ -107,6 +113,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               max={100}
               step={0.1}
               value={utilities.eadO2}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ eadO2: clampPercent(Number(event.target.value)) })}
             />
           </div>
@@ -117,6 +124,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               min={0}
               step={1}
               value={utilities.eadDepth}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ eadDepth: clampDepth(Number(event.target.value)) })}
             />
           </div>
@@ -134,6 +142,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               min={0}
               step={1}
               value={utilities.bestMixDepth}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixDepth: clampDepth(Number(event.target.value)) })}
             />
           </div>
@@ -144,6 +153,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               min={0}
               step={0.1}
               value={utilities.bestMixPPO2}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixPPO2: Math.max(0, Number(event.target.value)) })}
             />
           </div>
@@ -162,6 +172,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               max={100}
               step={0.1}
               value={utilities.endO2}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ endO2: clampPercent(Number(event.target.value)) })}
             />
           </div>
@@ -173,6 +184,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               max={100}
               step={0.1}
               value={utilities.endHe}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ endHe: clampPercent(Number(event.target.value)) })}
             />
           </div>
@@ -183,6 +195,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               min={0}
               step={1}
               value={utilities.endDepth}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ endDepth: clampDepth(Number(event.target.value)) })}
             />
           </div>
@@ -202,6 +215,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               max={100}
               step={0.1}
               value={utilities.densityO2}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ densityO2: clampPercent(Number(event.target.value)) })}
             />
           </div>
@@ -213,6 +227,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               max={100}
               step={0.1}
               value={utilities.densityHe}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ densityHe: clampPercent(Number(event.target.value)) })}
             />
           </div>
@@ -223,6 +238,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               min={0}
               step={1}
               value={utilities.densityDepth}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ densityDepth: clampDepth(Number(event.target.value)) })}
             />
           </div>

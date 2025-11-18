@@ -4,10 +4,11 @@ Barefoot Blender is an offline-first Progressive Web App that assists scuba dive
 
 ## Features
 
-- **Standard Blend Planner** – Partial pressure blending with automatic bleed-down solutions, warnings, and a multi-scenario top-off chart.
-- **Multi-Gas Nitrox Mixing** – Linear solver for filling from two banked gases with support for custom oxygen percentages.
-- **Dive Utilities** – MOD, EAD, Best Mix, END, and density calculators that honor global PPO2 and narcotic settings.
-- **Persistent Settings** – Local storage of preferred units, PPO2 defaults, narcotic rules, and custom banked gases.
+- **Standard Blend Planner** – Partial pressure blending with automatic bleed-down solutions, warnings, an interactive sensitivity slider, and reverse solvers for required start pressure and helium-free targets.
+- **Top-Off What-If** – Quick projections for topping a cylinder, including final mix readouts and a bleed/down sensitivity chart tied to the selected bank.
+- **Multi-Gas Trimix Mixing** – Linear solver for two source gases with Trimix presets, custom O₂/He mixes, target helium support, and resulting mix validation.
+- **Dive Utilities** – MOD, EAD, Best Mix, END, and density calculators that honor global PPO₂ and narcotic settings.
+- **Persistent Settings** – Local storage of preferred units, PPO₂ defaults, narcotic rules, and custom banked gases.
 - **Installable PWA** – Works fully offline after first load via Vite PWA service worker integration.
 
 ## Tech Stack
@@ -83,6 +84,10 @@ Additional background materials live in the [`docs/`](docs) directory:
 - [`docs/offline-behavior.md`](docs/offline-behavior.md)
 
 Refer to these documents for formula references, UI intent, and caching strategies.
+
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md) for a timeline of recent updates and feature additions.
 
 ## License
 

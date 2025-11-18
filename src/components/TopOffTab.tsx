@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
-import { useSessionStore, type SessionState, type TopOffInput } from "../state/session";
+import { useSessionStore, type SessionState, type TopOffInput, type StandardBlendInput } from "../state/session";
 import {
   calculateTopOffBlend,
+  projectTopOffChart,
   type GasSelection,
-  type TopOffResult
+  type TopOffResult,
+  type TopOffProjectionRow
 } from "../utils/calculations";
 import { formatPercentage, formatPressure } from "../utils/format";
 
@@ -20,6 +22,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const topOff = useSessionStore((state: SessionState) => state.topOff);
   const setTopOff = useSessionStore((state: SessionState) => state.setTopOff);
   const [result, setResult] = useState<TopOffResult | null>(null);
+  const [chart, setChart] = useState<TopOffProjectionRow[] | null>(null);
 
   const selectedTopGas = useMemo(() => {
     const match = topOffOptions.find((option) => option.id === topOff.topGasId);
@@ -36,9 +39,14 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     setTopOff({ ...topOff, [key]: value });
   }
 
+  const selectOnFocus = (event: FocusEvent<HTMLInputElement>): void => {
+    event.target.select();
+  };
+
   const onCalculate = (): void => {
     if (!selectedTopGas) {
       setResult(null);
+      setChart(null);
       return;
     }
 
@@ -48,6 +56,21 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       selectedTopGas
     );
     setResult(outcome);
+
+    if (outcome.success) {
+      const baseline: StandardBlendInput = {
+        startO2: topOff.startO2,
+        startHe: topOff.startHe,
+        startPressure: topOff.startPressure,
+        targetO2: outcome.finalO2,
+        targetHe: outcome.finalHe,
+        targetPressure: topOff.finalPressure,
+        topGasId: topOff.topGasId
+      };
+      setChart(projectTopOffChart({ pressureUnit: settings.pressureUnit }, baseline, selectedTopGas));
+    } else {
+      setChart(null);
+    }
   };
 
   return (
@@ -63,6 +86,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               max={100}
               step={0.1}
               value={topOff.startO2}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) =>
                 updateField("startO2", Number(event.target.value))
               }
@@ -77,6 +101,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               max={100}
               step={0.1}
               value={topOff.startHe}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) =>
                 updateField("startHe", Number(event.target.value))
               }
@@ -90,6 +115,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               step={settings.pressureUnit === "psi" ? 10 : 1}
               value={topOff.startPressure}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) =>
                 updateField("startPressure", Number(event.target.value))
               }
@@ -108,6 +134,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             min={0}
             step={settings.pressureUnit === "psi" ? 10 : 1}
             value={topOff.finalPressure}
+            onFocus={selectOnFocus}
             onChange={(event: ChangeEvent<HTMLInputElement>) =>
               updateField("finalPressure", Number(event.target.value))
             }
@@ -172,6 +199,53 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               {warning}
             </div>
           ))}
+        </section>
+      )}
+
+      {chart && chart.length > 0 && (
+        <section className="card">
+          <h2>Top-Off Sensitivity</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Start Pressure</th>
+                <th>Add He</th>
+                <th>Add O2</th>
+                <th>Top-Off Gas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {chart.map((row, index) => (
+                <tr key={`${row.startPressure}-${index}`}>
+                  <td>
+                    {formatPressure(row.startPressure, settings.pressureUnit)}
+                    {index === 0 && (
+                      <>
+                        {" "}
+                        <span className="tag">Actual</span>
+                      </>
+                    )}
+                  </td>
+                  <td>
+                    {row.feasible && row.helium !== null
+                      ? formatPressure(row.helium, settings.pressureUnit)
+                      : "Drain"}
+                  </td>
+                  <td>
+                    {row.feasible && row.oxygen !== null
+                      ? formatPressure(row.oxygen, settings.pressureUnit)
+                      : "Drain"}
+                  </td>
+                  <td>
+                    {row.feasible && row.topGas !== null
+                      ? formatPressure(row.topGas, settings.pressureUnit)
+                      : "Drain"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="table-note">Projection varies starting pressure in fixed increments using the selected top-off gas.</div>
         </section>
       )}
     </>

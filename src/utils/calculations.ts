@@ -1,6 +1,6 @@
 import type { DepthUnit, GasDefinition, PressureUnit } from "../state/settings";
 import type { StandardBlendInput, MultiGasInput, TopOffInput } from "../state/session";
-import { depthPerAtm, fromDisplayPressure } from "./units";
+import { depthPerAtm, fromDisplayPressure, toDisplayPressure } from "./units";
 
 export type GasSelection = {
   id: string;
@@ -21,6 +21,12 @@ export type BlendResult = {
   warnings: string[];
   errors: string[];
   bleedPressure?: number;
+};
+
+export type BlendVolumes = {
+  helium: number;
+  oxygen: number;
+  topoff: number;
 };
 
 export type TopOffProjectionRow = {
@@ -236,6 +242,30 @@ const findBleedSolution = (inputs: BlendInputs): SolveOutcome & { bleedPressure?
   return best;
 };
 
+export const summarizeBlendVolumes = (result: BlendResult): BlendVolumes => {
+  const summary: BlendVolumes = {
+    helium: 0,
+    oxygen: 0,
+    topoff: 0
+  };
+
+  if (!result.success) {
+    return summary;
+  }
+
+  for (const step of result.steps) {
+    if (step.kind === "helium") {
+      summary.helium += step.amount;
+    } else if (step.kind === "oxygen") {
+      summary.oxygen += step.amount;
+    } else if (step.kind === "topoff") {
+      summary.topoff += step.amount;
+    }
+  }
+
+  return summary;
+};
+
 export const calculateStandardBlend = (
   settings: { pressureUnit: PressureUnit },
   inputs: StandardBlendInput,
@@ -393,6 +423,159 @@ export const projectTopOffChart = (
   });
 };
 
+export type StartPressureSolveResult = {
+  success: boolean;
+  startPressurePsi: number;
+  blend: BlendResult | null;
+  warnings: string[];
+  errors: string[];
+};
+
+export const solveRequiredStartPressure = (
+  settings: { pressureUnit: PressureUnit },
+  inputs: StandardBlendInput,
+  topGas: GasSelection
+): StartPressureSolveResult => {
+  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure, settings.pressureUnit);
+  if (targetPressurePsi <= tolerance) {
+    return {
+      success: false,
+      startPressurePsi: 0,
+      blend: null,
+      warnings: [],
+      errors: ["Target pressure must be greater than zero."]
+    };
+  }
+
+  const evaluate = (startPsi: number): BlendResult => {
+    const candidate: StandardBlendInput = {
+      ...inputs,
+      startPressure: toDisplayPressure(startPsi, settings.pressureUnit)
+    };
+    return calculateStandardBlend(settings, candidate, topGas);
+  };
+
+  const upper = evaluate(targetPressurePsi);
+  const upperVolumes = summarizeBlendVolumes(upper);
+  if (!upper.success || upper.steps.some((step) => step.kind === "bleed") || upperVolumes.helium > tolerance) {
+    return {
+      success: false,
+      startPressurePsi: 0,
+      blend: null,
+      warnings: [],
+      errors: ["Target cannot be met without adding helium at full cylinder pressure."]
+    };
+  }
+
+  let low = 0;
+  let high = targetPressurePsi;
+  let best: { startPsi: number; result: BlendResult } | null = { startPsi: targetPressurePsi, result: upper };
+
+  for (let i = 0; i < 50; i += 1) {
+    const mid = (low + high) / 2;
+    const attempt = evaluate(mid);
+    if (!attempt.success || attempt.steps.some((step) => step.kind === "bleed")) {
+      low = mid;
+      continue;
+    }
+
+    const volumes = summarizeBlendVolumes(attempt);
+    if (volumes.helium <= tolerance) {
+      best = { startPsi: mid, result: attempt };
+      high = mid;
+    } else {
+      low = mid;
+    }
+  }
+
+  if (!best) {
+    return {
+      success: false,
+      startPressurePsi: 0,
+      blend: null,
+      warnings: [],
+      errors: ["Unable to determine required start pressure without helium addition."]
+    };
+  }
+
+  return {
+    success: true,
+    startPressurePsi: best.startPsi,
+    blend: best.result,
+    warnings: best.result.warnings,
+    errors: []
+  };
+};
+
+export type NoHeliumTargetResult = {
+  success: boolean;
+  targetHe: number;
+  blend: BlendResult | null;
+  warnings: string[];
+  errors: string[];
+};
+
+export const solveMaxTargetWithoutHelium = (
+  settings: { pressureUnit: PressureUnit },
+  inputs: StandardBlendInput,
+  topGas: GasSelection
+): NoHeliumTargetResult => {
+  const maxHe = Math.max(0, Math.min(100 - inputs.targetO2, 100));
+  if (maxHe <= tolerance) {
+    return {
+      success: true,
+      targetHe: 0,
+      blend: calculateStandardBlend(settings, { ...inputs, targetHe: 0 }, topGas),
+      warnings: [],
+      errors: []
+    };
+  }
+
+  let low = 0;
+  let high = maxHe;
+  let best: { he: number; result: BlendResult } | null = null;
+
+  for (let i = 0; i < 50; i += 1) {
+    const mid = (low + high) / 2;
+    const candidate: StandardBlendInput = {
+      ...inputs,
+      targetHe: mid
+    };
+    const attempt = calculateStandardBlend(settings, candidate, topGas);
+
+    if (!attempt.success || attempt.steps.some((step) => step.kind === "bleed")) {
+      high = mid;
+      continue;
+    }
+
+    const volumes = summarizeBlendVolumes(attempt);
+    if (volumes.helium <= tolerance) {
+      best = { he: mid, result: attempt };
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+
+  if (!best) {
+    return {
+      success: false,
+      targetHe: 0,
+      blend: null,
+      warnings: [],
+      errors: ["Unable to achieve a target mix without helium addition."]
+    };
+  }
+
+  return {
+    success: true,
+    targetHe: best.he,
+    blend: best.result,
+    warnings: best.result.warnings,
+    errors: []
+  };
+};
+
 export const calculateTopOffBlend = (
   settings: { pressureUnit: PressureUnit },
   inputs: TopOffInput,
@@ -530,32 +713,74 @@ export const calculateMultiGasBlend = (
   inputs: MultiGasInput,
   gas1: GasSelection,
   gas2: GasSelection
-): { success: boolean; steps: { gas: string; amount: number }[]; error?: string } => {
+): {
+  success: boolean;
+  steps: { gas: string; amount: number }[];
+  finalO2?: number;
+  finalHe?: number;
+  error?: string;
+  warning?: string;
+} => {
   const targetPressurePsi = fromDisplayPressure(inputs.targetPressure, settings.pressureUnit);
+  if (targetPressurePsi <= tolerance) {
+    return {
+      success: false,
+      steps: [],
+      error: "Target pressure must be greater than zero."
+    };
+  }
+
   const targetO2Fraction = fraction(inputs.targetO2);
+  const targetHeFraction = fraction(inputs.targetHe ?? 0);
+  if (targetO2Fraction + targetHeFraction > 1 + tolerance) {
+    return {
+      success: false,
+      steps: [],
+      error: "O2 + He must be 100% or less."
+    };
+  }
 
   const gas1O2Fraction = fraction(gas1.o2);
+  const gas1HeFraction = fraction(gas1.he);
   const gas2O2Fraction = fraction(gas2.o2);
+  const gas2HeFraction = fraction(gas2.he);
 
-  if (inputs.targetO2 < Math.min(gas1.o2, gas2.o2) - 1e-6 || inputs.targetO2 > Math.max(gas1.o2, gas2.o2) + 1e-6) {
-    return {
-      success: false,
-      steps: [],
-      error: "Target O2% must lie between Gas 1 and Gas 2 O2%."
-    };
+  const demandO2 = targetPressurePsi * targetO2Fraction;
+  const demandHe = targetPressurePsi * targetHeFraction;
+
+  const determinant = gas1O2Fraction * gas2HeFraction - gas2O2Fraction * gas1HeFraction;
+
+  let gas1Pressure: number | null = null;
+  let gas2Pressure: number | null = null;
+  let usedTrimixSolver = false;
+
+  if (Math.abs(determinant) > tolerance && (targetHeFraction > tolerance || gas1HeFraction > tolerance || gas2HeFraction > tolerance)) {
+    usedTrimixSolver = true;
+    gas1Pressure = (demandO2 * gas2HeFraction - demandHe * gas2O2Fraction) / determinant;
+    gas2Pressure = (gas1O2Fraction * demandHe - gas1HeFraction * demandO2) / determinant;
   }
 
-  const denominator = gas1O2Fraction - gas2O2Fraction;
-  if (Math.abs(denominator) < tolerance) {
-    return {
-      success: false,
-      steps: [],
-      error: "Source gases must have different O2 percentages."
-    };
-  }
+  if (gas1Pressure === null || gas2Pressure === null) {
+    if (inputs.targetO2 < Math.min(gas1.o2, gas2.o2) - 1e-6 || inputs.targetO2 > Math.max(gas1.o2, gas2.o2) + 1e-6) {
+      return {
+        success: false,
+        steps: [],
+        error: "Target O2% must lie between Gas 1 and Gas 2 O2%."
+      };
+    }
 
-  const gas1Pressure = targetPressurePsi * (targetO2Fraction - gas2O2Fraction) / denominator;
-  const gas2Pressure = targetPressurePsi - gas1Pressure;
+    const denominator = gas1O2Fraction - gas2O2Fraction;
+    if (Math.abs(denominator) < tolerance) {
+      return {
+        success: false,
+        steps: [],
+        error: "Source gases must have different O2 percentages."
+      };
+    }
+
+    gas1Pressure = targetPressurePsi * (targetO2Fraction - gas2O2Fraction) / denominator;
+    gas2Pressure = targetPressurePsi - gas1Pressure;
+  }
 
   if (gas1Pressure < -tolerance || gas2Pressure < -tolerance) {
     return {
@@ -565,12 +790,46 @@ export const calculateMultiGasBlend = (
     };
   }
 
+  const sanitizedGas1 = Math.max(0, gas1Pressure);
+  const sanitizedGas2 = Math.max(0, gas2Pressure);
+  const totalPressure = sanitizedGas1 + sanitizedGas2;
+
+  if (totalPressure <= tolerance) {
+    return {
+      success: false,
+      steps: [],
+      error: "Unable to compute source gas contributions."
+    };
+  }
+
+  if (Math.abs(totalPressure - targetPressurePsi) > Math.max(5, targetPressurePsi * 0.01)) {
+    return {
+      success: false,
+      steps: [],
+      error: "Selected sources cannot meet the target composition at this pressure."
+    };
+  }
+
+  const resultO2 = (sanitizedGas1 * gas1O2Fraction + sanitizedGas2 * gas2O2Fraction) / totalPressure * 100;
+  const resultHe = (sanitizedGas1 * gas1HeFraction + sanitizedGas2 * gas2HeFraction) / totalPressure * 100;
+
+  let warning: string | undefined;
+  if (usedTrimixSolver) {
+    const heError = Math.abs(resultHe - inputs.targetHe);
+    if (heError > 0.5) {
+      warning = "Helium target may require additional trimming with oxygen or helium.";
+    }
+  }
+
   return {
     success: true,
     steps: [
-      { gas: gas1.name, amount: Math.max(0, gas1Pressure) },
-      { gas: gas2.name, amount: Math.max(0, gas2Pressure) }
-    ]
+      { gas: gas1.name, amount: sanitizedGas1 },
+      { gas: gas2.name, amount: sanitizedGas2 }
+    ],
+    finalO2: resultO2,
+    finalHe: resultHe,
+    warning
   };
 };
 

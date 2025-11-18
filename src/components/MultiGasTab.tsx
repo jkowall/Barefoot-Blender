@@ -1,10 +1,16 @@
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type MultiGasInput } from "../state/session";
 import { calculateMultiGasBlend, type GasSelection } from "../utils/calculations";
 import { formatPressure } from "../utils/format";
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
+
+const trimixPresets: GasSelection[] = [
+  { id: "trimix-2135", name: "Trimix 21/35", o2: 21, he: 35 },
+  { id: "trimix-1845", name: "Trimix 18/45", o2: 18, he: 45 },
+  { id: "trimix-1555", name: "Trimix 15/55", o2: 15, he: 55 }
+];
 
 type Props = {
   settings: SettingsSnapshot;
@@ -16,28 +22,58 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const setMultiGas = useSessionStore((state: SessionState) => state.setMultiGas);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ label: string; amount: number }[] | null>(null);
+  const [outcomeMeta, setOutcomeMeta] = useState<{ finalO2: number; finalHe: number; warning?: string } | null>(null);
 
-  const options = useMemo(() => [{ id: "custom", name: "Custom", o2: 0, he: 0 }, ...topOffOptions], [topOffOptions]);
+  const sanitizeCustomMix = (o2: number, he: number): { o2: number; he: number } => {
+    const nextO2 = clampPercent(o2);
+    const maxHe = 100 - nextO2;
+    const nextHe = Math.min(maxHe, Math.max(0, he));
+    return { o2: nextO2, he: nextHe };
+  };
 
-  const resolveGasSelection = (id: string, customO2?: number): GasSelection | null => {
+  const options = useMemo(() => {
+    const custom = sanitizeCustomMix(multiGas.gas1CustomO2 ?? 32, multiGas.gas1CustomHe ?? 0);
+    return [
+      ...trimixPresets,
+      { id: "custom", name: `Custom (${custom.o2.toFixed(1)} O2 / ${custom.he.toFixed(1)} He)`, o2: custom.o2, he: custom.he },
+      ...topOffOptions
+    ];
+  }, [multiGas.gas1CustomHe, multiGas.gas1CustomO2, topOffOptions]);
+
+  const optionForGas2 = useMemo(() => {
+    const custom = sanitizeCustomMix(multiGas.gas2CustomO2 ?? 36, multiGas.gas2CustomHe ?? 0);
+    return [
+      ...trimixPresets,
+      { id: "custom", name: `Custom (${custom.o2.toFixed(1)} O2 / ${custom.he.toFixed(1)} He)`, o2: custom.o2, he: custom.he },
+      ...topOffOptions
+    ];
+  }, [multiGas.gas2CustomHe, multiGas.gas2CustomO2, topOffOptions]);
+
+  const resolveGasSelection = (id: string, customO2?: number, customHe?: number): GasSelection | null => {
     if (id === "custom") {
-      const o2 = customO2 ?? 32;
-      return { id: "custom", name: `Custom (${o2.toFixed(1)}% O2)`, o2, he: 0 };
+      const { o2, he } = sanitizeCustomMix(customO2 ?? 32, customHe ?? 0);
+      return { id: "custom", name: `Custom (${o2.toFixed(1)} O2 / ${he.toFixed(1)} He)`, o2, he };
     }
-    return topOffOptions.find((option) => option.id === id) ?? null;
+    return topOffOptions.find((option) => option.id === id) ?? trimixPresets.find((preset) => preset.id === id) ?? null;
   };
 
   const updateField = (patch: Partial<MultiGasInput>): void => {
     setMultiGas({ ...multiGas, ...patch });
   };
 
+  const selectOnFocus = (event: FocusEvent<HTMLInputElement>): void => {
+    event.target.select();
+  };
+
+
   const onCalculate = (): void => {
-    const gas1 = resolveGasSelection(multiGas.gas1Id, multiGas.gas1CustomO2);
-    const gas2 = resolveGasSelection(multiGas.gas2Id, multiGas.gas2CustomO2);
+    const gas1 = resolveGasSelection(multiGas.gas1Id, multiGas.gas1CustomO2, multiGas.gas1CustomHe);
+    const gas2 = resolveGasSelection(multiGas.gas2Id, multiGas.gas2CustomO2, multiGas.gas2CustomHe);
 
     if (!gas1 || !gas2) {
       setError("Please select both source gases.");
       setResult(null);
+      setOutcomeMeta(null);
       return;
     }
 
@@ -51,6 +87,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     if (!outcome.success) {
       setError(outcome.error ?? "Blend cannot be computed.");
       setResult(null);
+      setOutcomeMeta(null);
       return;
     }
 
@@ -59,6 +96,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       { label: `Add ${gas1.name}`, amount: outcome.steps[0].amount },
       { label: `Add ${gas2.name}`, amount: outcome.steps[1].amount }
     ]);
+    setOutcomeMeta({ finalO2: outcome.finalO2 ?? multiGas.targetO2, finalHe: outcome.finalHe ?? 0, warning: outcome.warning });
   };
 
   return (
@@ -81,17 +119,36 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
           </div>
           {multiGas.gas1Id === "custom" && (
             <div className="field">
-              <label>Gas 1 O2 %</label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.1}
-                value={multiGas.gas1CustomO2 ?? 32}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                  updateField({ gas1CustomO2: clampPercent(Number(event.target.value)) })
-                }
-              />
+              <label>Gas 1 Mix</label>
+              <div className="dual-input">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  value={multiGas.gas1CustomO2 ?? 32}
+                  onFocus={selectOnFocus}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                    const { o2, he } = sanitizeCustomMix(Number(event.target.value), multiGas.gas1CustomHe ?? 0);
+                    updateField({ gas1CustomO2: o2, gas1CustomHe: he });
+                  }}
+                />
+                <span className="dual-separator">O2%</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  value={multiGas.gas1CustomHe ?? 0}
+                  onFocus={selectOnFocus}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                    const { o2, he } = sanitizeCustomMix(multiGas.gas1CustomO2 ?? 32, Number(event.target.value));
+                    updateField({ gas1CustomO2: o2, gas1CustomHe: he });
+                  }}
+                />
+                <span className="dual-separator">He%</span>
+              </div>
+              <div className="table-note">N2 auto-balances remaining fraction.</div>
             </div>
           )}
           <div className="field">
@@ -100,7 +157,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               value={multiGas.gas2Id}
               onChange={(event: ChangeEvent<HTMLSelectElement>) => updateField({ gas2Id: event.target.value })}
             >
-              {options.map((option) => (
+              {optionForGas2.map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.name}
                 </option>
@@ -109,17 +166,36 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
           </div>
           {multiGas.gas2Id === "custom" && (
             <div className="field">
-              <label>Gas 2 O2 %</label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.1}
-                value={multiGas.gas2CustomO2 ?? 36}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                  updateField({ gas2CustomO2: clampPercent(Number(event.target.value)) })
-                }
-              />
+              <label>Gas 2 Mix</label>
+              <div className="dual-input">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  value={multiGas.gas2CustomO2 ?? 36}
+                  onFocus={selectOnFocus}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                    const { o2, he } = sanitizeCustomMix(Number(event.target.value), multiGas.gas2CustomHe ?? 0);
+                    updateField({ gas2CustomO2: o2, gas2CustomHe: he });
+                  }}
+                />
+                <span className="dual-separator">O2%</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  value={multiGas.gas2CustomHe ?? 0}
+                  onFocus={selectOnFocus}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                    const { o2, he } = sanitizeCustomMix(multiGas.gas2CustomO2 ?? 36, Number(event.target.value));
+                    updateField({ gas2CustomO2: o2, gas2CustomHe: he });
+                  }}
+                />
+                <span className="dual-separator">He%</span>
+              </div>
+              <div className="table-note">N2 auto-balances remaining fraction.</div>
             </div>
           )}
         </div>
@@ -136,8 +212,23 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               max={100}
               step={0.1}
               value={multiGas.targetO2}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) =>
                 updateField({ targetO2: clampPercent(Number(event.target.value)) })
+              }
+            />
+          </div>
+          <div className="field">
+            <label>Target He %</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={multiGas.targetHe ?? 0}
+              onFocus={selectOnFocus}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                updateField({ targetHe: clampPercent(Number(event.target.value)) })
               }
             />
           </div>
@@ -148,6 +239,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               step={settings.pressureUnit === "psi" ? 10 : 1}
               value={multiGas.targetPressure}
+              onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) =>
                 updateField({ targetPressure: Math.max(0, Number(event.target.value)) })
               }
@@ -171,6 +263,12 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             ))}
           </ol>
         )}
+        {!error && outcomeMeta && (
+          <div className="table-note">
+            Resulting mix ≈ {outcomeMeta.finalO2.toFixed(1)}% O2 / {outcomeMeta.finalHe.toFixed(1)}% He.
+          </div>
+        )}
+        {!error && outcomeMeta?.warning && <div className="warning">{outcomeMeta.warning}</div>}
       </section>
     </>
   );
