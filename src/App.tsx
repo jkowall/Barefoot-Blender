@@ -7,6 +7,9 @@ import MultiGasTab from "./components/MultiGasTab";
 import UtilitiesTab from "./components/UtilitiesTab";
 import SettingsPanel from "./components/SettingsPanel";
 
+const APP_VERSION = __APP_VERSION__;
+const CHANGELOG_URL = "https://github.com/jkowall/Barefoot-Blender/blob/main/CHANGELOG.md";
+
 const App = (): JSX.Element => {
   const [activeTab, setActiveTab] = useState<"standard" | "topoff" | "multi" | "utilities">("standard");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -72,6 +75,13 @@ const App = (): JSX.Element => {
         {activeTab === "multi" && <MultiGasTab settings={settings} topOffOptions={topOffOptions} />}
         {activeTab === "utilities" && <UtilitiesTab settings={settings} />}
       </main>
+
+      <footer className="app-footer">
+        <span className="app-version">Version {APP_VERSION}</span>
+        <a className="app-release-link" href={CHANGELOG_URL} target="_blank" rel="noreferrer">
+          Release notes
+        </a>
+      </footer>
 
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>

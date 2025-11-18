@@ -85,6 +85,12 @@ Additional background materials live in the [`docs/`](docs) directory:
 
 Refer to these documents for formula references, UI intent, and caching strategies.
 
+## Versioning
+
+- Bump the project version in `package.json` (for example with `npm version patch`).
+- Add a corresponding entry to [`CHANGELOG.md`](CHANGELOG.md) using the `[#.#.#] - YYYY-MM-DD` format.
+- The UI footer reads the version injected at build time, so no additional code changes are required after updating `package.json`.
+
 ## Changelog
 
 See [`CHANGELOG.md`](CHANGELOG.md) for a timeline of recent updates and feature additions.
