@@ -2,6 +2,8 @@
 
 Barefoot Blender is an offline-first Progressive Web App that assists scuba divers, fill station operators, and technical teams with advanced gas blending and dive-planning utilities. The tool supports Nitrox and Trimix workflows, bleed-down guidance, top-off efficiency projections, multi-bank Nitrox mixes, and a suite of gas analysis calculators.
 
+Source code: [github.com/jkowall/Barefoot-Blender](https://github.com/jkowall/Barefoot-Blender)
+
 ## Features
 
 - **Standard Blend Planner** – Partial pressure blending with automatic bleed-down solutions, warnings, an interactive sensitivity slider, and reverse solvers for required start pressure and helium-free targets.
@@ -94,6 +96,12 @@ Refer to these documents for formula references, UI intent, and caching strategi
 ## Changelog
 
 See [`CHANGELOG.md`](CHANGELOG.md) for a timeline of recent updates and feature additions.
+
+## Credits
+
+- **Inspiration & Direction:** John Bentley, technical diving and gas-mixing expert — learn more at [barefootbentley.com](https://barefootbentley.com/) and don’t forget to follow his [YouTube channel](https://www.youtube.com/@barefootbentley).
+- **Development:** Jonah Kowall, open-source maintainer for OpenSearch and Jaeger; scuba technologist and longtime advocate of community-driven observability tooling.
+- **AI Pairing:** GitHub Copilot and OpenAI Codex (GPT-5-Codex Preview) assisted with programming and refactoring.
 
 ## License
 

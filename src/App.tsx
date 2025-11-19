@@ -9,6 +9,7 @@ import SettingsPanel from "./components/SettingsPanel";
 
 const APP_VERSION = __APP_VERSION__;
 const CHANGELOG_URL = "https://github.com/jkowall/Barefoot-Blender/blob/main/CHANGELOG.md";
+const REPO_URL = "https://github.com/jkowall/Barefoot-Blender";
 
 const App = (): JSX.Element => {
   const [activeTab, setActiveTab] = useState<"standard" | "topoff" | "multi" | "utilities">("standard");
@@ -78,9 +79,15 @@ const App = (): JSX.Element => {
 
       <footer className="app-footer">
         <span className="app-version">Version {APP_VERSION}</span>
-        <a className="app-release-link" href={CHANGELOG_URL} target="_blank" rel="noreferrer">
-          Release notes
-        </a>
+        <div className="app-footer-links">
+          <a className="app-footer-link" href={CHANGELOG_URL} target="_blank" rel="noreferrer">
+            Release notes
+          </a>
+          <span className="app-footer-separator">•</span>
+          <a className="app-footer-link" href={REPO_URL} target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+        </div>
       </footer>
 
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}

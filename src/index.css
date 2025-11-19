@@ -179,13 +179,23 @@ button {
   color: #e2e8f0;
 }
 
-.app-release-link {
+.app-footer-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-footer-link {
   color: #38bdf8;
   text-decoration: none;
 }
 
-.app-release-link:hover {
+.app-footer-link:hover {
   text-decoration: underline;
+}
+
+.app-footer-separator {
+  color: rgba(148, 163, 184, 0.5);
 }
 
 .card {
