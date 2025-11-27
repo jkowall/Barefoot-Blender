@@ -708,34 +708,32 @@ export const calculateTopOffBlend = (
   };
 };
 
-export const calculateMultiGasBlend = (
-  settings: { pressureUnit: PressureUnit },
-  inputs: MultiGasInput,
+type TwoGasBlendResult =
+  | {
+      success: true;
+      gas1Amount: number;
+      gas2Amount: number;
+      finalO2: number;
+      finalHe: number;
+      warning?: string;
+    }
+  | {
+      success: false;
+      error: string;
+    };
+
+const solveTwoGasBlend = (
+  targetPressurePsi: number,
+  targetO2: number,
+  targetHe: number,
   gas1: GasSelection,
   gas2: GasSelection
-): {
-  success: boolean;
-  steps: { gas: string; amount: number }[];
-  finalO2?: number;
-  finalHe?: number;
-  error?: string;
-  warning?: string;
-} => {
-  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure, settings.pressureUnit);
-  if (targetPressurePsi <= tolerance) {
-    return {
-      success: false,
-      steps: [],
-      error: "Target pressure must be greater than zero."
-    };
-  }
-
-  const targetO2Fraction = fraction(inputs.targetO2);
-  const targetHeFraction = fraction(inputs.targetHe ?? 0);
+): TwoGasBlendResult => {
+  const targetO2Fraction = fraction(targetO2);
+  const targetHeFraction = fraction(targetHe);
   if (targetO2Fraction + targetHeFraction > 1 + tolerance) {
     return {
       success: false,
-      steps: [],
       error: "O2 + He must be 100% or less."
     };
   }
@@ -754,17 +752,22 @@ export const calculateMultiGasBlend = (
   let gas2Pressure: number | null = null;
   let usedTrimixSolver = false;
 
-  if (Math.abs(determinant) > tolerance && (targetHeFraction > tolerance || gas1HeFraction > tolerance || gas2HeFraction > tolerance)) {
+  if (
+    Math.abs(determinant) > tolerance &&
+    (targetHeFraction > tolerance || gas1HeFraction > tolerance || gas2HeFraction > tolerance)
+  ) {
     usedTrimixSolver = true;
     gas1Pressure = (demandO2 * gas2HeFraction - demandHe * gas2O2Fraction) / determinant;
     gas2Pressure = (gas1O2Fraction * demandHe - gas1HeFraction * demandO2) / determinant;
   }
 
   if (gas1Pressure === null || gas2Pressure === null) {
-    if (inputs.targetO2 < Math.min(gas1.o2, gas2.o2) - 1e-6 || inputs.targetO2 > Math.max(gas1.o2, gas2.o2) + 1e-6) {
+    if (
+      targetO2 < Math.min(gas1.o2, gas2.o2) - 1e-6 ||
+      targetO2 > Math.max(gas1.o2, gas2.o2) + 1e-6
+    ) {
       return {
         success: false,
-        steps: [],
         error: "Target O2% must lie between Gas 1 and Gas 2 O2%."
       };
     }
@@ -773,7 +776,6 @@ export const calculateMultiGasBlend = (
     if (Math.abs(denominator) < tolerance) {
       return {
         success: false,
-        steps: [],
         error: "Source gases must have different O2 percentages."
       };
     }
@@ -785,7 +787,6 @@ export const calculateMultiGasBlend = (
   if (gas1Pressure < -tolerance || gas2Pressure < -tolerance) {
     return {
       success: false,
-      steps: [],
       error: "Blend requires negative source gas volume."
     };
   }
@@ -797,7 +798,6 @@ export const calculateMultiGasBlend = (
   if (totalPressure <= tolerance) {
     return {
       success: false,
-      steps: [],
       error: "Unable to compute source gas contributions."
     };
   }
@@ -805,7 +805,6 @@ export const calculateMultiGasBlend = (
   if (Math.abs(totalPressure - targetPressurePsi) > Math.max(5, targetPressurePsi * 0.01)) {
     return {
       success: false,
-      steps: [],
       error: "Selected sources cannot meet the target composition at this pressure."
     };
   }
@@ -815,7 +814,7 @@ export const calculateMultiGasBlend = (
 
   let warning: string | undefined;
   if (usedTrimixSolver) {
-    const heError = Math.abs(resultHe - inputs.targetHe);
+    const heError = Math.abs(resultHe - targetHe);
     if (heError > 0.5) {
       warning = "Helium target may require additional trimming with oxygen or helium.";
     }
@@ -823,13 +822,160 @@ export const calculateMultiGasBlend = (
 
   return {
     success: true,
-    steps: [
-      { gas: gas1.name, amount: sanitizedGas1 },
-      { gas: gas2.name, amount: sanitizedGas2 }
-    ],
+    gas1Amount: sanitizedGas1,
+    gas2Amount: sanitizedGas2,
     finalO2: resultO2,
     finalHe: resultHe,
     warning
+  };
+};
+
+const MULTI_GAS_O2_TOLERANCE = 1;
+const MULTI_GAS_HE_TOLERANCE = 5;
+const MULTI_GAS_O2_STEP = 0.1;
+const MULTI_GAS_HE_STEP = 0.5;
+
+const buildSearchValues = (
+  target: number,
+  toleranceValue: number,
+  step: number,
+  minValue: number,
+  maxValue: number
+): number[] => {
+  const values: number[] = [];
+  const append = (value: number) => {
+    if (value < minValue - 1e-6 || value > maxValue + 1e-6) {
+      return;
+    }
+    const rounded = Number(value.toFixed(4));
+    if (!values.some((existing) => Math.abs(existing - rounded) < 1e-4)) {
+      values.push(rounded);
+    }
+  };
+
+  append(target);
+  for (let delta = step; delta <= toleranceValue + 1e-6; delta += step) {
+    append(target - delta);
+    append(target + delta);
+  }
+
+  return values;
+};
+
+export type MultiGasFallbackSuggestion = {
+  steps: { gas: string; amount: number }[];
+  finalO2: number;
+  finalHe: number;
+  deviationO2: number;
+  deviationHe: number;
+  warning?: string;
+};
+
+const findSimilarMultiGasBlend = (
+  targetPressurePsi: number,
+  targetO2: number,
+  targetHe: number,
+  gas1: GasSelection,
+  gas2: GasSelection
+): MultiGasFallbackSuggestion | null => {
+  const o2Candidates = buildSearchValues(targetO2, MULTI_GAS_O2_TOLERANCE, MULTI_GAS_O2_STEP, 0, 100);
+
+  for (const o2 of o2Candidates) {
+    const heMax = Math.max(0, 100 - o2);
+    const heCandidates = buildSearchValues(targetHe, MULTI_GAS_HE_TOLERANCE, MULTI_GAS_HE_STEP, 0, heMax);
+    for (const he of heCandidates) {
+      if (Math.abs(o2 - targetO2) < 1e-6 && Math.abs(he - targetHe) < 1e-6) {
+        continue;
+      }
+      const attempt = solveTwoGasBlend(targetPressurePsi, o2, he, gas1, gas2);
+      if (attempt.success) {
+        return {
+          steps: [
+            { gas: gas1.name, amount: attempt.gas1Amount },
+            { gas: gas2.name, amount: attempt.gas2Amount }
+          ],
+          finalO2: attempt.finalO2,
+          finalHe: attempt.finalHe,
+          deviationO2: o2 - targetO2,
+          deviationHe: he - targetHe,
+          warning: attempt.warning
+        };
+      }
+    }
+  }
+
+  return null;
+};
+
+export const calculateMultiGasBlend = (
+  settings: { pressureUnit: PressureUnit },
+  inputs: MultiGasInput,
+  gas1: GasSelection,
+  gas2: GasSelection
+): {
+  success: boolean;
+  steps: { gas: string; amount: number }[];
+  finalO2?: number;
+  finalHe?: number;
+  error?: string;
+  warning?: string;
+  fallback?: MultiGasFallbackSuggestion;
+} => {
+  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure, settings.pressureUnit);
+  if (targetPressurePsi <= tolerance) {
+    return {
+      success: false,
+      steps: [],
+      error: "Target pressure must be greater than zero."
+    };
+  }
+
+  const targetO2Fraction = fraction(inputs.targetO2);
+  const targetHe = inputs.targetHe ?? 0;
+  const targetHeFraction = fraction(targetHe);
+  if (targetO2Fraction + targetHeFraction > 1 + tolerance) {
+    return {
+      success: false,
+      steps: [],
+      error: "O2 + He must be 100% or less."
+    };
+  }
+  const primary = solveTwoGasBlend(targetPressurePsi, inputs.targetO2, targetHe, gas1, gas2);
+
+  if (primary.success) {
+    return {
+      success: true,
+      steps: [
+        { gas: gas1.name, amount: primary.gas1Amount },
+        { gas: gas2.name, amount: primary.gas2Amount }
+      ],
+      finalO2: primary.finalO2,
+      finalHe: primary.finalHe,
+      warning: primary.warning
+    };
+  }
+
+  const fallback = findSimilarMultiGasBlend(
+    targetPressurePsi,
+    inputs.targetO2,
+    targetHe,
+    gas1,
+    gas2
+  );
+
+  if (fallback) {
+    return {
+      success: false,
+      steps: [],
+      error: primary.error ?? "Blend cannot be computed.",
+      fallback
+    };
+  }
+
+  return {
+    success: false,
+    steps: [],
+    error: primary.error ?? "Blend cannot be computed."
   };
 };
 

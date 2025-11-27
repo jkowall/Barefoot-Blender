@@ -350,6 +350,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             ))}
           </select>
         </div>
+        <div className="table-note">What gas is being used other than oxygen and helium?</div>
         <button className="calculate-button" type="button" onClick={onCalculate}>
           Calculate
         </button>

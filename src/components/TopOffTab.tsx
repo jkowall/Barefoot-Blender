@@ -9,6 +9,7 @@ import {
   type TopOffProjectionRow
 } from "../utils/calculations";
 import { formatPercentage, formatPressure } from "../utils/format";
+import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 const clampPressure = (value: number): number => Math.max(0, value);
@@ -23,17 +24,38 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const setTopOff = useSessionStore((state: SessionState) => state.setTopOff);
   const [result, setResult] = useState<TopOffResult | null>(null);
   const [chart, setChart] = useState<TopOffProjectionRow[] | null>(null);
+  const [bleedPsi, setBleedPsi] = useState(0);
 
   const selectedTopGas = useMemo(() => {
     const match = topOffOptions.find((option) => option.id === topOff.topGasId);
     return match ?? topOffOptions[0];
   }, [topOff.topGasId, topOffOptions]);
 
+  const startPressurePsi = useMemo(
+    () => fromDisplayPressure(topOff.startPressure, settings.pressureUnit),
+    [topOff.startPressure, settings.pressureUnit]
+  );
+
   useEffect(() => {
     if (selectedTopGas && selectedTopGas.id !== topOff.topGasId) {
       setTopOff({ ...topOff, topGasId: selectedTopGas.id });
     }
   }, [selectedTopGas, topOff, setTopOff]);
+
+  useEffect(() => {
+    if (!result?.success) {
+      setBleedPsi(0);
+    }
+  }, [result?.success]);
+
+  useEffect(() => {
+    setBleedPsi((previous) => {
+      if (startPressurePsi <= 0) {
+        return 0;
+      }
+      return Math.min(previous, startPressurePsi);
+    });
+  }, [startPressurePsi]);
 
   function updateField<K extends keyof TopOffInput>(key: K, value: TopOffInput[K]): void {
     setTopOff({ ...topOff, [key]: value });
@@ -47,6 +69,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     if (!selectedTopGas) {
       setResult(null);
       setChart(null);
+      setBleedPsi(0);
       return;
     }
 
@@ -72,6 +95,42 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       setChart(null);
     }
   };
+
+  const adjustedStartPsi = useMemo(
+    () => Math.max(0, startPressurePsi - bleedPsi),
+    [bleedPsi, startPressurePsi]
+  );
+
+  const bleedSliderMaxDisplay = useMemo(
+    () => toDisplayPressure(Math.max(0, startPressurePsi), settings.pressureUnit),
+    [settings.pressureUnit, startPressurePsi]
+  );
+
+  const bleedSliderValueDisplay = useMemo(
+    () => toDisplayPressure(Math.min(bleedPsi, startPressurePsi), settings.pressureUnit),
+    [bleedPsi, settings.pressureUnit, startPressurePsi]
+  );
+
+  const bleedSliderStepDisplay = settings.pressureUnit === "psi" ? 10 : 0.1;
+
+  const showBleedPreview = Boolean(result?.success && startPressurePsi > 0);
+
+  const bleedPreview = useMemo(() => {
+    if (!showBleedPreview || !selectedTopGas) {
+      return null;
+    }
+
+    const simulatedInput: TopOffInput = {
+      ...topOff,
+      startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit)
+    };
+
+    return calculateTopOffBlend(
+      { pressureUnit: settings.pressureUnit },
+      simulatedInput,
+      selectedTopGas
+    );
+  }, [adjustedStartPsi, selectedTopGas, settings.pressureUnit, showBleedPreview, topOff]);
 
   return (
     <>
@@ -199,6 +258,60 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               {warning}
             </div>
           ))}
+        </section>
+      )}
+
+      {showBleedPreview && bleedPreview && (
+        <section className="card">
+          <h2>Bleed-Down What-If</h2>
+          <div className="field">
+            <label>Bleed Amount ({settings.pressureUnit.toUpperCase()})</label>
+            <input
+              type="range"
+              min={0}
+              max={bleedSliderMaxDisplay}
+              step={bleedSliderStepDisplay}
+              value={bleedSliderValueDisplay}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const displayValue = Number(event.target.value);
+                const nextPsi = fromDisplayPressure(displayValue, settings.pressureUnit);
+                setBleedPsi(Math.max(0, Math.min(nextPsi, startPressurePsi)));
+              }}
+            />
+          </div>
+          <div className="sensitivity-summary">
+            <span>Bleed {formatPressure(bleedPsi, settings.pressureUnit)}</span>
+            <span>Adjusted Start {formatPressure(adjustedStartPsi, settings.pressureUnit)}</span>
+          </div>
+          {bleedPreview.success ? (
+            <>
+              <div className="grid three">
+                <div className="stat">
+                  <div className="stat-label">Final O2</div>
+                  <div className="stat-value">{formatPercentage(bleedPreview.finalO2)}</div>
+                </div>
+                <div className="stat">
+                  <div className="stat-label">Final He</div>
+                  <div className="stat-value">{formatPercentage(bleedPreview.finalHe)}</div>
+                </div>
+                <div className="stat">
+                  <div className="stat-label">Final N2</div>
+                  <div className="stat-value">{formatPercentage(bleedPreview.finalN2)}</div>
+                </div>
+              </div>
+              <div className="result-note">
+                After bleeding to {formatPressure(adjustedStartPsi, settings.pressureUnit)}, add {formatPressure(bleedPreview.addedPressure, settings.pressureUnit)} of {selectedTopGas?.name ?? "chosen gas"}.
+              </div>
+              {bleedPreview.warnings.map((warning) => (
+                <div key={warning} className="warning">
+                  {warning}
+                </div>
+              ))}
+            </>
+          ) : (
+            <div className="warning">{bleedPreview.errors[0] ?? "Unable to compute bleed preview."}</div>
+          )}
+          <div className="table-note">Slider previews a bleed-down before topping-off; it does not modify the start inputs.</div>
         </section>
       )}
 

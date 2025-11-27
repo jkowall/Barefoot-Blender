@@ -21,8 +21,16 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const multiGas = useSessionStore((state: SessionState) => state.multiGas);
   const setMultiGas = useSessionStore((state: SessionState) => state.setMultiGas);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [result, setResult] = useState<{ label: string; amount: number; total: number }[] | null>(null);
-  const [outcomeMeta, setOutcomeMeta] = useState<{ finalO2: number; finalHe: number; warning?: string } | null>(null);
+  const [outcomeMeta, setOutcomeMeta] = useState<{
+    finalO2: number;
+    finalHe: number;
+    warning?: string;
+    similar?: boolean;
+    deviationO2?: number;
+    deviationHe?: number;
+  } | null>(null);
 
   const sanitizeCustomMix = (o2: number, he: number): { o2: number; he: number } => {
     const nextO2 = clampPercent(o2);
@@ -65,13 +73,36 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     event.target.select();
   };
 
+  const buildCumulativeSteps = (steps: { gas: string; amount: number }[]): { label: string; amount: number; total: number }[] => {
+    const cumulative: { label: string; amount: number; total: number }[] = [];
+    let runningPsi = 0;
+    steps.forEach((step) => {
+      runningPsi += step.amount;
+      cumulative.push({ label: `Add ${step.gas}`, amount: step.amount, total: runningPsi });
+    });
+    return cumulative;
+  };
+
+  const formatSignedPercent = (value?: number): string => {
+    if (value === undefined) {
+      return "0.0%";
+    }
+    const rounded = value.toFixed(1);
+    if (value > 0) {
+      return `+${rounded}%`;
+    }
+    return `${rounded}%`;
+  };
+
 
   const onCalculate = (): void => {
+    setNotice(null);
     const gas1 = resolveGasSelection(multiGas.gas1Id, multiGas.gas1CustomO2, multiGas.gas1CustomHe);
     const gas2 = resolveGasSelection(multiGas.gas2Id, multiGas.gas2CustomO2, multiGas.gas2CustomHe);
 
     if (!gas1 || !gas2) {
       setError("Please select both source gases.");
+      setNotice(null);
       setResult(null);
       setOutcomeMeta(null);
       return;
@@ -85,21 +116,36 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     );
 
     if (!outcome.success) {
+      if (outcome.fallback) {
+        setError(null);
+        setNotice("Desired mix cannot be attained with these gases. A similar mix within ±1% O2 / ±5% He is shown below.");
+        setResult(buildCumulativeSteps(outcome.fallback.steps));
+        setOutcomeMeta({
+          finalO2: outcome.fallback.finalO2,
+          finalHe: outcome.fallback.finalHe,
+          warning: outcome.fallback.warning,
+          similar: true,
+          deviationO2: outcome.fallback.deviationO2,
+          deviationHe: outcome.fallback.deviationHe
+        });
+        return;
+      }
       setError(outcome.error ?? "Blend cannot be computed.");
+      setNotice(null);
       setResult(null);
       setOutcomeMeta(null);
       return;
     }
 
     setError(null);
-    const cumulative: { label: string; amount: number; total: number }[] = [];
-    let runningPsi = 0;
-    outcome.steps.forEach((step) => {
-      runningPsi += step.amount;
-      cumulative.push({ label: `Add ${step.gas}`, amount: step.amount, total: runningPsi });
+    setNotice(null);
+    setResult(buildCumulativeSteps(outcome.steps));
+    setOutcomeMeta({
+      finalO2: outcome.finalO2 ?? multiGas.targetO2,
+      finalHe: outcome.finalHe ?? (multiGas.targetHe ?? 0),
+      warning: outcome.warning,
+      similar: false
     });
-    setResult(cumulative);
-    setOutcomeMeta({ finalO2: outcome.finalO2 ?? multiGas.targetO2, finalHe: outcome.finalHe ?? 0, warning: outcome.warning });
   };
 
   return (
@@ -257,6 +303,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       <section className="card">
         <h2>Fill Plan</h2>
         {error && <div className="error">{error}</div>}
+        {!error && notice && <div className="warning">{notice}</div>}
         {!error && result && (
           <ol className="result-list">
             {result.map((step, index) => (
@@ -270,6 +317,11 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         {!error && outcomeMeta && (
           <div className="table-note">
             Resulting mix ≈ {outcomeMeta.finalO2.toFixed(1)}% O2 / {outcomeMeta.finalHe.toFixed(1)}% He.
+            {outcomeMeta.similar && (
+              <>
+                {" "}(ΔO2 {formatSignedPercent(outcomeMeta.deviationO2)}, ΔHe {formatSignedPercent(outcomeMeta.deviationHe)}).
+              </>
+            )}
           </div>
         )}
         {!error && outcomeMeta?.warning && <div className="warning">{outcomeMeta.warning}</div>}
