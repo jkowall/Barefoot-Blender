@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. This file follows reverse chronological order, with the newest release at the top.
 
+## [0.3.0] - 2025-11-27
+
+- Added a bleed-down slider to the Top-Off What-If tab so divers can preview mixes after simulated drains without altering their base inputs.
+- Clarified the Standard Blend top-off selector with guidance about the non-O₂/He supply to help new users pick the right bank.
+- Multi-Gas planner now offers a closest-match suggestion (±1% O₂ / ±5% He) when the exact blend cannot be produced with the chosen sources.
+
 ## [0.2.0] - 2025-11-18
 
 - Added an in-app footer that surfaces the current version alongside a quick link to the release notes.
