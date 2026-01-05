@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Wrangler cache
+.wrangler/
+
+# OS files
+.DS_Store
+*.DS_Store
+
+# Log files
+*.log
+*.txt
+!README.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# TypeScript cache
+*.tsbuildinfo
