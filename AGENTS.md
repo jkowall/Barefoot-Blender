@@ -152,6 +152,8 @@ Test blending scenarios against known values:
 
 **Production URL**: [https://trimix-blender.com](https://trimix-blender.com)
 
+**All commits must be signed** (`git commit -S`). Ensure GPG is configured for your git user.
+
 ```bash
 npm run build
 npx wrangler deploy   # Deploys to Cloudflare Pages
