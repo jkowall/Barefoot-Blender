@@ -76,9 +76,9 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     event.target.select();
   };
 
-  const buildCumulativeSteps = (steps: { gas: string; amount: number }[]): { label: string; amount: number; total: number }[] => {
+  const buildCumulativeSteps = (steps: { gas: string; amount: number }[], startPressure: number): { label: string; amount: number; total: number }[] => {
     const cumulative: { label: string; amount: number; total: number }[] = [];
-    let runningPsi = 0;
+    let runningPsi = startPressure;
     steps.forEach((step) => {
       runningPsi += step.amount;
       cumulative.push({ label: `Add ${step.gas}`, amount: step.amount, total: runningPsi });
@@ -122,7 +122,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       if (outcome.fallback) {
         setError(null);
         setNotice("Desired mix cannot be attained with these gases. A similar mix within ±1% O2 / ±5% He is shown below.");
-        setResult(buildCumulativeSteps(outcome.fallback.steps));
+        setResult(buildCumulativeSteps(outcome.fallback.steps, multiGas.startPressure ?? 0));
         setOutcomeMeta({
           finalO2: outcome.fallback.finalO2,
           finalHe: outcome.fallback.finalHe,
@@ -142,7 +142,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
     setError(null);
     setNotice(null);
-    setResult(buildCumulativeSteps(outcome.steps));
+    setResult(buildCumulativeSteps(outcome.steps, multiGas.startPressure ?? 0));
     setOutcomeMeta({
       finalO2: outcome.finalO2 ?? multiGas.targetO2,
       finalHe: outcome.finalHe ?? (multiGas.targetHe ?? 0),

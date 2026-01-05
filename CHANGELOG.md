@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.1] - 2026-01-05
+
+### Fixed
+- Multi-Gas tab fill plan now correctly accounts for starting pressure when calculating cumulative fill totals. Previously, the "Tank @" pressures were off by the start pressure amount.
+
 ## v0.5.0
 - **Feature:** Multi-Bank Blending: Added "Start Tank" input to Multi-Gas Match tab.
 - **UI:** Refactored all tabs (Standard, Multi-Gas, Top-Off, Utilities) to use collapsible Accordion sections for better usability.
