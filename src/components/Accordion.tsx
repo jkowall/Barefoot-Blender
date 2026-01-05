@@ -27,12 +27,14 @@ export const AccordionItem = ({
     };
 
     return (
-        <div className={`accordion-item ${isExpanded ? "open" : ""}`}>
+        <div className={`card accordion-card ${isExpanded ? "open" : ""}`}>
             <button className="accordion-header" type="button" onClick={handleToggle}>
-                <span className="accordion-title">{title}</span>
-                <span className="accordion-icon">{isExpanded ? "−" : "+"}</span>
+                <h2>{title}</h2>
+                <span className={`accordion-icon ${isExpanded ? "open" : ""}`}>{isExpanded ? "−" : "+"}</span>
             </button>
-            {isExpanded && <div className="accordion-content">{children}</div>}
+            <div className={`accordion-content ${isExpanded ? "open" : ""}`}>
+                {children}
+            </div>
         </div>
     );
 };
