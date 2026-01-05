@@ -1,0 +1,12 @@
+
+ ⛅️ wrangler 4.54.0
+───────────────────
+🌀 Building list of assets...
+✨ Read 14 files from the assets directory /home/jkowall/Barefoot-Blender/dist
+🌀 Starting asset upload...
+No updated asset files to upload. Proceeding with deployment...
+Total Upload: 0.33 KiB / gzip: 0.24 KiB
+Uploaded barefoot-blender (3.61 sec)
+Deployed barefoot-blender triggers (1.23 sec)
+  https://barefoot-blender.jkowall.workers.dev
+Current Version ID: a1a25fb7-17b8-43a1-8dc1-facd8b77dc66

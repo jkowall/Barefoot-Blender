@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.1] - 2026-01-04
+
+### Changed
+- Reordered Utilities tab metrics: "Best Mix" grouped with "MOD", "EAD" grouped with "END".
+
 ## [0.4.0] - 2026-01-04
 
 ### Added

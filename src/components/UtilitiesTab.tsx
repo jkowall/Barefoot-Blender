@@ -116,37 +116,6 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
         </div>
       </AccordionItem>
 
-      <AccordionItem title="Equivalent Air Depth">
-        <div className="grid two">
-          <div className="field">
-            <label>Gas O2 %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={utilities.eadO2}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ eadO2: clampPercent(Number(event.target.value)) })}
-            />
-          </div>
-          <div className="field">
-            <label>Depth ({settings.depthUnit})</label>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={utilities.eadDepth}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ eadDepth: clampDepth(Number(event.target.value)) })}
-            />
-          </div>
-        </div>
-        <div style={{ marginTop: "12px" }}>
-          <div>EAD: {formatNumber(eadResult, 1)} {settings.depthUnit}</div>
-        </div>
-      </AccordionItem>
-
       <AccordionItem title="Best Mix">
         <div className="grid two">
           <div className="field">
@@ -185,6 +154,37 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
         </div>
         <div style={{ marginTop: "12px" }}>
           <div>Best Mix: {formatNumber(bestMixResult.o2, 1)}% O2, {formatNumber(bestMixResult.he, 1)}% He</div>
+        </div>
+      </AccordionItem>
+
+      <AccordionItem title="Equivalent Air Depth">
+        <div className="grid two">
+          <div className="field">
+            <label>Gas O2 %</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={utilities.eadO2}
+              onFocus={selectOnFocus}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ eadO2: clampPercent(Number(event.target.value)) })}
+            />
+          </div>
+          <div className="field">
+            <label>Depth ({settings.depthUnit})</label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={utilities.eadDepth}
+              onFocus={selectOnFocus}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ eadDepth: clampDepth(Number(event.target.value)) })}
+            />
+          </div>
+        </div>
+        <div style={{ marginTop: "12px" }}>
+          <div>EAD: {formatNumber(eadResult, 1)} {settings.depthUnit}</div>
         </div>
       </AccordionItem>
 
