@@ -153,6 +153,25 @@ button {
   color: #94a3b8;
 }
 
+.stat-value-input {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-base);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--border-color);
+  width: 100%;
+  text-align: center;
+  padding: 0;
+  margin: 0;
+  outline: none;
+  font-family: inherit;
+}
+
+.stat-value-input:focus {
+  border-bottom-color: var(--primary-color);
+}
+
 .content {
   flex: 1;
   display: flex;

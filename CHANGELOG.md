@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.3] - 2026-01-04
+
+### Added
+- Manual input fields in "Top-Off What-If" tab to calculate bleed-down from a target final mix.
+
 ## [0.4.2] - 2026-01-04
 
 ### Fixed

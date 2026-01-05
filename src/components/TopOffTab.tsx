@@ -8,7 +8,7 @@ import {
   type TopOffResult,
   type TopOffProjectionRow
 } from "../utils/calculations";
-import { formatPercentage, formatPressure } from "../utils/format";
+import { formatNumber, formatPercentage, formatPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
@@ -287,15 +287,74 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             <>
               <div className="grid three">
                 <div className="stat">
-                  <div className="stat-label">Final O2</div>
-                  <div className="stat-value">{formatPercentage(bleedPreview.finalO2)}</div>
+                  <div className="stat-label">Final O2 %</div>
+                  <input
+                    type="number"
+                    className="stat-value-input"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    value={formatNumber(bleedPreview.finalO2, 1)}
+                    onFocus={selectOnFocus}
+                    onChange={(e) => {
+                      // Reverse solve: P_final_O2 = (P_start_adj * Start_O2 + P_added * Top_O2) / P_total
+                      // We know P_total (finalPressure), Top_O2, Start_O2.
+                      // Variable is bleed amount, which determines P_start_adj.
+                      // P_start_adj = P_start - bleed.
+                      // P_added = P_total - P_start_adj.
+
+                      const targetO2 = Number(e.target.value) / 100;
+                      const topO2 = topOffOptions.find(o => o.id === topOff.topGasId)?.o2 ?? 0;
+                      const startO2 = topOff.startO2 / 100;
+
+                      const pTotal = fromDisplayPressure(topOff.finalPressure, settings.pressureUnit);
+
+                      // P_total * Target_O2 = P_start_adj * Start_O2 + (P_total - P_start_adj) * Top_O2
+                      // P_total * Target_O2 = P_start_adj * Start_O2 + P_total * Top_O2 - P_start_adj * Top_O2
+                      // P_total * (Target_O2 - Top_O2) = P_start_adj * (Start_O2 - Top_O2)
+                      // P_start_adj = P_total * (Target_O2 - Top_O2) / (Start_O2 - Top_O2)
+
+                      const numerator = pTotal * (targetO2 - (topO2 / 100));
+                      const denominator = startO2 - (topO2 / 100);
+
+                      if (Math.abs(denominator) > 1e-6) {
+                        const neededStartPsi = numerator / denominator;
+                        const neededBleed = startPressurePsi - neededStartPsi;
+                        setBleedPsi(Math.max(0, Math.min(neededBleed, startPressurePsi)));
+                      }
+                    }}
+                  />
                 </div>
                 <div className="stat">
-                  <div className="stat-label">Final He</div>
-                  <div className="stat-value">{formatPercentage(bleedPreview.finalHe)}</div>
+                  <div className="stat-label">Final He %</div>
+                  <input
+                    type="number"
+                    className="stat-value-input"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    value={formatNumber(bleedPreview.finalHe, 1)}
+                    onFocus={selectOnFocus}
+                    onChange={(e) => {
+                      const targetHe = Number(e.target.value) / 100;
+                      const topHe = topOffOptions.find(o => o.id === topOff.topGasId)?.he ?? 0;
+                      const startHe = topOff.startHe / 100;
+
+                      const pTotal = fromDisplayPressure(topOff.finalPressure, settings.pressureUnit);
+
+                      const numerator = pTotal * (targetHe - (topHe / 100));
+                      const denominator = startHe - (topHe / 100);
+
+                      if (Math.abs(denominator) > 1e-6) {
+                        const neededStartPsi = numerator / denominator;
+                        const neededBleed = startPressurePsi - neededStartPsi;
+                        setBleedPsi(Math.max(0, Math.min(neededBleed, startPressurePsi)));
+                      }
+                    }}
+                  />
                 </div>
                 <div className="stat">
-                  <div className="stat-label">Final N2</div>
+                  <div className="stat-label">Final N2 %</div>
                   <div className="stat-value">{formatPercentage(bleedPreview.finalN2)}</div>
                 </div>
               </div>
