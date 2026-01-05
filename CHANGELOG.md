@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0] - 2026-01-04
+
+### Added
+- Unit Converter utility for Depth (m/ft) and Pressure (bar/psi)
+- "Max END" input to Best Mix calculator for Helium suggestions
+
+### Changed
+- Utilities tab now uses a collapsible Accordion UI layout
+- Best Mix calculator now suggests Helium/Oxygen trimix blends instead of just O2%
+
+### Fixed
+- Metric calculation errors in MOD and END (removed double-conversion bugs)
+
+
 All notable changes to this project will be documented here. This file follows reverse chronological order, with the newest release at the top.
 
 ## [0.3.0] - 2025-11-27
