@@ -30,6 +30,7 @@ export type UtilityInputs = {
   eadDepth: number;
   bestMixDepth: number;
   bestMixPPO2: number;
+  bestMixMaxEND: number;
   endO2: number;
   endHe: number;
   endDepth: number;
@@ -93,6 +94,7 @@ const defaultValues = {
     eadDepth: 100,
     bestMixDepth: 100,
     bestMixPPO2: 1.4,
+    bestMixMaxEND: 30,
     endO2: 21,
     endHe: 35,
     endDepth: 150,

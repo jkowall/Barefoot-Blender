@@ -1,4 +1,4 @@
-import { useMemo, type ChangeEvent, type FocusEvent } from "react";
+import { useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState } from "../state/session";
 import {
@@ -39,9 +39,16 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
       calculateBestMix(
         utilities.bestMixDepth,
         utilities.bestMixPPO2 ?? settings.defaultMaxPPO2,
+        utilities.bestMixMaxEND ?? 30, // Default to 30m if not set
         settings.depthUnit
       ),
-    [utilities.bestMixDepth, utilities.bestMixPPO2, settings.defaultMaxPPO2, settings.depthUnit]
+    [
+      utilities.bestMixDepth,
+      utilities.bestMixPPO2,
+      utilities.bestMixMaxEND,
+      settings.defaultMaxPPO2,
+      settings.depthUnit
+    ]
   );
 
   const endResult = useMemo(
@@ -61,6 +68,12 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
     [utilities.densityO2, utilities.densityHe, utilities.densityDepth, settings.depthUnit]
   );
 
+  // Unit Converter State
+  const [converterDepth, setConverterDepth] = useMemo(() => {
+    let d = 10;
+    return [d, (v: number) => { d = v; }];
+  }, []);
+
   const update = (patch: Parameters<typeof setUtilities>[0]): void => {
     setUtilities(patch);
   };
@@ -70,9 +83,8 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
   };
 
   return (
-    <>
-      <section className="card">
-        <h2>Maximum Operating Depth</h2>
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <AccordionItem title="Maximum Operating Depth" defaultOpen={true}>
         <div className="grid two">
           <div className="field">
             <label>Gas O2 %</label>
@@ -98,12 +110,13 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
             />
           </div>
         </div>
-        <div>Working MOD: {formatDepth(modResult.mod, settings.depthUnit, 0)}</div>
-        <div>Contingency MOD ({settings.defaultContingencyPPO2}): {formatDepth(modResult.contingency, settings.depthUnit, 0)}</div>
-      </section>
+        <div style={{ marginTop: "12px" }}>
+          <div>Working MOD: {formatNumber(modResult.mod, 1)} {settings.depthUnit}</div>
+          <div>Contingency MOD ({settings.defaultContingencyPPO2}): {formatNumber(modResult.contingency, 1)} {settings.depthUnit}</div>
+        </div>
+      </AccordionItem>
 
-      <section className="card">
-        <h2>Equivalent Air Depth</h2>
+      <AccordionItem title="Equivalent Air Depth">
         <div className="grid two">
           <div className="field">
             <label>Gas O2 %</label>
@@ -129,11 +142,12 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
             />
           </div>
         </div>
-        <div>EAD: {formatDepth(eadResult, settings.depthUnit, 0)}</div>
-      </section>
+        <div style={{ marginTop: "12px" }}>
+          <div>EAD: {formatNumber(eadResult, 1)} {settings.depthUnit}</div>
+        </div>
+      </AccordionItem>
 
-      <section className="card">
-        <h2>Best Mix</h2>
+      <AccordionItem title="Best Mix">
         <div className="grid two">
           <div className="field">
             <label>Target Depth ({settings.depthUnit})</label>
@@ -157,12 +171,24 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixPPO2: Math.max(0, Number(event.target.value)) })}
             />
           </div>
+          <div className="field">
+            <label>Max END ({settings.depthUnit})</label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={utilities.bestMixMaxEND ?? 30}
+              onFocus={selectOnFocus}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixMaxEND: Math.max(0, Number(event.target.value)) })}
+            />
+          </div>
         </div>
-        <div>Best Mix: {formatNumber(bestMixResult, 1)}% O2</div>
-      </section>
+        <div style={{ marginTop: "12px" }}>
+          <div>Best Mix: {formatNumber(bestMixResult.o2, 1)}% O2, {formatNumber(bestMixResult.he, 1)}% He</div>
+        </div>
+      </AccordionItem>
 
-      <section className="card">
-        <h2>Equivalent Narcotic Depth</h2>
+      <AccordionItem title="Equivalent Narcotic Depth">
         <div className="grid two">
           <div className="field">
             <label>Gas O2 %</label>
@@ -200,12 +226,13 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
             />
           </div>
         </div>
-        <div>END: {formatDepth(endResult, settings.depthUnit, 0)}</div>
-        <div className="table-note">Oxygen counted as narcotic: {settings.oxygenIsNarcotic ? "Yes" : "No"}</div>
-      </section>
+        <div style={{ marginTop: "12px" }}>
+          <div>END: {formatNumber(endResult, 1)} {settings.depthUnit}</div>
+          <div className="table-note">Oxygen counted as narcotic: {settings.oxygenIsNarcotic ? "Yes" : "No"}</div>
+        </div>
+      </AccordionItem>
 
-      <section className="card">
-        <h2>Gas Density</h2>
+      <AccordionItem title="Gas Density">
         <div className="grid two">
           <div className="field">
             <label>Gas O2 %</label>
@@ -243,9 +270,112 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
             />
           </div>
         </div>
-        <div>Density: {formatNumber(densityResult, 2)} g/L</div>
-      </section>
-    </>
+        <div style={{ marginTop: "12px" }}>
+          <div>Density: {formatNumber(densityResult, 2)} g/L</div>
+        </div>
+      </AccordionItem>
+
+      <UnitConverter />
+    </div>
+  );
+};
+
+const UnitConverter = (): JSX.Element => {
+  const [depthValue, setDepthValue] = useState<number>(10);
+  const [depthUnit, setDepthUnit] = useState<"m" | "ft">("m");
+
+  const [pressureValue, setPressureValue] = useState<number>(200);
+  const [pressureUnit, setPressureUnit] = useState<"bar" | "psi">("bar");
+
+  const convertedDepth = useMemo(() => {
+    if (depthUnit === "m") {
+      return { value: depthValue * 3.28084, unit: "ft" };
+    }
+    return { value: depthValue / 3.28084, unit: "m" };
+  }, [depthValue, depthUnit]);
+
+  const convertedPressure = useMemo(() => {
+    if (pressureUnit === "bar") {
+      return { value: pressureValue * 14.5038, unit: "psi" };
+    }
+    return { value: pressureValue / 14.5038, unit: "bar" };
+  }, [pressureValue, pressureUnit]);
+
+  return (
+    <section className="card">
+      <h2>Unit Converter</h2>
+      <div className="grid two">
+        <div className="field">
+          <label>Depth</label>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <input
+              type="number"
+              value={depthValue}
+              onChange={(e) => setDepthValue(Math.max(0, Number(e.target.value)))}
+              style={{ flex: 1 }}
+            />
+            <select
+              value={depthUnit}
+              onChange={(e) => setDepthUnit(e.target.value as "m" | "ft")}
+              style={{ width: "auto" }}
+            >
+              <option value="m">m</option>
+              <option value="ft">ft</option>
+            </select>
+          </div>
+          <div>= {formatNumber(convertedDepth.value, 1)} {convertedDepth.unit}</div>
+        </div>
+        <div className="field">
+          <label>Pressure</label>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <input
+              type="number"
+              value={pressureValue}
+              onChange={(e) => setPressureValue(Math.max(0, Number(e.target.value)))}
+              style={{ flex: 1 }}
+            />
+            <select
+              value={pressureUnit}
+              onChange={(e) => setPressureUnit(e.target.value as "bar" | "psi")}
+              style={{ width: "auto" }}
+            >
+              <option value="bar">bar</option>
+              <option value="psi">psi</option>
+            </select>
+          </div>
+          <div>= {formatNumber(convertedPressure.value, 0)} {convertedPressure.unit}</div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const AccordionItem = ({
+  title,
+  children,
+  defaultOpen = false
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}): JSX.Element => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <section className="card accordion-card">
+      <button className="accordion-header" onClick={() => setIsOpen(!isOpen)}>
+        <h2>{title}</h2>
+        <svg
+          className={`accordion-icon ${isOpen ? "open" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      <div className={`accordion-content ${isOpen ? "open" : ""}`}>{children}</div>
+    </section>
   );
 };
 

@@ -1004,10 +1004,21 @@ export const calculateEAD = (o2Percent: number, depth: number, unit: DepthUnit):
   return Math.max(0, ead);
 };
 
-export const calculateBestMix = (depth: number, targetPPO2: number, unit: DepthUnit): number => {
+export const calculateBestMix = (
+  depth: number,
+  targetPPO2: number,
+  maxEND: number,
+  unit: DepthUnit
+): { o2: number; he: number } => {
   const perAtm = depthPerAtm(unit);
   const ambient = depth / perAtm + 1;
-  return Math.min(100, Math.max(0, targetPPO2 / ambient * 100));
+  const o2 = Math.min(100, Math.max(0, (targetPPO2 / ambient) * 100));
+
+  const safeN2Pressure = (maxEND / perAtm + 1) * 0.79;
+  const maxN2Fraction = safeN2Pressure / ambient;
+  const he = Math.max(0, 100 - o2 - maxN2Fraction * 100);
+
+  return { o2, he };
 };
 
 export const calculateEND = (
