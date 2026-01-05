@@ -10,6 +10,7 @@ import {
 } from "../utils/calculations";
 import { formatNumber, formatPercentage, formatPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
+import { AccordionItem } from "./Accordion";
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 const clampPressure = (value: number): number => Math.max(0, value);
@@ -134,8 +135,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
   return (
     <>
-      <section className="card">
-        <h2>Start Tank</h2>
+      <AccordionItem title="Start Tank" defaultOpen={true}>
         <div className="grid two">
           <div className="field">
             <label>Current O2 %</label>
@@ -182,10 +182,9 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             />
           </div>
         </div>
-      </section>
+      </AccordionItem>
 
-      <section className="card">
-        <h2>Top-Off Goal</h2>
+      <AccordionItem title="Top-Off Goal" defaultOpen={true}>
         <div className="field">
           <label>Final Pressure ({settings.pressureUnit.toUpperCase()})</label>
           <input
@@ -200,10 +199,9 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             onBlur={() => updateField("finalPressure", clampPressure(topOff.finalPressure))}
           />
         </div>
-      </section>
+      </AccordionItem>
 
-      <section className="card">
-        <h2>Top-Off Gas</h2>
+      <AccordionItem title="Top-Off Gas" defaultOpen={true}>
         <div className="field">
           <label>Select Gas</label>
           <select
@@ -222,11 +220,10 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         <button className="calculate-button" type="button" onClick={onCalculate}>
           Calculate
         </button>
-      </section>
+      </AccordionItem>
 
       {result && (
-        <section className="card">
-          <h2>Top-Off Outcome</h2>
+        <AccordionItem title="Top-Off Outcome" defaultOpen={true}>
           {!result.success && result.errors.length > 0 && (
             <div className="error">{result.errors[0]}</div>
           )}
@@ -258,12 +255,11 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               {warning}
             </div>
           ))}
-        </section>
+        </AccordionItem>
       )}
 
       {showBleedPreview && bleedPreview && (
-        <section className="card">
-          <h2>Bleed-Down What-If</h2>
+        <AccordionItem title="Bleed-Down What-If" defaultOpen={false}>
           <div className="field">
             <label>Bleed Amount ({settings.pressureUnit.toUpperCase()})</label>
             <input
@@ -371,12 +367,11 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             <div className="warning">{bleedPreview.errors[0] ?? "Unable to compute bleed preview."}</div>
           )}
           <div className="table-note">Slider previews a bleed-down before topping-off; it does not modify the start inputs.</div>
-        </section>
+        </AccordionItem>
       )}
 
       {chart && chart.length > 0 && (
-        <section className="card">
-          <h2>Top-Off Sensitivity</h2>
+        <AccordionItem title="Top-Off Sensitivity" defaultOpen={false}>
           <table>
             <thead>
               <tr>
@@ -418,7 +413,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             </tbody>
           </table>
           <div className="table-note">Projection varies starting pressure in fixed increments using the selected top-off gas.</div>
-        </section>
+        </AccordionItem>
       )}
     </>
   );

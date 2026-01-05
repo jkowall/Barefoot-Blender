@@ -9,6 +9,7 @@ import {
   calculateMOD
 } from "../utils/calculations";
 import { formatNumber } from "../utils/format";
+import { AccordionItem } from "./Accordion";
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 
@@ -346,33 +347,6 @@ const UnitConverter = (): JSX.Element => {
   );
 };
 
-const AccordionItem = ({
-  title,
-  children,
-  defaultOpen = false
-}: {
-  title: string;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
-}): JSX.Element => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
 
-  return (
-    <section className="card accordion-card">
-      <button className="accordion-header" onClick={() => setIsOpen(!isOpen)}>
-        <h2>{title}</h2>
-        <svg
-          className={`accordion-icon ${isOpen ? "open" : ""}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      <div className={`accordion-content ${isOpen ? "open" : ""}`}>{children}</div>
-    </section>
-  );
-};
 
 export default UtilitiesTab;

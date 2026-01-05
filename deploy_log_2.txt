@@ -1,0 +1,22 @@
+
+ ⛅️ wrangler 4.54.0
+───────────────────
+🌀 Building list of assets...
+✨ Read 14 files from the assets directory /home/jkowall/Barefoot-Blender/dist
+🌀 Starting asset upload...
+🌀 Found 5 new or modified static assets to upload. Proceeding with upload...
++ /index.html
++ /assets/index-BAEjGy6D.css
++ /assets/virtual_pwa-register-C5yzot1T.js
++ /assets/index-Cp69kkih.js
++ /sw.js
+Uploaded 1 of 5 assets
+Uploaded 3 of 5 assets
+Uploaded 5 of 5 assets
+✨ Success! Uploaded 5 files (8 already uploaded) (1.59 sec)
+
+Total Upload: 0.33 KiB / gzip: 0.24 KiB
+Uploaded barefoot-blender (6.51 sec)
+Deployed barefoot-blender triggers (1.64 sec)
+  https://barefoot-blender.jkowall.workers.dev
+Current Version ID: 8b60186b-037a-4eb8-80ee-f2ac4dda84ce

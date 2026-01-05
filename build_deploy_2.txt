@@ -1,0 +1,23 @@
+
+> barefoot-blender@0.4.3 build
+> vite build
+
+vite v7.3.0 building client environment for production...
+transforming...
+✓ 52 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/manifest.webmanifest                          0.44 kB
+dist/index.html                                    0.66 kB │ gzip:  0.36 kB
+dist/assets/index-BAEjGy6D.css                     6.64 kB │ gzip:  1.86 kB
+dist/assets/virtual_pwa-register-C5yzot1T.js       0.73 kB │ gzip:  0.45 kB
+dist/assets/workbox-window.prod.es5-BIl4cyR9.js    5.76 kB │ gzip:  2.37 kB
+dist/assets/index-Cp69kkih.js                    201.89 kB │ gzip: 60.76 kB
+✓ built in 602ms
+
+PWA v1.2.0
+mode      generateSW
+precache  10 entries (210.63 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-8c29f6e4.js

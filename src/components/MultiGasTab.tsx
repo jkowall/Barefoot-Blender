@@ -3,8 +3,10 @@ import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type MultiGasInput } from "../state/session";
 import { calculateMultiGasBlend, type GasSelection } from "../utils/calculations";
 import { formatPressure } from "../utils/format";
+import { AccordionItem } from "./Accordion";
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
+const clampPressure = (value: number): number => Math.max(0, value);
 
 const trimixPresets: GasSelection[] = [
   { id: "trimix-2135", name: "Trimix 21/35", o2: 21, he: 35 },
@@ -31,6 +33,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     deviationO2?: number;
     deviationHe?: number;
   } | null>(null);
+  const [planOpen, setPlanOpen] = useState(false);
 
   const sanitizeCustomMix = (o2: number, he: number): { o2: number; he: number } => {
     const nextO2 = clampPercent(o2);
@@ -146,12 +149,58 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       warning: outcome.warning,
       similar: false
     });
+    setPlanOpen(true);
   };
 
   return (
     <>
-      <section className="card">
-        <h2>Source Gases</h2>
+      <AccordionItem title="Start Tank" defaultOpen={true}>
+        <div className="grid two">
+          <div className="field">
+            <label>Start O2 %</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={multiGas.startO2 ?? 21}
+              onFocus={selectOnFocus}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                updateField({ startO2: clampPercent(Number(event.target.value)) })
+              }
+            />
+          </div>
+          <div className="field">
+            <label>Start He %</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={multiGas.startHe ?? 0}
+              onFocus={selectOnFocus}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                updateField({ startHe: clampPercent(Number(event.target.value)) })
+              }
+            />
+          </div>
+          <div className="field">
+            <label>Start Pressure ({settings.pressureUnit.toUpperCase()})</label>
+            <input
+              type="number"
+              min={0}
+              step={settings.pressureUnit === "psi" ? 10 : 1}
+              value={multiGas.startPressure ?? 0}
+              onFocus={selectOnFocus}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                updateField({ startPressure: clampPressure(Number(event.target.value)) })
+              }
+            />
+          </div>
+        </div>
+      </AccordionItem>
+
+      <AccordionItem title="Source Gases" defaultOpen={true}>
         <div className="grid two">
           <div className="field">
             <label>Gas 1</label>
@@ -248,10 +297,9 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             </div>
           )}
         </div>
-      </section>
+      </AccordionItem>
 
-      <section className="card">
-        <h2>Target Blend</h2>
+      <AccordionItem title="Target Blend" defaultOpen={true}>
         <div className="grid two">
           <div className="field">
             <label>Target O2 %</label>
@@ -290,7 +338,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               value={multiGas.targetPressure}
               onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField({ targetPressure: Math.max(0, Number(event.target.value)) })
+                updateField({ targetPressure: clampPressure(Number(event.target.value)) })
               }
             />
           </div>
@@ -298,34 +346,35 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         <button className="calculate-button" type="button" onClick={onCalculate}>
           Calculate
         </button>
-      </section>
+      </AccordionItem>
 
-      <section className="card">
-        <h2>Fill Plan</h2>
-        {error && <div className="error">{error}</div>}
-        {!error && notice && <div className="warning">{notice}</div>}
-        {!error && result && (
-          <ol className="result-list">
-            {result.map((step, index) => (
-              <li key={step.label}>
-                {index + 1}. {step.label}: {formatPressure(step.amount, settings.pressureUnit)}
-                <span className="result-step-total">{"->"} Tank @ {formatPressure(step.total, settings.pressureUnit)}</span>
-              </li>
-            ))}
-          </ol>
-        )}
-        {!error && outcomeMeta && (
-          <div className="table-note">
-            Resulting mix ≈ {outcomeMeta.finalO2.toFixed(1)}% O2 / {outcomeMeta.finalHe.toFixed(1)}% He.
-            {outcomeMeta.similar && (
-              <>
-                {" "}(ΔO2 {formatSignedPercent(outcomeMeta.deviationO2)}, ΔHe {formatSignedPercent(outcomeMeta.deviationHe)}).
-              </>
-            )}
-          </div>
-        )}
-        {!error && outcomeMeta?.warning && <div className="warning">{outcomeMeta.warning}</div>}
-      </section>
+      {(result || error || notice) && (
+        <AccordionItem title="Fill Plan" isOpen={planOpen} onToggle={() => setPlanOpen(!planOpen)}>
+          {error && <div className="error">{error}</div>}
+          {!error && notice && <div className="warning">{notice}</div>}
+          {!error && result && (
+            <ol className="result-list">
+              {result.map((step, index) => (
+                <li key={step.label}>
+                  {index + 1}. {step.label}: {formatPressure(step.amount, settings.pressureUnit)}
+                  <span className="result-step-total">{"->"} Tank @ {formatPressure(step.total, settings.pressureUnit)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+          {!error && outcomeMeta && (
+            <div className="table-note">
+              Resulting mix ≈ {outcomeMeta.finalO2.toFixed(1)}% O2 / {outcomeMeta.finalHe.toFixed(1)}% He.
+              {outcomeMeta.similar && (
+                <>
+                  {" "}(ΔO2 {formatSignedPercent(outcomeMeta.deviationO2)}, ΔHe {formatSignedPercent(outcomeMeta.deviationHe)}).
+                </>
+              )}
+            </div>
+          )}
+          {!error && outcomeMeta?.warning && <div className="warning">{outcomeMeta.warning}</div>}
+        </AccordionItem>
+      )}
     </>
   );
 };

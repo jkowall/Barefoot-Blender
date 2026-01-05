@@ -12,6 +12,7 @@ import {
 } from "../utils/calculations";
 import { formatPercentage, formatPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
+import { AccordionItem } from "./Accordion";
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 
@@ -31,6 +32,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const setStandardBlend = useSessionStore((state: SessionState) => state.setStandardBlend);
   const [result, setResult] = useState<BlendResult | null>(null);
   const [sensitivityDeltaPsi, setSensitivityDeltaPsi] = useState(0);
+  const [planOpen, setPlanOpen] = useState(false);
 
   const selectedTopGas = useMemo(() => {
     const match = topOffOptions.find((option) => option.id === standardBlend.topGasId);
@@ -90,7 +92,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     );
   }, [baseVolumes, settings.defaultTankSizeCuFt, settings.tankRatedPressure, settings.pricePerCuFtO2, settings.pricePerCuFtHe]);
 
-  const updateField = (key: keyof StandardBlendInput, value: number): void => {
+  const updateField = <K extends keyof StandardBlendInput>(key: K, value: StandardBlendInput[K]): void => {
     setStandardBlend({ ...standardBlend, [key]: value });
   };
 
@@ -112,6 +114,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     );
     setResult(blendResult);
     setSensitivityDeltaPsi(0);
+    setPlanOpen(true);
   };
 
   const formatSignedPressure = (valuePsi: number): string => {
@@ -253,8 +256,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
   return (
     <>
-      <section className="card">
-        <h2>Start Tank</h2>
+      <AccordionItem title="Start Tank" defaultOpen={true}>
         <div className="grid two">
           <div className="field">
             <label>Start O2 %</label>
@@ -301,10 +303,9 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             />
           </div>
         </div>
-      </section>
+      </AccordionItem>
 
-      <section className="card">
-        <h2>Target Blend</h2>
+      <AccordionItem title="Target Blend" defaultOpen={true}>
         <div className="grid two">
           <div className="field">
             <label>Target O2 %</label>
@@ -351,10 +352,9 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             />
           </div>
         </div>
-      </section>
+      </AccordionItem>
 
-      <section className="card">
-        <h2>Top-Off Gas</h2>
+      <AccordionItem title="Top-Off Gas" defaultOpen={true}>
         <div className="field">
           <label>Select Gas</label>
           <select
@@ -374,11 +374,10 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         <button className="calculate-button" type="button" onClick={onCalculate}>
           Calculate
         </button>
-      </section>
+      </AccordionItem>
 
       {result && (
-        <section className="card">
-          <h2>Blend Plan</h2>
+        <AccordionItem title="Blend Plan" isOpen={planOpen} onToggle={() => setPlanOpen(!planOpen)}>
           {!result.success && result.errors.length > 0 && (
             <div className="error">{result.errors[0]}</div>
           )}
@@ -441,12 +440,11 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               </div>
             </div>
           )}
-        </section>
+        </AccordionItem>
       )}
 
       {result?.success && sensitivityAnalysis && (
-        <section className="card">
-          <h2>Fill Sensitivity</h2>
+        <AccordionItem title="Fill Sensitivity" defaultOpen={false}>
           <div className="field">
             <label>Adjust Start Pressure ({settings.pressureUnit.toUpperCase()})</label>
             <input
@@ -525,12 +523,11 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
           ) : (
             <div className="warning">{sensitivityAnalysis.error}</div>
           )}
-        </section>
+        </AccordionItem>
       )}
 
       {result?.success && (requiredStart || noHeliumTarget) && (
-        <section className="card">
-          <h2>Reverse Solvers</h2>
+        <AccordionItem title="Reverse Solvers" defaultOpen={false}>
           <div className="grid two">
             <div className="reverse-block">
               <div className="section-title">Required Start Pressure (no helium)</div>
@@ -572,7 +569,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               )}
             </div>
           </div>
-        </section>
+        </AccordionItem>
       )}
     </>
   );

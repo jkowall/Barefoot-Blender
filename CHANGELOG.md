@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.0
+- **Feature:** Multi-Bank Blending: Added "Start Tank" input to Multi-Gas Match tab.
+- **UI:** Refactored all tabs (Standard, Multi-Gas, Top-Off, Utilities) to use collapsible Accordion sections for better usability.
+- **UI:** Improved organization of Utilities tab metrics.
+- **Fix:** Corrected linting errors and improved type safety.
+
 ## [0.4.3] - 2026-01-04
 
 ### Added

@@ -21,6 +21,9 @@ export type MultiGasInput = {
   gas1CustomHe?: number;
   gas2CustomO2?: number;
   gas2CustomHe?: number;
+  startO2: number;
+  startHe: number;
+  startPressure: number;
 };
 
 export type UtilityInputs = {
@@ -85,7 +88,10 @@ const defaultValues = {
     gas1CustomO2: 32,
     gas1CustomHe: 0,
     gas2CustomO2: 36,
-    gas2CustomHe: 0
+    gas2CustomHe: 0,
+    startO2: 21,
+    startHe: 0,
+    startPressure: 0
   },
   utilities: {
     modGasO2: 32,

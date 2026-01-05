@@ -876,7 +876,10 @@ const findSimilarMultiGasBlend = (
   targetO2: number,
   targetHe: number,
   gas1: GasSelection,
-  gas2: GasSelection
+  gas2: GasSelection,
+  startPressurePsi: number = 0,
+  startO2: number = 0,
+  startHe: number = 0
 ): MultiGasFallbackSuggestion | null => {
   const o2Candidates = buildSearchValues(targetO2, MULTI_GAS_O2_TOLERANCE, MULTI_GAS_O2_STEP, 0, 100);
 
@@ -887,15 +890,28 @@ const findSimilarMultiGasBlend = (
       if (Math.abs(o2 - targetO2) < 1e-6 && Math.abs(he - targetHe) < 1e-6) {
         continue;
       }
-      const attempt = solveTwoGasBlend(targetPressurePsi, o2, he, gas1, gas2);
+
+      // Calculate required added mix for this candidate target
+      const addedPressure = targetPressurePsi - startPressurePsi;
+      if (addedPressure <= tolerance) continue;
+
+      const neededO2Psi = targetPressurePsi * fraction(o2) - startPressurePsi * fraction(startO2);
+      const neededHePsi = targetPressurePsi * fraction(he) - startPressurePsi * fraction(startHe);
+      const neededO2 = (neededO2Psi / addedPressure) * 100;
+      const neededHe = (neededHePsi / addedPressure) * 100;
+
+      // Skip if needed mix is invalid (e.g. requires removing O2/He or > 100%)
+      if (neededO2 < -1e-6 || neededHe < -1e-6 || neededO2 + neededHe > 100 + 1e-6) continue;
+
+      const attempt = solveTwoGasBlend(addedPressure, neededO2, neededHe, gas1, gas2);
       if (attempt.success) {
         return {
           steps: [
             { gas: gas1.name, amount: attempt.gas1Amount },
             { gas: gas2.name, amount: attempt.gas2Amount }
           ],
-          finalO2: attempt.finalO2,
-          finalHe: attempt.finalHe,
+          finalO2: o2,
+          finalHe: he,
           deviationO2: o2 - targetO2,
           deviationHe: he - targetHe,
           warning: attempt.warning
@@ -922,6 +938,8 @@ export const calculateMultiGasBlend = (
   fallback?: MultiGasFallbackSuggestion;
 } => {
   const targetPressurePsi = fromDisplayPressure(inputs.targetPressure, settings.pressureUnit);
+  const startPressurePsi = fromDisplayPressure(inputs.startPressure ?? 0, settings.pressureUnit);
+
   if (targetPressurePsi <= tolerance) {
     return {
       success: false,
@@ -930,9 +948,28 @@ export const calculateMultiGasBlend = (
     };
   }
 
+  if (targetPressurePsi < startPressurePsi - tolerance) {
+    return {
+      success: false,
+      steps: [],
+      error: "Target pressure is lower than start pressure. Bleed-down required first."
+    };
+  }
+
+  const addedPressurePsi = targetPressurePsi - startPressurePsi;
+  if (addedPressurePsi <= tolerance) {
+    return {
+      success: false, // Or true? If equal, we are done.
+      // If exactly equal, no gas adds.
+      steps: [],
+      error: "Start pressure equals target pressure."
+    };
+  }
+
   const targetO2Fraction = fraction(inputs.targetO2);
   const targetHe = inputs.targetHe ?? 0;
   const targetHeFraction = fraction(targetHe);
+
   if (targetO2Fraction + targetHeFraction > 1 + tolerance) {
     return {
       success: false,
@@ -940,7 +977,33 @@ export const calculateMultiGasBlend = (
       error: "O2 + He must be 100% or less."
     };
   }
-  const primary = solveTwoGasBlend(targetPressurePsi, inputs.targetO2, targetHe, gas1, gas2);
+
+  // Calculate required composition of the added gas
+  const startO2Fraction = fraction(inputs.startO2 ?? 0);
+  const startHeFraction = fraction(inputs.startHe ?? 0);
+
+  const neededO2Psi = targetPressurePsi * targetO2Fraction - startPressurePsi * startO2Fraction;
+  const neededHePsi = targetPressurePsi * targetHeFraction - startPressurePsi * startHeFraction;
+
+  const neededO2Percent = (neededO2Psi / addedPressurePsi) * 100;
+  const neededHePercent = (neededHePsi / addedPressurePsi) * 100;
+
+  // Basic sanity check on needed mix
+  if (neededO2Percent < -0.01 || neededHePercent < -0.01 || (neededO2Percent + neededHePercent) > 100.01) {
+    return {
+      success: false,
+      steps: [],
+      error: "Impossible to reach target from current start mix (requires removing gas or exceeding 100%)."
+    };
+  }
+
+  const primary = solveTwoGasBlend(
+    addedPressurePsi,
+    Math.max(0, neededO2Percent),
+    Math.max(0, neededHePercent),
+    gas1,
+    gas2
+  );
 
   if (primary.success) {
     return {
@@ -949,8 +1012,13 @@ export const calculateMultiGasBlend = (
         { gas: gas1.name, amount: primary.gas1Amount },
         { gas: gas2.name, amount: primary.gas2Amount }
       ],
-      finalO2: primary.finalO2,
-      finalHe: primary.finalHe,
+      // We return the TARGET final mix relative to total pressure (which is what the user asked for).
+      // solveTwoGasBlend returns the mix of the ADDED portion.
+      // We should confirm if the caller expects the final total mix or the added mix.
+      // Looking at usage: likely expects the resulting mix in the tank.
+      // Since we hit the target exactly (primary.success), we return the requested target.
+      finalO2: inputs.targetO2,
+      finalHe: targetHe,
       warning: primary.warning
     };
   }
@@ -960,7 +1028,10 @@ export const calculateMultiGasBlend = (
     inputs.targetO2,
     targetHe,
     gas1,
-    gas2
+    gas2,
+    startPressurePsi,
+    inputs.startO2 ?? 0,
+    inputs.startHe ?? 0
   );
 
   if (fallback) {
