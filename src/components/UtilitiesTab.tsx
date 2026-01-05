@@ -8,7 +8,7 @@ import {
   calculateEND,
   calculateMOD
 } from "../utils/calculations";
-import { formatDepth, formatNumber } from "../utils/format";
+import { formatNumber } from "../utils/format";
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 
@@ -68,11 +68,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
     [utilities.densityO2, utilities.densityHe, utilities.densityDepth, settings.depthUnit]
   );
 
-  // Unit Converter State
-  const [converterDepth, setConverterDepth] = useMemo(() => {
-    let d = 10;
-    return [d, (v: number) => { d = v; }];
-  }, []);
+
 
   const update = (patch: Parameters<typeof setUtilities>[0]): void => {
     setUtilities(patch);

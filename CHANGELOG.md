@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.2] - 2026-01-04
+
+### Fixed
+- Resolved lint errors in `UtilitiesTab.tsx` and `main.tsx`.
+
 ## [0.4.1] - 2026-01-04
 
 ### Changed
