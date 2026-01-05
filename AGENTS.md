@@ -161,11 +161,34 @@ npx wrangler deploy   # Deploys to Cloudflare Pages
 
 Ensure authenticated via `npx wrangler login` first.
 
-## Versioning
+## Versioning & Release Checklist
 
-1. Bump version: `npm version patch|minor|major`
-2. Update `CHANGELOG.md` with `[X.Y.Z] - YYYY-MM-DD` entry
-3. Build and deploy
+**Every new feature or bug fix requires the following updates:**
+
+1. **Bump the version** in `package.json`:
+   - `npm version patch` - Bug fixes and minor changes
+   - `npm version minor` - New features
+   - `npm version major` - Breaking changes
+
+2. **Update `CHANGELOG.md`**:
+   - Add entry with format `[X.Y.Z] - YYYY-MM-DD`
+   - Describe what was added, changed, or fixed
+   - Group by: Added, Changed, Fixed, Removed (as applicable)
+
+3. **Update `README.md`** if the change affects:
+   - Available features or functionality
+   - Usage instructions or commands
+   - Project structure or dependencies
+   - Configuration options
+
+4. **Commit all updates together** with a signed commit:
+   ```bash
+   git add -A
+   git commit -S -m "Release vX.Y.Z: Brief description"
+   git push
+   ```
+
+> **Important**: Do not merge features or fixes without completing all versioning steps.
 
 ## Key Domain Concepts
 
