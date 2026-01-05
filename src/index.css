@@ -429,3 +429,31 @@ td {
   font-size: 0.75rem;
   color: #94a3b8;
 }
+
+.cost-breakdown {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.cost-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #cbd5f5;
+  padding: 4px 0;
+}
+
+.cost-line span:first-child {
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.cost-total {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  font-size: 1rem;
+  color: #38bdf8;
+}

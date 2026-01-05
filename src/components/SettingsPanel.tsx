@@ -14,7 +14,11 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
     setDefaultContingencyPPO2,
     setOxygenIsNarcotic,
     upsertCustomGas,
-    removeCustomGas
+    removeCustomGas,
+    setPricePerCuFtO2,
+    setPricePerCuFtHe,
+    setDefaultTankSizeCuFt,
+    setTankRatedPressure
   } = settings;
 
   const handleGasChange = (gas: GasDefinition, patch: Partial<GasDefinition>): void => {
@@ -103,6 +107,59 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
             <option value="yes">Yes</option>
           </select>
         </div>
+
+        <div className="section-title">Pricing</div>
+        <div className="grid two">
+          <div className="field">
+            <label>O₂ Price ($/cu ft)</label>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={settings.pricePerCuFtO2 ?? 1.0}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                setPricePerCuFtO2(Math.max(0, Number(event.target.value)))
+              }
+            />
+          </div>
+          <div className="field">
+            <label>He Price ($/cu ft)</label>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={settings.pricePerCuFtHe ?? 3.5}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                setPricePerCuFtHe(Math.max(0, Number(event.target.value)))
+              }
+            />
+          </div>
+          <div className="field">
+            <label>Tank Size (cu ft)</label>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={settings.defaultTankSizeCuFt ?? 80}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                setDefaultTankSizeCuFt(Math.max(1, Number(event.target.value)))
+              }
+            />
+          </div>
+          <div className="field">
+            <label>Tank Rated Pressure (PSI)</label>
+            <input
+              type="number"
+              min={1}
+              step={100}
+              value={settings.tankRatedPressure ?? 3000}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                setTankRatedPressure(Math.max(1, Number(event.target.value)))
+              }
+            />
+          </div>
+        </div>
+        <div className="table-note">Common tanks: AL80 (80 cu ft @ 3000 PSI), HP100 (100 cu ft @ 3442 PSI)</div>
 
         <div className="section-title">Custom Banked Gases</div>
         {settings.customGases.map((gas) => (

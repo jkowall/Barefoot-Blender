@@ -710,17 +710,17 @@ export const calculateTopOffBlend = (
 
 type TwoGasBlendResult =
   | {
-      success: true;
-      gas1Amount: number;
-      gas2Amount: number;
-      finalO2: number;
-      finalHe: number;
-      warning?: string;
-    }
+    success: true;
+    gas1Amount: number;
+    gas2Amount: number;
+    finalO2: number;
+    finalHe: number;
+    warning?: string;
+  }
   | {
-      success: false;
-      error: string;
-    };
+    success: false;
+    error: string;
+  };
 
 const solveTwoGasBlend = (
   targetPressurePsi: number,
@@ -1051,4 +1051,44 @@ export const listTopOffOptions = (customGases: GasDefinition[]): GasSelection[] 
     { id: "helium", name: "Helium", o2: 0, he: 100 },
     ...customGases.map((gas) => ({ id: gas.id, name: gas.name, o2: gas.o2, he: gas.he }))
   ];
+};
+
+export type GasCostResult = {
+  oxygenCuFt: number;
+  heliumCuFt: number;
+  oxygenCost: number;
+  heliumCost: number;
+  totalCost: number;
+};
+
+/**
+ * Calculate the cost of gas additions based on PSI values and tank specifications.
+ * Formula: cuFt = (psi / tankRatedPressure) * tankSizeCuFt
+ */
+export const calculateGasCost = (
+  oxygenPsi: number,
+  heliumPsi: number,
+  tankSizeCuFt: number,
+  tankRatedPressure: number,
+  pricePerCuFtO2: number,
+  pricePerCuFtHe: number
+): GasCostResult => {
+  const psiToCuFt = (psi: number): number => {
+    if (tankRatedPressure <= 0) return 0;
+    return (psi / tankRatedPressure) * tankSizeCuFt;
+  };
+
+  const oxygenCuFt = psiToCuFt(oxygenPsi);
+  const heliumCuFt = psiToCuFt(heliumPsi);
+  const oxygenCost = oxygenCuFt * pricePerCuFtO2;
+  const heliumCost = heliumCuFt * pricePerCuFtHe;
+  const totalCost = oxygenCost + heliumCost;
+
+  return {
+    oxygenCuFt,
+    heliumCuFt,
+    oxygenCost,
+    heliumCost,
+    totalCost
+  };
 };

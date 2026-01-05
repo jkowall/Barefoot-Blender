@@ -7,7 +7,8 @@ import {
   type GasSelection,
   summarizeBlendVolumes,
   solveRequiredStartPressure,
-  solveMaxTargetWithoutHelium
+  solveMaxTargetWithoutHelium,
+  calculateGasCost
 } from "../utils/calculations";
 import { formatPercentage, formatPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
@@ -69,6 +70,25 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     }
     return summarizeBlendVolumes(result);
   }, [result]);
+
+  const gasCost = useMemo(() => {
+    if (!baseVolumes) {
+      return null;
+    }
+    // Use fallback defaults in case settings were persisted before these fields existed
+    const tankSize = settings.defaultTankSizeCuFt ?? 80;
+    const ratedPressure = settings.tankRatedPressure ?? 3000;
+    const o2Price = settings.pricePerCuFtO2 ?? 1.0;
+    const hePrice = settings.pricePerCuFtHe ?? 3.5;
+    return calculateGasCost(
+      baseVolumes.oxygen,
+      baseVolumes.helium,
+      tankSize,
+      ratedPressure,
+      o2Price,
+      hePrice
+    );
+  }, [baseVolumes, settings.defaultTankSizeCuFt, settings.tankRatedPressure, settings.pricePerCuFtO2, settings.pricePerCuFtHe]);
 
   const updateField = (key: keyof StandardBlendInput, value: number): void => {
     setStandardBlend({ ...standardBlend, [key]: value });
@@ -399,6 +419,28 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               {warning}
             </div>
           ))}
+          {gasCost && (gasCost.oxygenCuFt > 0 || gasCost.heliumCuFt > 0) && (
+            <div className="cost-breakdown">
+              <div className="section-title">Fill Cost</div>
+              <div className="grid two">
+                {gasCost.oxygenCuFt > 0 && (
+                  <div className="cost-line">
+                    <span>O₂:</span>
+                    <span>{gasCost.oxygenCuFt.toFixed(2)} cu ft × ${settings.pricePerCuFtO2.toFixed(2)} = ${gasCost.oxygenCost.toFixed(2)}</span>
+                  </div>
+                )}
+                {gasCost.heliumCuFt > 0 && (
+                  <div className="cost-line">
+                    <span>He:</span>
+                    <span>{gasCost.heliumCuFt.toFixed(2)} cu ft × ${settings.pricePerCuFtHe.toFixed(2)} = ${gasCost.heliumCost.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+              <div className="cost-total">
+                <strong>Total: ${gasCost.totalCost.toFixed(2)}</strong>
+              </div>
+            </div>
+          )}
         </section>
       )}
 
