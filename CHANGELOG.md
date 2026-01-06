@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2] - 2026-01-06
+
+### Changed
+- **Settings UI**: Complete redesign of the Settings panel using a tabbed interface (General, Gases, Pricing) for better organization.
+- **Calculate Button**: Updated "Calculate" buttons to be full-width for improved mobile usability.
+- **UI Layout**: Added pinned headers and footers to the Settings panel to keep navigation and actions always visible.
+
 ## [0.6.1] - 2026-01-06
 
 ### Fixed

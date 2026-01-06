@@ -7,7 +7,7 @@ import { AccordionItem } from "./Accordion";
 import ErrorBoundary from "./ErrorBoundary";
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
-const clampPressure = (value: number): number => Math.max(0, value);
+
 
 const MAX_GAS_SOURCES = 4;
 
