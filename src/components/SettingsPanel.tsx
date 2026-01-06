@@ -121,34 +121,7 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                     }}
                   />
                 </div>
-                <div className="field">
-                  <label>Tank Size (cu ft)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={settings.defaultTankSizeCuFt ?? ""}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                      const val = event.target.value;
-                      setDefaultTankSizeCuFt(val === "" ? undefined : Math.max(1, Number(val)));
-                    }}
-                  />
-                </div>
-                <div className="field">
-                  <label>Tank Rated Pressure (PSI)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    step={100}
-                    value={settings.tankRatedPressure ?? ""}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                      const val = event.target.value;
-                      setTankRatedPressure(val === "" ? undefined : Math.max(1, Number(val)));
-                    }}
-                  />
-                </div>
               </div>
-              <div className="table-note">Common tanks: AL80 (80 cu ft @ 3000 PSI), HP100 (100 cu ft @ 3442 PSI)</div>
             </>
           )}
 
@@ -257,6 +230,37 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                   />
                 </div>
               </div>
+
+              <div className="section-title" style={{ marginTop: 16 }}>Default Tank</div>
+              <div className="grid two">
+                <div className="field">
+                  <label>Tank Size (cu ft)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={settings.defaultTankSizeCuFt ?? ""}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                      const val = event.target.value;
+                      setDefaultTankSizeCuFt(val === "" ? undefined : Math.max(1, Number(val)));
+                    }}
+                  />
+                </div>
+                <div className="field">
+                  <label>Tank Rated Pressure (PSI)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={100}
+                    value={settings.tankRatedPressure ?? ""}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                      const val = event.target.value;
+                      setTankRatedPressure(val === "" ? undefined : Math.max(1, Number(val)));
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="table-note">Common tanks: AL80 (80 cu ft @ 3000 PSI), HP100 (100 cu ft @ 3442 PSI)</div>
             </>
           )}
         </div>

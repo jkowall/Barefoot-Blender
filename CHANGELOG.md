@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.4] - 2026-01-06
+
+### Changed
+- **Settings UI**: Moved Tank Size and Rated Pressure settings from the General tab to the Pricing tab for better context.
+
 ## [0.6.3] - 2026-01-06
 
 ### Fixed
