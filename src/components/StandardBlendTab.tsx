@@ -416,8 +416,8 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                   runningPsi += step.amount;
                   return (
                     <li key={`${step.kind}-${index}`}>
-                      {index + 1}. {descriptor} {formatPressure(step.amount, settings.pressureUnit)} {gasLabel}
-                      <span className="result-step-total">{"->"} Tank @ {formatPressure(runningPsi, settings.pressureUnit)}</span>
+                      {index + 1}. {descriptor} {gasLabel}: {formatPressure(runningPsi, settings.pressureUnit)}
+                      <span className="result-step-total"> ({formatSignedPressure(step.amount)})</span>
                     </li>
                   );
                 })}

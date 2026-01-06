@@ -433,9 +433,9 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                       const displayAmount = Math.abs(step.amount);
                       return (
                         <li key={index} className={isBleed ? "bleed-step" : ""}>
-                          {index + 1}. {action} {step.gas}: {formatPressure(displayAmount, settings.pressureUnit)}
+                          {index + 1}. {action} {step.gas}: {formatPressure(runningTotal, settings.pressureUnit)}
                           <span className="result-step-total">
-                            {"->"} Tank @ {formatPressure(runningTotal, settings.pressureUnit)}
+                            ({isBleed ? "-" : "+"}{formatPressure(displayAmount, settings.pressureUnit)})
                           </span>
                         </li>
                       );

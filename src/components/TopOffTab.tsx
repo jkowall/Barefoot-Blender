@@ -252,9 +252,8 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
           )}
           {result.success && (
             <div className="result-note">
-              Add {formatPressure(result.addedPressure, settings.pressureUnit)} of {selectedTopGas?.name ?? "chosen gas"} to reach
-              {" "}
-              {formatPressure(result.finalPressure, settings.pressureUnit)}.
+              Add {selectedTopGas?.name ?? "chosen gas"}: {formatPressure(result.finalPressure, settings.pressureUnit)}
+              <span className="result-step-total"> (+{formatPressure(result.addedPressure, settings.pressureUnit)})</span>
             </div>
           )}
           {result.warnings.map((warning) => (
@@ -362,7 +361,8 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                 </div>
               </div>
               <div className="result-note">
-                After bleeding to {formatPressure(adjustedStartPsi, settings.pressureUnit)}, add {formatPressure(bleedPreview.addedPressure, settings.pressureUnit)} of {selectedTopGas?.name ?? "chosen gas"}.
+                Bleed tank to {formatPressure(adjustedStartPsi, settings.pressureUnit)}, then add {selectedTopGas?.name ?? "chosen gas"}: {formatPressure(bleedPreview.finalPressure, settings.pressureUnit)}
+                <span className="result-step-total"> (+{formatPressure(bleedPreview.addedPressure, settings.pressureUnit)})</span>
               </div>
               {bleedPreview.warnings.map((warning) => (
                 <div key={warning} className="warning">

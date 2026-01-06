@@ -1716,29 +1716,51 @@ export const solveNGasBlend = (
 
   // If no solution and bleed-down might help (target He < start He, or composition requires it)
   if (alternatives.length === 0 && startPressurePsi > tolerance) {
-    // Try blending from empty tank (full bleed-down)
-    const bleedAlternatives = generateBlendAlternatives(
-      targetPressurePsi,
-      targetO2,
-      targetHe,
-      0, // Start from empty
-      21, // Air composition (doesn't matter since pressure is 0)
-      0,
-      availableGases,
-      costSettings
-    );
+    // Binary search for the maximum starting pressure (minimum bleed) that allows a solution
+    let low = 0;
+    let high = startPressurePsi;
+    let bestStartPressure = 0;
+    let bestAlternatives: BlendAlternative[] = [];
 
-    // Add bleed step to each alternative's fill order
-    for (const alt of bleedAlternatives) {
-      const bleedStep = { gas: "Bleed Tank", amount: -startPressurePsi };
-      alt.fillOrder = [bleedStep, ...alt.fillOrder];
-      // Add bleed note to cost breakdown
-      alt.costBreakdown = [{ gas: "Bleed to Empty", amount: startPressurePsi, cost: 0 }, ...alt.costBreakdown];
+    // 20 iterations is enough for < 1 PSI precision at 10000 PSI
+    for (let i = 0; i < 20; i++) {
+      const mid = (low + high) / 2;
+      const attemptAlts = generateBlendAlternatives(
+        targetPressurePsi,
+        targetO2,
+        targetHe,
+        mid,
+        startO2,
+        startHe,
+        availableGases,
+        costSettings
+      );
+
+      if (attemptAlts.length > 0) {
+        bestStartPressure = mid;
+        bestAlternatives = attemptAlts;
+        low = mid; // Try to bleed less
+      } else {
+        high = mid; // Must bleed more
+      }
     }
 
-    if (bleedAlternatives.length > 0) {
+    if (bestAlternatives.length > 0) {
       warnings.push("Bleed-down required to achieve target mix.");
-      alternatives = bleedAlternatives;
+
+      // Add bleed step to each alternative
+      for (const alt of bestAlternatives) {
+        const bleedAmount = startPressurePsi - bestStartPressure;
+        const bleedStep = { gas: "Bleed Tank", amount: -bleedAmount };
+        alt.fillOrder = [bleedStep, ...alt.fillOrder];
+
+        // Add bleed note to cost breakdown
+        alt.costBreakdown = [
+          { gas: `Bleed to ${Math.round(toDisplayPressure(bestStartPressure, settings.pressureUnit))} ${settings.pressureUnit}`, amount: bleedAmount, cost: 0 },
+          ...alt.costBreakdown
+        ];
+      }
+      alternatives = bestAlternatives;
     }
   }
 

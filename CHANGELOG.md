@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.5] - 2026-01-06
+
+### Fixed
+- **Multi-Gas Blending**: Optimized bleed-down logic to suggest partial bleeds instead of always emptying the tank. This significantly reduces gas waste and cost when the target mix is reachable from a partial drain.
+
 ## [0.6.4] - 2026-01-06
 
 ### Changed
