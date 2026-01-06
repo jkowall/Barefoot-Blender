@@ -22,24 +22,24 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
   const modResult = useMemo(
     () =>
       calculateMOD(
-        utilities.modGasO2,
-        utilities.modMaxPPO2 ?? settings.defaultMaxPPO2,
-        settings.defaultContingencyPPO2,
+        utilities.modGasO2 ?? 0,
+        utilities.modMaxPPO2 ?? settings.defaultMaxPPO2 ?? 1.4,
+        settings.defaultContingencyPPO2 ?? 1.6,
         settings.depthUnit
       ),
     [utilities.modGasO2, utilities.modMaxPPO2, settings.defaultMaxPPO2, settings.defaultContingencyPPO2, settings.depthUnit]
   );
 
   const eadResult = useMemo(
-    () => calculateEAD(utilities.eadO2, utilities.eadDepth, settings.depthUnit),
+    () => calculateEAD(utilities.eadO2 ?? 0, utilities.eadDepth ?? 0, settings.depthUnit),
     [utilities.eadO2, utilities.eadDepth, settings.depthUnit]
   );
 
   const bestMixResult = useMemo(
     () =>
       calculateBestMix(
-        utilities.bestMixDepth,
-        utilities.bestMixPPO2 ?? settings.defaultMaxPPO2,
+        utilities.bestMixDepth ?? 0,
+        utilities.bestMixPPO2 ?? settings.defaultMaxPPO2 ?? 1.4,
         utilities.bestMixMaxEND ?? 30, // Default to 30m if not set
         settings.depthUnit
       ),
@@ -55,9 +55,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
   const endResult = useMemo(
     () =>
       calculateEND(
-        utilities.endO2,
-        utilities.endHe,
-        utilities.endDepth,
+        utilities.endO2 ?? 0,
+        utilities.endHe ?? 0,
+        utilities.endDepth ?? 0,
         settings.depthUnit,
         settings.oxygenIsNarcotic
       ),
@@ -65,7 +65,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
   );
 
   const densityResult = useMemo(
-    () => calculateDensity(utilities.densityO2, utilities.densityHe, utilities.densityDepth, settings.depthUnit),
+    () => calculateDensity(utilities.densityO2 ?? 0, utilities.densityHe ?? 0, utilities.densityDepth ?? 0, settings.depthUnit),
     [utilities.densityO2, utilities.densityHe, utilities.densityDepth, settings.depthUnit]
   );
 
@@ -90,9 +90,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               min={0}
               max={100}
               step={0.1}
-              value={utilities.modGasO2}
+              value={utilities.modGasO2 ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ modGasO2: clampPercent(Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ modGasO2: event.target.value === "" ? undefined : clampPercent(Number(event.target.value)) })}
             />
           </div>
           <div className="field">
@@ -101,9 +101,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               type="number"
               min={0}
               step={0.1}
-              value={utilities.modMaxPPO2}
+              value={utilities.modMaxPPO2 ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ modMaxPPO2: Math.max(0, Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ modMaxPPO2: event.target.value === "" ? undefined : Math.max(0, Number(event.target.value)) })}
             />
           </div>
         </div>
@@ -121,9 +121,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               type="number"
               min={0}
               step={1}
-              value={utilities.bestMixDepth}
+              value={utilities.bestMixDepth ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixDepth: clampDepth(Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixDepth: event.target.value === "" ? undefined : clampDepth(Number(event.target.value)) })}
             />
           </div>
           <div className="field">
@@ -132,9 +132,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               type="number"
               min={0}
               step={0.1}
-              value={utilities.bestMixPPO2}
+              value={utilities.bestMixPPO2 ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixPPO2: Math.max(0, Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixPPO2: event.target.value === "" ? undefined : Math.max(0, Number(event.target.value)) })}
             />
           </div>
           <div className="field">
@@ -143,9 +143,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               type="number"
               min={0}
               step={1}
-              value={utilities.bestMixMaxEND ?? 30}
+              value={utilities.bestMixMaxEND ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixMaxEND: Math.max(0, Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixMaxEND: event.target.value === "" ? undefined : Math.max(0, Number(event.target.value)) })}
             />
           </div>
         </div>
@@ -163,9 +163,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               min={0}
               max={100}
               step={0.1}
-              value={utilities.eadO2}
+              value={utilities.eadO2 ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ eadO2: clampPercent(Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ eadO2: event.target.value === "" ? undefined : clampPercent(Number(event.target.value)) })}
             />
           </div>
           <div className="field">
@@ -174,9 +174,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               type="number"
               min={0}
               step={1}
-              value={utilities.eadDepth}
+              value={utilities.eadDepth ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ eadDepth: clampDepth(Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ eadDepth: event.target.value === "" ? undefined : clampDepth(Number(event.target.value)) })}
             />
           </div>
         </div>
@@ -194,9 +194,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               min={0}
               max={100}
               step={0.1}
-              value={utilities.endO2}
+              value={utilities.endO2 ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ endO2: clampPercent(Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ endO2: event.target.value === "" ? undefined : clampPercent(Number(event.target.value)) })}
             />
           </div>
           <div className="field">
@@ -206,9 +206,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               min={0}
               max={100}
               step={0.1}
-              value={utilities.endHe}
+              value={utilities.endHe ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ endHe: clampPercent(Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ endHe: event.target.value === "" ? undefined : clampPercent(Number(event.target.value)) })}
             />
           </div>
           <div className="field">
@@ -217,9 +217,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               type="number"
               min={0}
               step={1}
-              value={utilities.endDepth}
+              value={utilities.endDepth ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ endDepth: clampDepth(Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ endDepth: event.target.value === "" ? undefined : clampDepth(Number(event.target.value)) })}
             />
           </div>
         </div>
@@ -238,9 +238,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               min={0}
               max={100}
               step={0.1}
-              value={utilities.densityO2}
+              value={utilities.densityO2 ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ densityO2: clampPercent(Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ densityO2: event.target.value === "" ? undefined : clampPercent(Number(event.target.value)) })}
             />
           </div>
           <div className="field">
@@ -250,9 +250,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               min={0}
               max={100}
               step={0.1}
-              value={utilities.densityHe}
+              value={utilities.densityHe ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ densityHe: clampPercent(Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ densityHe: event.target.value === "" ? undefined : clampPercent(Number(event.target.value)) })}
             />
           </div>
           <div className="field">
@@ -261,9 +261,9 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
               type="number"
               min={0}
               step={1}
-              value={utilities.densityDepth}
+              value={utilities.densityDepth ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ densityDepth: clampDepth(Number(event.target.value)) })}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ densityDepth: event.target.value === "" ? undefined : clampDepth(Number(event.target.value)) })}
             />
           </div>
         </div>
@@ -278,24 +278,26 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
 };
 
 const UnitConverter = (): JSX.Element => {
-  const [depthValue, setDepthValue] = useState<number>(10);
+  const [depthValue, setDepthValue] = useState<number | undefined>(10);
   const [depthUnit, setDepthUnit] = useState<"m" | "ft">("m");
 
-  const [pressureValue, setPressureValue] = useState<number>(200);
+  const [pressureValue, setPressureValue] = useState<number | undefined>(200);
   const [pressureUnit, setPressureUnit] = useState<"bar" | "psi">("bar");
 
   const convertedDepth = useMemo(() => {
+    const val = depthValue ?? 0;
     if (depthUnit === "m") {
-      return { value: depthValue * 3.28084, unit: "ft" };
+      return { value: val * 3.28084, unit: "ft" };
     }
-    return { value: depthValue / 3.28084, unit: "m" };
+    return { value: val / 3.28084, unit: "m" };
   }, [depthValue, depthUnit]);
 
   const convertedPressure = useMemo(() => {
+    const val = pressureValue ?? 0;
     if (pressureUnit === "bar") {
-      return { value: pressureValue * 14.5038, unit: "psi" };
+      return { value: val * 14.5038, unit: "psi" };
     }
-    return { value: pressureValue / 14.5038, unit: "bar" };
+    return { value: val / 14.5038, unit: "bar" };
   }, [pressureValue, pressureUnit]);
 
   return (
@@ -307,8 +309,11 @@ const UnitConverter = (): JSX.Element => {
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <input
               type="number"
-              value={depthValue}
-              onChange={(e) => setDepthValue(Math.max(0, Number(e.target.value)))}
+              value={depthValue ?? ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                setDepthValue(val === "" ? undefined : Math.max(0, Number(val)));
+              }}
               style={{ flex: 1 }}
             />
             <select
@@ -327,8 +332,11 @@ const UnitConverter = (): JSX.Element => {
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <input
               type="number"
-              value={pressureValue}
-              onChange={(e) => setPressureValue(Math.max(0, Number(e.target.value)))}
+              value={pressureValue ?? ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                setPressureValue(val === "" ? undefined : Math.max(0, Number(val)));
+              }}
               style={{ flex: 1 }}
             />
             <select

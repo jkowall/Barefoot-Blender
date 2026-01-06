@@ -14,25 +14,25 @@ export type GasDefinition = {
 type SettingsState = {
   pressureUnit: PressureUnit;
   depthUnit: DepthUnit;
-  defaultMaxPPO2: number;
-  defaultContingencyPPO2: number;
+  defaultMaxPPO2?: number;
+  defaultContingencyPPO2?: number;
   oxygenIsNarcotic: boolean;
   customGases: GasDefinition[];
-  pricePerCuFtO2: number;
-  pricePerCuFtHe: number;
-  defaultTankSizeCuFt: number;
-  tankRatedPressure: number;
+  pricePerCuFtO2?: number;
+  pricePerCuFtHe?: number;
+  defaultTankSizeCuFt?: number;
+  tankRatedPressure?: number;
   setPressureUnit: (unit: PressureUnit) => void;
   setDepthUnit: (unit: DepthUnit) => void;
-  setDefaultMaxPPO2: (value: number) => void;
-  setDefaultContingencyPPO2: (value: number) => void;
+  setDefaultMaxPPO2: (value: number | undefined) => void;
+  setDefaultContingencyPPO2: (value: number | undefined) => void;
   setOxygenIsNarcotic: (value: boolean) => void;
   upsertCustomGas: (gas: GasDefinition) => void;
   removeCustomGas: (id: string) => void;
-  setPricePerCuFtO2: (value: number) => void;
-  setPricePerCuFtHe: (value: number) => void;
-  setDefaultTankSizeCuFt: (value: number) => void;
-  setTankRatedPressure: (value: number) => void;
+  setPricePerCuFtO2: (value: number | undefined) => void;
+  setPricePerCuFtHe: (value: number | undefined) => void;
+  setDefaultTankSizeCuFt: (value: number | undefined) => void;
+  setTankRatedPressure: (value: number | undefined) => void;
 };
 
 type SettingsSetter = (
@@ -63,8 +63,8 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
   tankRatedPressure: 3000,
   setPressureUnit: (unit: PressureUnit) => set({ pressureUnit: unit }),
   setDepthUnit: (unit: DepthUnit) => set({ depthUnit: unit }),
-  setDefaultMaxPPO2: (value: number) => set({ defaultMaxPPO2: value }),
-  setDefaultContingencyPPO2: (value: number) => set({ defaultContingencyPPO2: value }),
+  setDefaultMaxPPO2: (value: number | undefined) => set({ defaultMaxPPO2: value }),
+  setDefaultContingencyPPO2: (value: number | undefined) => set({ defaultContingencyPPO2: value }),
   setOxygenIsNarcotic: (value: boolean) => set({ oxygenIsNarcotic: value }),
   upsertCustomGas: (gas: GasDefinition) => {
     const gases = get().customGases;
@@ -80,10 +80,10 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
   removeCustomGas: (id: string) => {
     set({ customGases: get().customGases.filter((item: GasDefinition) => item.id !== id) });
   },
-  setPricePerCuFtO2: (value: number) => set({ pricePerCuFtO2: value }),
-  setPricePerCuFtHe: (value: number) => set({ pricePerCuFtHe: value }),
-  setDefaultTankSizeCuFt: (value: number) => set({ defaultTankSizeCuFt: value }),
-  setTankRatedPressure: (value: number) => set({ tankRatedPressure: value })
+  setPricePerCuFtO2: (value: number | undefined) => set({ pricePerCuFtO2: value }),
+  setPricePerCuFtHe: (value: number | undefined) => set({ pricePerCuFtHe: value }),
+  setDefaultTankSizeCuFt: (value: number | undefined) => set({ defaultTankSizeCuFt: value }),
+  setTankRatedPressure: (value: number | undefined) => set({ tankRatedPressure: value })
 });
 
 export const useSettingsStore = create<SettingsState>()(

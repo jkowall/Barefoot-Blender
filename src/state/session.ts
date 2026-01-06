@@ -30,19 +30,19 @@ export type MultiGasInput = {
 };
 
 export type UtilityInputs = {
-  modGasO2: number;
-  modMaxPPO2: number;
-  eadO2: number;
-  eadDepth: number;
-  bestMixDepth: number;
-  bestMixPPO2: number;
-  bestMixMaxEND: number;
-  endO2: number;
-  endHe: number;
-  endDepth: number;
-  densityO2: number;
-  densityHe: number;
-  densityDepth: number;
+  modGasO2?: number;
+  modMaxPPO2?: number;
+  eadO2?: number;
+  eadDepth?: number;
+  bestMixDepth?: number;
+  bestMixPPO2?: number;
+  bestMixMaxEND?: number;
+  endO2?: number;
+  endHe?: number;
+  endDepth?: number;
+  densityO2?: number;
+  densityHe?: number;
+  densityDepth?: number;
 };
 
 export type TopOffInput = {

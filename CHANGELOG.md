@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.3] - 2026-01-06
+
+### Fixed
+- **Input Behavior**: Resolved issue where clearing number inputs resulted in '0' causing editing friction. Inputs can now be fully cleared.
+
 ## [0.6.2] - 2026-01-06
 
 ### Changed

@@ -147,12 +147,13 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               max={100}
               step={0.1}
-              value={topOff.startO2}
+              value={topOff.startO2 ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField("startO2", Number(event.target.value))
-              }
-              onBlur={() => updateField("startO2", clampPercent(topOff.startO2))}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField("startO2", val === "" ? undefined : Number(val));
+              }}
+              onBlur={() => updateField("startO2", clampPercent(topOff.startO2 ?? 0))}
             />
           </div>
           <div className="field">
@@ -162,12 +163,13 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               max={100}
               step={0.1}
-              value={topOff.startHe}
+              value={topOff.startHe ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField("startHe", Number(event.target.value))
-              }
-              onBlur={() => updateField("startHe", clampPercent(topOff.startHe))}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField("startHe", val === "" ? undefined : Number(val));
+              }}
+              onBlur={() => updateField("startHe", clampPercent(topOff.startHe ?? 0))}
             />
           </div>
           <div className="field">
@@ -176,12 +178,13 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               type="number"
               min={0}
               step={settings.pressureUnit === "psi" ? 10 : 1}
-              value={topOff.startPressure}
+              value={topOff.startPressure ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField("startPressure", Number(event.target.value))
-              }
-              onBlur={() => updateField("startPressure", clampPressure(topOff.startPressure))}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField("startPressure", val === "" ? undefined : Number(val));
+              }}
+              onBlur={() => updateField("startPressure", clampPressure(topOff.startPressure ?? 0))}
             />
           </div>
         </div>
@@ -194,12 +197,13 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             type="number"
             min={0}
             step={settings.pressureUnit === "psi" ? 10 : 1}
-            value={topOff.finalPressure}
+            value={topOff.finalPressure ?? ""}
             onFocus={selectOnFocus}
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              updateField("finalPressure", Number(event.target.value))
-            }
-            onBlur={() => updateField("finalPressure", clampPressure(topOff.finalPressure))}
+            onChange={(event: ChangeEvent<HTMLInputElement>) => {
+              const val = event.target.value;
+              updateField("finalPressure", val === "" ? undefined : Number(val));
+            }}
+            onBlur={() => updateField("finalPressure", clampPressure(topOff.finalPressure ?? 0))}
           />
         </div>
       </AccordionItem>

@@ -101,10 +101,11 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                     type="number"
                     min={0}
                     step={0.05}
-                    value={settings.defaultMaxPPO2}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                      setDefaultMaxPPO2(Math.max(0, Number(event.target.value)))
-                    }
+                    value={settings.defaultMaxPPO2 ?? ""}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                      const val = event.target.value;
+                      setDefaultMaxPPO2(val === "" ? undefined : Math.max(0, Number(val)));
+                    }}
                   />
                 </div>
                 <div className="field">
@@ -113,10 +114,11 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                     type="number"
                     min={0}
                     step={0.05}
-                    value={settings.defaultContingencyPPO2}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                      setDefaultContingencyPPO2(Math.max(0, Number(event.target.value)))
-                    }
+                    value={settings.defaultContingencyPPO2 ?? ""}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                      const val = event.target.value;
+                      setDefaultContingencyPPO2(val === "" ? undefined : Math.max(0, Number(val)));
+                    }}
                   />
                 </div>
                 <div className="field">
@@ -125,10 +127,11 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                     type="number"
                     min={1}
                     step={1}
-                    value={settings.defaultTankSizeCuFt ?? 80}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                      setDefaultTankSizeCuFt(Math.max(1, Number(event.target.value)))
-                    }
+                    value={settings.defaultTankSizeCuFt ?? ""}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                      const val = event.target.value;
+                      setDefaultTankSizeCuFt(val === "" ? undefined : Math.max(1, Number(val)));
+                    }}
                   />
                 </div>
                 <div className="field">
@@ -137,10 +140,11 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                     type="number"
                     min={1}
                     step={100}
-                    value={settings.tankRatedPressure ?? 3000}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                      setTankRatedPressure(Math.max(1, Number(event.target.value)))
-                    }
+                    value={settings.tankRatedPressure ?? ""}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                      const val = event.target.value;
+                      setTankRatedPressure(val === "" ? undefined : Math.max(1, Number(val)));
+                    }}
                   />
                 </div>
               </div>
@@ -232,10 +236,11 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                     type="number"
                     min={0}
                     step={0.01}
-                    value={settings.pricePerCuFtO2 ?? 1.0}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                      setPricePerCuFtO2(Math.max(0, Number(event.target.value)))
-                    }
+                    value={settings.pricePerCuFtO2 ?? ""}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                      const val = event.target.value;
+                      setPricePerCuFtO2(val === "" ? undefined : Math.max(0, Number(val)));
+                    }}
                   />
                 </div>
                 <div className="field">
@@ -244,10 +249,11 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                     type="number"
                     min={0}
                     step={0.01}
-                    value={settings.pricePerCuFtHe ?? 3.5}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                      setPricePerCuFtHe(Math.max(0, Number(event.target.value)))
-                    }
+                    value={settings.pricePerCuFtHe ?? ""}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                      const val = event.target.value;
+                      setPricePerCuFtHe(val === "" ? undefined : Math.max(0, Number(val)));
+                    }}
                   />
                 </div>
               </div>

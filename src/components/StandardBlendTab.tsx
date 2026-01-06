@@ -270,12 +270,13 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               max={100}
               step={0.1}
-              value={standardBlend.startO2}
+              value={standardBlend.startO2 ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField("startO2", Number(event.target.value))
-              }
-              onBlur={() => updateField("startO2", clampPercent(standardBlend.startO2))}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField("startO2", val === "" ? undefined : Number(val));
+              }}
+              onBlur={() => updateField("startO2", clampPercent(standardBlend.startO2 ?? 0))}
             />
           </div>
           <div className="field">
@@ -285,12 +286,13 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               max={100}
               step={0.1}
-              value={standardBlend.startHe}
+              value={standardBlend.startHe ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField("startHe", Number(event.target.value))
-              }
-              onBlur={() => updateField("startHe", clampPercent(standardBlend.startHe))}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField("startHe", val === "" ? undefined : Number(val));
+              }}
+              onBlur={() => updateField("startHe", clampPercent(standardBlend.startHe ?? 0))}
             />
           </div>
           <div className="field">
@@ -299,12 +301,13 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               type="number"
               min={0}
               step={settings.pressureUnit === "psi" ? 10 : 1}
-              value={standardBlend.startPressure}
+              value={standardBlend.startPressure ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField("startPressure", Number(event.target.value))
-              }
-              onBlur={() => updateField("startPressure", clampPressure(standardBlend.startPressure))}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField("startPressure", val === "" ? undefined : Number(val));
+              }}
+              onBlur={() => updateField("startPressure", clampPressure(standardBlend.startPressure ?? 0))}
             />
           </div>
         </div>
@@ -319,12 +322,13 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               max={100}
               step={0.1}
-              value={standardBlend.targetO2}
+              value={standardBlend.targetO2 ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField("targetO2", Number(event.target.value))
-              }
-              onBlur={() => updateField("targetO2", clampPercent(standardBlend.targetO2))}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField("targetO2", val === "" ? undefined : Number(val));
+              }}
+              onBlur={() => updateField("targetO2", clampPercent(standardBlend.targetO2 ?? 0))}
             />
           </div>
           <div className="field">
@@ -334,12 +338,13 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               max={100}
               step={0.1}
-              value={standardBlend.targetHe}
+              value={standardBlend.targetHe ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField("targetHe", Number(event.target.value))
-              }
-              onBlur={() => updateField("targetHe", clampPercent(standardBlend.targetHe))}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField("targetHe", val === "" ? undefined : Number(val));
+              }}
+              onBlur={() => updateField("targetHe", clampPercent(standardBlend.targetHe ?? 0))}
             />
           </div>
           <div className="field">
@@ -348,12 +353,13 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               type="number"
               min={0}
               step={settings.pressureUnit === "psi" ? 10 : 1}
-              value={standardBlend.targetPressure}
+              value={standardBlend.targetPressure ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField("targetPressure", Number(event.target.value))
-              }
-              onBlur={() => updateField("targetPressure", clampPressure(standardBlend.targetPressure))}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField("targetPressure", val === "" ? undefined : Number(val));
+              }}
+              onBlur={() => updateField("targetPressure", clampPressure(standardBlend.targetPressure ?? 0))}
             />
           </div>
         </div>
