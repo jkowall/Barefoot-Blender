@@ -11,19 +11,22 @@ export type StandardBlendInput = {
   topGasId: string;
 };
 
+export type GasSourceInput = {
+  id: string;
+  customO2?: number;
+  customHe?: number;
+  enabled: boolean;
+};
+
 export type MultiGasInput = {
-  gas1Id: string;
-  gas2Id: string;
+  gasSources: GasSourceInput[];
   targetO2: number;
   targetHe: number;
   targetPressure: number;
-  gas1CustomO2?: number;
-  gas1CustomHe?: number;
-  gas2CustomO2?: number;
-  gas2CustomHe?: number;
   startO2: number;
   startHe: number;
   startPressure: number;
+  selectedAlternativeIndex: number;
 };
 
 export type UtilityInputs = {
@@ -80,18 +83,17 @@ const defaultValues = {
     topGasId: "air"
   },
   multiGas: {
-    gas1Id: "air",
-    gas2Id: "bank-36",
+    gasSources: [
+      { id: "air", enabled: true },
+      { id: "bank-36", customO2: 36, customHe: 0, enabled: true }
+    ],
     targetO2: 32,
     targetHe: 0,
     targetPressure: 3000,
-    gas1CustomO2: 32,
-    gas1CustomHe: 0,
-    gas2CustomO2: 36,
-    gas2CustomHe: 0,
     startO2: 21,
     startHe: 0,
-    startPressure: 0
+    startPressure: 0,
+    selectedAlternativeIndex: 0
   },
   utilities: {
     modGasO2: 32,

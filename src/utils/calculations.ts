@@ -1174,3 +1174,590 @@ export const calculateGasCost = (
     totalCost
   };
 };
+
+// ============================================================================
+// N-GAS BLEND OPTIMIZER
+// ============================================================================
+
+export type BlendAlternative = {
+  steps: { gas: GasSelection; amount: number }[];
+  finalO2: number;
+  finalHe: number;
+  deviationO2: number;
+  deviationHe: number;
+  estimatedCost: number;
+  costBreakdown: { gas: string; amount: number; cost: number }[];
+  fillOrder: { gas: string; amount: number }[];
+};
+
+export type NGasBlendResult = {
+  success: boolean;
+  alternatives: BlendAlternative[];
+  selectedIndex: number;
+  error?: string;
+  warnings: string[];
+};
+
+type CostSettings = {
+  pricePerCuFtO2: number;
+  pricePerCuFtHe: number;
+  tankSizeCuFt: number;
+  tankRatedPressure: number;
+};
+
+/**
+ * Calculate cost priority rank for a gas (lower = cheaper).
+ * Used as fallback when He price is not configured.
+ */
+const getGasCostRank = (gas: GasSelection): number => {
+  if (gas.id === "air") return 1;
+  if (gas.he === 0) return 2; // Nitrox (no He)
+  if (gas.he < 20) return 3;  // Low He
+  if (gas.he < 100) return 4; // High He
+  return 5; // Pure He
+};
+
+/**
+ * Estimate cost for using a gas at a given pressure.
+ * If He price is 0/undefined, uses heuristic ranking.
+ */
+const estimateGasPressureCost = (
+  gas: GasSelection,
+  pressurePsi: number,
+  costSettings: CostSettings
+): number => {
+  const { pricePerCuFtO2, pricePerCuFtHe, tankSizeCuFt, tankRatedPressure } = costSettings;
+
+  if (tankRatedPressure <= 0 || pressurePsi <= 0) return 0;
+
+  const cuFt = (pressurePsi / tankRatedPressure) * tankSizeCuFt;
+  const o2Fraction = fraction(gas.o2);
+  const heFraction = fraction(gas.he);
+
+  // If He price is configured, calculate actual cost
+  if (pricePerCuFtHe > 0) {
+    const o2Cost = cuFt * o2Fraction * pricePerCuFtO2;
+    const heCost = cuFt * heFraction * pricePerCuFtHe;
+    return o2Cost + heCost;
+  }
+
+  // Fallback: use rank-based heuristic (rank * base cost)
+  const rank = getGasCostRank(gas);
+  return cuFt * rank * 0.1; // Arbitrary multiplier for comparison
+};
+
+/**
+ * Sort gases by cost (cheapest first).
+ */
+export const rankGasesByCost = (
+  gases: GasSelection[],
+  costSettings: CostSettings
+): GasSelection[] => {
+  const referenceAmount = 100; // Use 100 PSI as reference for ranking
+  return [...gases].sort((a, b) => {
+    const costA = estimateGasPressureCost(a, referenceAmount, costSettings);
+    const costB = estimateGasPressureCost(b, referenceAmount, costSettings);
+    return costA - costB;
+  });
+};
+
+/**
+ * Solve a blend using exactly 2 gases.
+ * Uses linear algebra to find amounts that satisfy both O2 and He targets.
+ * Returns null if not solvable.
+ */
+const tryTwoGasSolution = (
+  addedPressure: number,
+  neededO2Percent: number,
+  neededHePercent: number,
+  gas1: GasSelection,
+  gas2: GasSelection
+): { gas1Amount: number; gas2Amount: number; finalO2: number; finalHe: number } | null => {
+  const targetO2 = fraction(neededO2Percent);
+  const targetHe = fraction(neededHePercent);
+
+  if (targetO2 + targetHe > 1 + tolerance) return null;
+  if (targetO2 < -tolerance || targetHe < -tolerance) return null;
+
+  const o1 = fraction(gas1.o2);
+  const h1 = fraction(gas1.he);
+  const o2 = fraction(gas2.o2);
+  const h2 = fraction(gas2.he);
+
+  // We have constraints:
+  // g1 + g2 = P (total pressure)
+  // g1*o1 + g2*o2 = P*targetO2 (O2 target)
+  // g1*h1 + g2*h2 = P*targetHe (He target)
+
+  // This is overdetermined (3 equations, 2 unknowns).
+  // We solve using O2 and He constraints (2 equations), then check if g1+g2 = P.
+
+  // Matrix form: [o1 o2; h1 h2] * [g1; g2] = P * [targetO2; targetHe]
+  const det = o1 * h2 - o2 * h1;
+
+  // Handle degenerate cases
+  if (Math.abs(det) < tolerance) {
+    // Gases are parallel in O2/He space - can't span 2D
+    // Try simple nitrox blending (He = 0 case)
+    if (targetHe < tolerance && h1 < tolerance && h2 < tolerance) {
+      // Both gases are nitrox, solve for O2 only
+      const denom = o1 - o2;
+      if (Math.abs(denom) < tolerance) return null;
+
+      const g1 = addedPressure * (targetO2 - o2) / denom;
+      const g2 = addedPressure - g1;
+
+      if (g1 < -tolerance || g2 < -tolerance) return null;
+
+      const sg1 = Math.max(0, g1);
+      const sg2 = Math.max(0, g2);
+
+      return {
+        gas1Amount: sg1,
+        gas2Amount: sg2,
+        finalO2: (sg1 * o1 + sg2 * o2) / addedPressure * 100,
+        finalHe: 0
+      };
+    }
+    return null;
+  }
+
+  // Solve the 2x2 system for O2 and He constraints
+  // The target amounts are: P*targetO2 for O2, P*targetHe for He
+  const rhs_o2 = addedPressure * targetO2;
+  const rhs_he = addedPressure * targetHe;
+
+  // Cramer's rule
+  const g1 = (rhs_o2 * h2 - rhs_he * o2) / det;
+  const g2 = (o1 * rhs_he - h1 * rhs_o2) / det;
+
+  // Check if amounts are valid (non-negative)
+  if (g1 < -tolerance || g2 < -tolerance) return null;
+
+  const sg1 = Math.max(0, g1);
+  const sg2 = Math.max(0, g2);
+  const totalPressure = sg1 + sg2;
+
+  // Check if total matches added pressure (within tolerance)
+  // This is the third constraint - if it doesn't match, these 2 gases can't hit the target
+  if (Math.abs(totalPressure - addedPressure) > Math.max(1, addedPressure * 0.005)) {
+    return null;
+  }
+
+  // Verify result
+  const resultO2 = totalPressure > 0 ? (sg1 * o1 + sg2 * o2) / totalPressure * 100 : 0;
+  const resultHe = totalPressure > 0 ? (sg1 * h1 + sg2 * h2) / totalPressure * 100 : 0;
+
+  return {
+    gas1Amount: sg1,
+    gas2Amount: sg2,
+    finalO2: resultO2,
+    finalHe: resultHe
+  };
+};
+
+/**
+ * Try to solve using a single gas source.
+ * Only matches if the gas composition is very close to needed.
+ */
+const trySingleGasSolution = (
+  addedPressure: number,
+  neededO2Percent: number,
+  neededHePercent: number,
+  gas: GasSelection
+): { amount: number; finalO2: number; finalHe: number } | null => {
+  // Single gas solution requires the gas composition to closely match the needed composition
+  // Use tight tolerance (0.5%) to avoid false matches
+  const o2Match = Math.abs(gas.o2 - neededO2Percent) < 0.5;
+  const heMatch = Math.abs(gas.he - neededHePercent) < 0.5;
+
+  if (o2Match && heMatch) {
+    return {
+      amount: addedPressure,
+      finalO2: gas.o2,
+      finalHe: gas.he
+    };
+  }
+
+  return null;
+};
+
+/**
+ * Get recommended fill order for a blend (He first, then O2, then diluent/Air).
+ */
+export const getRecommendedFillOrder = (
+  steps: { gas: GasSelection; amount: number }[]
+): { gas: string; amount: number }[] => {
+  // Sort by: pure He first, then by He content descending, then by O2 content descending
+  const sorted = [...steps]
+    .filter(s => s.amount > tolerance)
+    .sort((a, b) => {
+      // Pure He comes first
+      if (a.gas.he === 100 && b.gas.he !== 100) return -1;
+      if (b.gas.he === 100 && a.gas.he !== 100) return 1;
+      // Then pure O2
+      if (a.gas.o2 === 100 && b.gas.o2 !== 100) return -1;
+      if (b.gas.o2 === 100 && a.gas.o2 !== 100) return 1;
+      // Then by He content (higher He first)
+      if (a.gas.he !== b.gas.he) return b.gas.he - a.gas.he;
+      // Then by O2 content (higher O2 first)  
+      if (a.gas.o2 !== b.gas.o2) return b.gas.o2 - a.gas.o2;
+      // Air/diluent last
+      return 0;
+    });
+
+  return sorted.map(s => ({ gas: s.gas.name, amount: s.amount }));
+};
+
+/**
+ * Solve a blend using exactly 3 gases.
+ * Uses Cramer's rule to solve the 3x3 linear system.
+ * 
+ * System of equations:
+ *   g1 + g2 + g3 = P (total pressure)
+ *   g1*o1 + g2*o2 + g3*o3 = P*targetO2 (O2 constraint)
+ *   g1*h1 + g2*h2 + g3*h3 = P*targetHe (He constraint)
+ */
+const tryThreeGasSolution = (
+  addedPressure: number,
+  neededO2Percent: number,
+  neededHePercent: number,
+  gas1: GasSelection,
+  gas2: GasSelection,
+  gas3: GasSelection
+): { gas1Amount: number; gas2Amount: number; gas3Amount: number; finalO2: number; finalHe: number } | null => {
+  const targetO2 = fraction(neededO2Percent);
+  const targetHe = fraction(neededHePercent);
+
+  if (targetO2 + targetHe > 1 + tolerance) return null;
+  if (targetO2 < -tolerance || targetHe < -tolerance) return null;
+
+  const o1 = fraction(gas1.o2), h1 = fraction(gas1.he);
+  const o2 = fraction(gas2.o2), h2 = fraction(gas2.he);
+  const o3 = fraction(gas3.o2), h3 = fraction(gas3.he);
+
+  // Matrix form: A * [g1; g2; g3] = [P; P*targetO2; P*targetHe]
+  // where A = [[1, 1, 1], [o1, o2, o3], [h1, h2, h3]]
+
+  // Calculate determinant of A using rule of Sarrus
+  const detA = 1 * (o2 * h3 - o3 * h2) - 1 * (o1 * h3 - o3 * h1) + 1 * (o1 * h2 - o2 * h1);
+
+  if (Math.abs(detA) < tolerance) {
+    // Matrix is singular - gases are linearly dependent
+    return null;
+  }
+
+  // Right-hand side vector
+  const rhs1 = addedPressure;
+  const rhs2 = addedPressure * targetO2;
+  const rhs3 = addedPressure * targetHe;
+
+  // Cramer's rule for g1 (replace first column with rhs)
+  const detA1 = rhs1 * (o2 * h3 - o3 * h2) - 1 * (rhs2 * h3 - o3 * rhs3) + 1 * (rhs2 * h2 - o2 * rhs3);
+  const g1 = detA1 / detA;
+
+  // Cramer's rule for g2 (replace second column with rhs)
+  const detA2 = 1 * (rhs2 * h3 - o3 * rhs3) - rhs1 * (o1 * h3 - o3 * h1) + 1 * (o1 * rhs3 - rhs2 * h1);
+  const g2 = detA2 / detA;
+
+  // Cramer's rule for g3 (replace third column with rhs)
+  const detA3 = 1 * (o2 * rhs3 - rhs2 * h2) - 1 * (o1 * rhs3 - rhs2 * h1) + rhs1 * (o1 * h2 - o2 * h1);
+  const g3 = detA3 / detA;
+
+  // Check if all amounts are non-negative
+  if (g1 < -tolerance || g2 < -tolerance || g3 < -tolerance) {
+    return null;
+  }
+
+  const sg1 = Math.max(0, g1);
+  const sg2 = Math.max(0, g2);
+  const sg3 = Math.max(0, g3);
+  const totalPressure = sg1 + sg2 + sg3;
+
+  // Verify total matches added pressure
+  if (Math.abs(totalPressure - addedPressure) > Math.max(1, addedPressure * 0.01)) {
+    return null;
+  }
+
+  // Compute resulting mix
+  const resultO2 = totalPressure > 0 ? (sg1 * o1 + sg2 * o2 + sg3 * o3) / totalPressure * 100 : 0;
+  const resultHe = totalPressure > 0 ? (sg1 * h1 + sg2 * h2 + sg3 * h3) / totalPressure * 100 : 0;
+
+  return {
+    gas1Amount: sg1,
+    gas2Amount: sg2,
+    gas3Amount: sg3,
+    finalO2: resultO2,
+    finalHe: resultHe
+  };
+};
+
+/**
+ * Generate all valid blend alternatives for the given gas sources.
+ * Tries all 1-gas, 2-gas, and 3-gas combinations, ranked by cost.
+ */
+export const generateBlendAlternatives = (
+  targetPressurePsi: number,
+  targetO2: number,
+  targetHe: number,
+  startPressurePsi: number,
+  startO2: number,
+  startHe: number,
+  availableGases: GasSelection[],
+  costSettings: CostSettings,
+  maxAlternatives: number = 5
+): BlendAlternative[] => {
+  const addedPressure = targetPressurePsi - startPressurePsi;
+  if (addedPressure <= tolerance) return [];
+
+  // Calculate needed composition for the added gas
+  const neededO2Psi = targetPressurePsi * fraction(targetO2) - startPressurePsi * fraction(startO2);
+  const neededHePsi = targetPressurePsi * fraction(targetHe) - startPressurePsi * fraction(startHe);
+  const neededO2Percent = (neededO2Psi / addedPressure) * 100;
+  const neededHePercent = (neededHePsi / addedPressure) * 100;
+
+  // Validate needed mix is achievable
+  if (neededO2Percent < -0.5 || neededHePercent < -0.5) return [];
+  if (neededO2Percent + neededHePercent > 100.5) return [];
+
+  const alternatives: BlendAlternative[] = [];
+  const enabledGases = availableGases.filter(g => g);
+
+  // Try single-gas solutions
+  for (const gas of enabledGases) {
+    const solution = trySingleGasSolution(addedPressure, neededO2Percent, neededHePercent, gas);
+    if (solution) {
+      // Compute actual final mix in the tank
+      const totalPressure = startPressurePsi + solution.amount;
+      const actualFinalO2 = (startPressurePsi * fraction(startO2) + solution.amount * fraction(gas.o2)) / totalPressure * 100;
+      const actualFinalHe = (startPressurePsi * fraction(startHe) + solution.amount * fraction(gas.he)) / totalPressure * 100;
+
+      const steps = [{ gas, amount: solution.amount }];
+      const cost = estimateGasPressureCost(gas, solution.amount, costSettings);
+      alternatives.push({
+        steps,
+        finalO2: actualFinalO2,
+        finalHe: actualFinalHe,
+        deviationO2: actualFinalO2 - targetO2,
+        deviationHe: actualFinalHe - targetHe,
+        estimatedCost: cost,
+        costBreakdown: [{ gas: gas.name, amount: solution.amount, cost }],
+        fillOrder: getRecommendedFillOrder(steps)
+      });
+    }
+  }
+
+  // Try two-gas solutions (all combinations)
+  for (let i = 0; i < enabledGases.length; i++) {
+    for (let j = i + 1; j < enabledGases.length; j++) {
+      const gas1 = enabledGases[i];
+      const gas2 = enabledGases[j];
+
+      const solution = tryTwoGasSolution(addedPressure, neededO2Percent, neededHePercent, gas1, gas2);
+      if (solution && solution.gas1Amount > -tolerance && solution.gas2Amount > -tolerance) {
+        const steps: { gas: GasSelection; amount: number }[] = [];
+        if (solution.gas1Amount > tolerance) steps.push({ gas: gas1, amount: solution.gas1Amount });
+        if (solution.gas2Amount > tolerance) steps.push({ gas: gas2, amount: solution.gas2Amount });
+
+        // Compute actual final mix in the tank
+        const totalAdd = solution.gas1Amount + solution.gas2Amount;
+        const totalPressure = startPressurePsi + totalAdd;
+        const actualFinalO2 = (startPressurePsi * fraction(startO2) +
+          solution.gas1Amount * fraction(gas1.o2) +
+          solution.gas2Amount * fraction(gas2.o2)) / totalPressure * 100;
+        const actualFinalHe = (startPressurePsi * fraction(startHe) +
+          solution.gas1Amount * fraction(gas1.he) +
+          solution.gas2Amount * fraction(gas2.he)) / totalPressure * 100;
+
+        const cost1 = estimateGasPressureCost(gas1, solution.gas1Amount, costSettings);
+        const cost2 = estimateGasPressureCost(gas2, solution.gas2Amount, costSettings);
+        const totalCost = cost1 + cost2;
+
+        const costBreakdown: { gas: string; amount: number; cost: number }[] = [];
+        if (solution.gas1Amount > tolerance) costBreakdown.push({ gas: gas1.name, amount: solution.gas1Amount, cost: cost1 });
+        if (solution.gas2Amount > tolerance) costBreakdown.push({ gas: gas2.name, amount: solution.gas2Amount, cost: cost2 });
+
+        alternatives.push({
+          steps,
+          finalO2: actualFinalO2,
+          finalHe: actualFinalHe,
+          deviationO2: actualFinalO2 - targetO2,
+          deviationHe: actualFinalHe - targetHe,
+          estimatedCost: totalCost,
+          costBreakdown,
+          fillOrder: getRecommendedFillOrder(steps)
+        });
+      }
+    }
+  }
+
+  // Try three-gas solutions (all triplet combinations)
+  for (let i = 0; i < enabledGases.length; i++) {
+    for (let j = i + 1; j < enabledGases.length; j++) {
+      for (let k = j + 1; k < enabledGases.length; k++) {
+        const gas1 = enabledGases[i];
+        const gas2 = enabledGases[j];
+        const gas3 = enabledGases[k];
+
+        const solution = tryThreeGasSolution(addedPressure, neededO2Percent, neededHePercent, gas1, gas2, gas3);
+        if (solution &&
+          solution.gas1Amount > -tolerance &&
+          solution.gas2Amount > -tolerance &&
+          solution.gas3Amount > -tolerance) {
+
+          const steps: { gas: GasSelection; amount: number }[] = [];
+          if (solution.gas1Amount > tolerance) steps.push({ gas: gas1, amount: solution.gas1Amount });
+          if (solution.gas2Amount > tolerance) steps.push({ gas: gas2, amount: solution.gas2Amount });
+          if (solution.gas3Amount > tolerance) steps.push({ gas: gas3, amount: solution.gas3Amount });
+
+          // Compute actual final mix in the tank
+          const totalAdd = solution.gas1Amount + solution.gas2Amount + solution.gas3Amount;
+          const totalPressure = startPressurePsi + totalAdd;
+          const actualFinalO2 = (startPressurePsi * fraction(startO2) +
+            solution.gas1Amount * fraction(gas1.o2) +
+            solution.gas2Amount * fraction(gas2.o2) +
+            solution.gas3Amount * fraction(gas3.o2)) / totalPressure * 100;
+          const actualFinalHe = (startPressurePsi * fraction(startHe) +
+            solution.gas1Amount * fraction(gas1.he) +
+            solution.gas2Amount * fraction(gas2.he) +
+            solution.gas3Amount * fraction(gas3.he)) / totalPressure * 100;
+
+          const cost1 = estimateGasPressureCost(gas1, solution.gas1Amount, costSettings);
+          const cost2 = estimateGasPressureCost(gas2, solution.gas2Amount, costSettings);
+          const cost3 = estimateGasPressureCost(gas3, solution.gas3Amount, costSettings);
+          const totalCost = cost1 + cost2 + cost3;
+
+          const costBreakdown: { gas: string; amount: number; cost: number }[] = [];
+          if (solution.gas1Amount > tolerance) costBreakdown.push({ gas: gas1.name, amount: solution.gas1Amount, cost: cost1 });
+          if (solution.gas2Amount > tolerance) costBreakdown.push({ gas: gas2.name, amount: solution.gas2Amount, cost: cost2 });
+          if (solution.gas3Amount > tolerance) costBreakdown.push({ gas: gas3.name, amount: solution.gas3Amount, cost: cost3 });
+
+          alternatives.push({
+            steps,
+            finalO2: actualFinalO2,
+            finalHe: actualFinalHe,
+            deviationO2: actualFinalO2 - targetO2,
+            deviationHe: actualFinalHe - targetHe,
+            estimatedCost: totalCost,
+            costBreakdown,
+            fillOrder: getRecommendedFillOrder(steps)
+          });
+        }
+      }
+    }
+  }
+
+  // Deduplicate alternatives based on gas combo and amounts
+  const seen = new Set<string>();
+  const uniqueAlternatives: BlendAlternative[] = [];
+  for (const alt of alternatives) {
+    const key = alt.fillOrder.map(s => `${s.gas}:${Math.round(s.amount)}`).sort().join('|');
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueAlternatives.push(alt);
+    }
+  }
+
+  // Sort by cost and return top alternatives
+  uniqueAlternatives.sort((a, b) => a.estimatedCost - b.estimatedCost);
+  return uniqueAlternatives.slice(0, maxAlternatives);
+};
+
+/**
+ * Main N-gas blend solver.
+ * Finds optimal blend using available gas sources, minimizing cost.
+ * Supports bleed-down scenarios when target composition requires removing gas.
+ */
+export const solveNGasBlend = (
+  settings: { pressureUnit: PressureUnit },
+  targetPressure: number,
+  targetO2: number,
+  targetHe: number,
+  startPressure: number,
+  startO2: number,
+  startHe: number,
+  availableGases: GasSelection[],
+  costSettings: CostSettings,
+  selectedIndex: number = 0
+): NGasBlendResult => {
+  const targetPressurePsi = fromDisplayPressure(targetPressure, settings.pressureUnit);
+  const startPressurePsi = fromDisplayPressure(startPressure, settings.pressureUnit);
+
+  const warnings: string[] = [];
+
+  // Basic validation
+  if (targetPressurePsi <= tolerance) {
+    return { success: false, alternatives: [], selectedIndex: 0, error: "Target pressure must be greater than zero.", warnings };
+  }
+
+  if (targetO2 + targetHe > 100 + tolerance) {
+    return { success: false, alternatives: [], selectedIndex: 0, error: "O2 + He must be 100% or less.", warnings };
+  }
+
+  if (availableGases.length === 0) {
+    return { success: false, alternatives: [], selectedIndex: 0, error: "No gas sources available.", warnings };
+  }
+
+  // Add warnings
+  if (targetO2 < 18) warnings.push("Hypoxic mix (<18% O2).");
+  if (targetO2 > 40) warnings.push("High O2 - fire risk (>40% O2).");
+
+  // First try: generate alternatives from current start tank
+  let alternatives = generateBlendAlternatives(
+    targetPressurePsi,
+    targetO2,
+    targetHe,
+    startPressurePsi,
+    startO2,
+    startHe,
+    availableGases,
+    costSettings
+  );
+
+  // If no solution and bleed-down might help (target He < start He, or composition requires it)
+  if (alternatives.length === 0 && startPressurePsi > tolerance) {
+    // Try blending from empty tank (full bleed-down)
+    const bleedAlternatives = generateBlendAlternatives(
+      targetPressurePsi,
+      targetO2,
+      targetHe,
+      0, // Start from empty
+      21, // Air composition (doesn't matter since pressure is 0)
+      0,
+      availableGases,
+      costSettings
+    );
+
+    // Add bleed step to each alternative's fill order
+    for (const alt of bleedAlternatives) {
+      const bleedStep = { gas: "Bleed Tank", amount: -startPressurePsi };
+      alt.fillOrder = [bleedStep, ...alt.fillOrder];
+      // Add bleed note to cost breakdown
+      alt.costBreakdown = [{ gas: "Bleed to Empty", amount: startPressurePsi, cost: 0 }, ...alt.costBreakdown];
+    }
+
+    if (bleedAlternatives.length > 0) {
+      warnings.push("Bleed-down required to achieve target mix.");
+      alternatives = bleedAlternatives;
+    }
+  }
+
+  if (alternatives.length === 0) {
+    return {
+      success: false,
+      alternatives: [],
+      selectedIndex: 0,
+      error: "No valid blend found with available gases. Try adding more gas sources or adjusting target.",
+      warnings
+    };
+  }
+
+  const validIndex = Math.min(selectedIndex, alternatives.length - 1);
+
+  return {
+    success: true,
+    alternatives,
+    selectedIndex: validIndex,
+    warnings
+  };
+};

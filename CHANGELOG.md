@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.0] - 2026-01-06
+
+### Added
+- **Dynamic Multi-Gas Blending**: Support for 1-4 gas sources with add/remove buttons
+- **N-Gas Solver**: 2-gas and 3-gas blend calculations using linear algebra (Cramer's rule)
+- **Cost Optimization**: Alternatives ranked by estimated cost based on O₂/He prices
+- **Bleed-Down Support**: Automatically suggests draining tank when target He% < start He%
+- **Fill Order Recommendations**: Gases sorted by He content (highest first) for proper blending sequence
+- **Alternative Selection**: Interactive UI to choose between multiple valid blend options
+
+### Changed
+- Multi-Gas tab completely rewritten for dynamic source management
+- Blend Options accordion now always expanded for better visibility
+- State structure updated: `MultiGasInput` now uses `gasSources[]` array (breaking change for stored sessions)
+
+### Fixed
+- Duplicate blend alternatives are now deduplicated based on gas combination and amounts
+
 ## [0.5.2] - 2026-01-05
 
 ### Fixed

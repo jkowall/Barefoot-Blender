@@ -1,12 +1,14 @@
-import { useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
+import { useMemo, type ChangeEvent, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
-import { useSessionStore, type SessionState, type MultiGasInput } from "../state/session";
-import { calculateMultiGasBlend, type GasSelection } from "../utils/calculations";
+import { useSessionStore, type SessionState, type MultiGasInput, type GasSourceInput } from "../state/session";
+import { solveNGasBlend, type GasSelection, type BlendAlternative } from "../utils/calculations";
 import { formatPressure } from "../utils/format";
 import { AccordionItem } from "./Accordion";
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 const clampPressure = (value: number): number => Math.max(0, value);
+
+const MAX_GAS_SOURCES = 4;
 
 const trimixPresets: GasSelection[] = [
   { id: "trimix-2135", name: "Trimix 21/35", o2: 21, he: 35 },
@@ -22,18 +24,14 @@ type Props = {
 const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const multiGas = useSessionStore((state: SessionState) => state.multiGas);
   const setMultiGas = useSessionStore((state: SessionState) => state.setMultiGas);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [result, setResult] = useState<{ label: string; amount: number; total: number }[] | null>(null);
-  const [outcomeMeta, setOutcomeMeta] = useState<{
-    finalO2: number;
-    finalHe: number;
-    warning?: string;
-    similar?: boolean;
-    deviationO2?: number;
-    deviationHe?: number;
-  } | null>(null);
-  const [planOpen, setPlanOpen] = useState(false);
+
+  // Build available gas options from presets and custom banks
+  const gasOptions = useMemo(() => {
+    return [
+      ...topOffOptions,
+      ...trimixPresets
+    ];
+  }, [topOffOptions]);
 
   const sanitizeCustomMix = (o2: number, he: number): { o2: number; he: number } => {
     const nextO2 = clampPercent(o2);
@@ -42,56 +40,27 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     return { o2: nextO2, he: nextHe };
   };
 
-  const options = useMemo(() => {
-    const custom = sanitizeCustomMix(multiGas.gas1CustomO2 ?? 32, multiGas.gas1CustomHe ?? 0);
-    return [
-      ...trimixPresets,
-      { id: "custom", name: `Custom (${custom.o2.toFixed(1)} O2 / ${custom.he.toFixed(1)} He)`, o2: custom.o2, he: custom.he },
-      ...topOffOptions
-    ];
-  }, [multiGas.gas1CustomHe, multiGas.gas1CustomO2, topOffOptions]);
-
-  const optionForGas2 = useMemo(() => {
-    const custom = sanitizeCustomMix(multiGas.gas2CustomO2 ?? 36, multiGas.gas2CustomHe ?? 0);
-    return [
-      ...trimixPresets,
-      { id: "custom", name: `Custom (${custom.o2.toFixed(1)} O2 / ${custom.he.toFixed(1)} He)`, o2: custom.o2, he: custom.he },
-      ...topOffOptions
-    ];
-  }, [multiGas.gas2CustomHe, multiGas.gas2CustomO2, topOffOptions]);
-
-  const resolveGasSelection = (id: string, customO2?: number, customHe?: number): GasSelection | null => {
-    if (id === "custom") {
-      const { o2, he } = sanitizeCustomMix(customO2 ?? 32, customHe ?? 0);
-      return { id: "custom", name: `Custom (${o2.toFixed(1)} O2 / ${he.toFixed(1)} He)`, o2, he };
-    }
-    return topOffOptions.find((option) => option.id === id) ?? trimixPresets.find((preset) => preset.id === id) ?? null;
-  };
-
-  // Check if helium is available from any source (start tank or selected gases)
+  // Check if helium is available from any source
   const hasHeliumAvailable = useMemo(() => {
-    // Helper to resolve a gas selection inline
-    const getGasHe = (id: string, customO2?: number, customHe?: number): number => {
-      if (id === "custom") {
-        const { he } = sanitizeCustomMix(customO2 ?? 32, customHe ?? 0);
-        return he;
+    const resolveGas = (source: GasSourceInput): GasSelection | null => {
+      if (source.id === "custom") {
+        const o2Val = clampPercent(source.customO2 ?? 32);
+        const heVal = Math.min(100 - o2Val, Math.max(0, source.customHe ?? 0));
+        return { id: "custom", name: `Custom`, o2: o2Val, he: heVal };
       }
-      const found = topOffOptions.find((option) => option.id === id) ?? trimixPresets.find((preset) => preset.id === id);
-      return found?.he ?? 0;
+      return gasOptions.find((option) => option.id === source.id) ?? null;
     };
 
-    // Check start tank helium
-    const startHe = multiGas.startHe ?? 0;
-    if (startHe > 0) return true;
+    if ((multiGas.startHe ?? 0) > 0) return true;
 
-    // Check Gas 1 for helium
-    if (getGasHe(multiGas.gas1Id, multiGas.gas1CustomO2, multiGas.gas1CustomHe) > 0) return true;
-
-    // Check Gas 2 for helium
-    if (getGasHe(multiGas.gas2Id, multiGas.gas2CustomO2, multiGas.gas2CustomHe) > 0) return true;
+    for (const source of multiGas.gasSources) {
+      if (!source.enabled) continue;
+      const gas = resolveGas(source);
+      if (gas && gas.he > 0) return true;
+    }
 
     return false;
-  }, [multiGas.startHe, multiGas.gas1Id, multiGas.gas1CustomO2, multiGas.gas1CustomHe, multiGas.gas2Id, multiGas.gas2CustomO2, multiGas.gas2CustomHe, topOffOptions]);
+  }, [multiGas.startHe, multiGas.gasSources, gasOptions]);
 
   const updateField = (patch: Partial<MultiGasInput>): void => {
     setMultiGas({ ...multiGas, ...patch });
@@ -101,80 +70,88 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     event.target.select();
   };
 
-  const buildCumulativeSteps = (steps: { gas: string; amount: number }[], startPressure: number): { label: string; amount: number; total: number }[] => {
-    const cumulative: { label: string; amount: number; total: number }[] = [];
-    let runningPsi = startPressure;
-    steps.forEach((step) => {
-      runningPsi += step.amount;
-      cumulative.push({ label: `Add ${step.gas}`, amount: step.amount, total: runningPsi });
-    });
-    return cumulative;
+  const updateGasSource = (index: number, patch: Partial<GasSourceInput>): void => {
+    const newSources = [...multiGas.gasSources];
+    newSources[index] = { ...newSources[index], ...patch };
+    updateField({ gasSources: newSources });
   };
 
-  const formatSignedPercent = (value?: number): string => {
-    if (value === undefined) {
-      return "0.0%";
-    }
-    const rounded = value.toFixed(1);
-    if (value > 0) {
-      return `+${rounded}%`;
-    }
-    return `${rounded}%`;
+  const addGasSource = (): void => {
+    if (multiGas.gasSources.length >= MAX_GAS_SOURCES) return;
+    const newSource: GasSourceInput = { id: "air", enabled: true };
+    updateField({ gasSources: [...multiGas.gasSources, newSource] });
   };
 
+  const removeGasSource = (index: number): void => {
+    if (multiGas.gasSources.length <= 1) return;
+    const newSources = multiGas.gasSources.filter((_, i) => i !== index);
+    updateField({ gasSources: newSources });
+  };
 
-  const onCalculate = (): void => {
-    setNotice(null);
-    const gas1 = resolveGasSelection(multiGas.gas1Id, multiGas.gas1CustomO2, multiGas.gas1CustomHe);
-    const gas2 = resolveGasSelection(multiGas.gas2Id, multiGas.gas2CustomO2, multiGas.gas2CustomHe);
+  // Cost settings from app settings
+  const costSettings = useMemo(() => ({
+    pricePerCuFtO2: settings.pricePerCuFtO2,
+    pricePerCuFtHe: settings.pricePerCuFtHe,
+    tankSizeCuFt: settings.defaultTankSizeCuFt,
+    tankRatedPressure: settings.tankRatedPressure
+  }), [settings]);
 
-    if (!gas1 || !gas2) {
-      setError("Please select both source gases.");
-      setNotice(null);
-      setResult(null);
-      setOutcomeMeta(null);
-      return;
-    }
-
-    const outcome = calculateMultiGasBlend(
-      { pressureUnit: settings.pressureUnit },
-      multiGas,
-      gas1,
-      gas2
-    );
-
-    if (!outcome.success) {
-      if (outcome.fallback) {
-        setError(null);
-        setNotice("Desired mix cannot be attained with these gases. A similar mix within ±1% O2 / ±5% He is shown below.");
-        setResult(buildCumulativeSteps(outcome.fallback.steps, multiGas.startPressure ?? 0));
-        setOutcomeMeta({
-          finalO2: outcome.fallback.finalO2,
-          finalHe: outcome.fallback.finalHe,
-          warning: outcome.fallback.warning,
-          similar: true,
-          deviationO2: outcome.fallback.deviationO2,
-          deviationHe: outcome.fallback.deviationHe
-        });
-        return;
+  // Compute blend result
+  const blendResult = useMemo(() => {
+    const resolveGas = (source: GasSourceInput): GasSelection | null => {
+      if (source.id === "custom") {
+        const o2Val = clampPercent(source.customO2 ?? 32);
+        const heVal = Math.min(100 - o2Val, Math.max(0, source.customHe ?? 0));
+        return { id: "custom", name: `Custom (${o2Val.toFixed(1)} O2 / ${heVal.toFixed(1)} He)`, o2: o2Val, he: heVal };
       }
-      setError(outcome.error ?? "Blend cannot be computed.");
-      setNotice(null);
-      setResult(null);
-      setOutcomeMeta(null);
-      return;
+      return gasOptions.find((option) => option.id === source.id) ?? null;
+    };
+
+    const enabledGases = multiGas.gasSources
+      .filter(s => s.enabled)
+      .map(s => resolveGas(s))
+      .filter((g): g is GasSelection => g !== null);
+
+    if (enabledGases.length === 0) {
+      return null;
     }
 
-    setError(null);
-    setNotice(null);
-    setResult(buildCumulativeSteps(outcome.steps, multiGas.startPressure ?? 0));
-    setOutcomeMeta({
-      finalO2: outcome.finalO2 ?? multiGas.targetO2,
-      finalHe: outcome.finalHe ?? (multiGas.targetHe ?? 0),
-      warning: outcome.warning,
-      similar: false
-    });
-    setPlanOpen(true);
+    return solveNGasBlend(
+      { pressureUnit: settings.pressureUnit },
+      multiGas.targetPressure,
+      multiGas.targetO2,
+      hasHeliumAvailable ? (multiGas.targetHe ?? 0) : 0,
+      multiGas.startPressure ?? 0,
+      multiGas.startO2 ?? 21,
+      multiGas.startHe ?? 0,
+      enabledGases,
+      costSettings,
+      multiGas.selectedAlternativeIndex
+    );
+  }, [multiGas, settings.pressureUnit, costSettings, hasHeliumAvailable, gasOptions]);
+
+  const selectedAlternative: BlendAlternative | null = useMemo(() => {
+    if (!blendResult?.success || blendResult.alternatives.length === 0) return null;
+    return blendResult.alternatives[blendResult.selectedIndex] ?? null;
+  }, [blendResult]);
+
+  const selectAlternative = (index: number): void => {
+    updateField({ selectedAlternativeIndex: index });
+  };
+
+  const formatCost = (cost: number): string => {
+    return `$${cost.toFixed(2)}`;
+  };
+
+  // Build options list with custom option
+  const getOptionsForSource = (source: GasSourceInput): GasSelection[] => {
+    const custom: GasSelection = {
+      id: "custom",
+      name: `Custom (${(source.customO2 ?? 32).toFixed(1)} O2 / ${(source.customHe ?? 0).toFixed(1)} He)`,
+      o2: source.customO2 ?? 32,
+      he: source.customHe ?? 0
+    };
+    return [...gasOptions, custom, ...trimixPresets.filter(t => !gasOptions.some(g => g.id === t.id))];
   };
 
   return (
@@ -226,102 +203,89 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       </AccordionItem>
 
       <AccordionItem title="Source Gases" defaultOpen={true}>
-        <div className="grid two">
-          <div className="field">
-            <label>Gas 1</label>
-            <select
-              value={multiGas.gas1Id}
-              onChange={(event: ChangeEvent<HTMLSelectElement>) => updateField({ gas1Id: event.target.value })}
-            >
-              {options.map((option: GasSelection) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {multiGas.gas1Id === "custom" && (
-            <div className="field">
-              <label>Gas 1 Mix</label>
-              <div className="dual-input">
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.1}
-                  value={multiGas.gas1CustomO2 ?? 32}
-                  onFocus={selectOnFocus}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                    const { o2, he } = sanitizeCustomMix(Number(event.target.value), multiGas.gas1CustomHe ?? 0);
-                    updateField({ gas1CustomO2: o2, gas1CustomHe: he });
-                  }}
-                />
-                <span className="dual-separator">O2%</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.1}
-                  value={multiGas.gas1CustomHe ?? 0}
-                  onFocus={selectOnFocus}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                    const { o2, he } = sanitizeCustomMix(multiGas.gas1CustomO2 ?? 32, Number(event.target.value));
-                    updateField({ gas1CustomO2: o2, gas1CustomHe: he });
-                  }}
-                />
-                <span className="dual-separator">He%</span>
+        {multiGas.gasSources.map((source, index) => (
+          <div key={index} className="gas-source-row">
+            <div className="grid two">
+              <div className="field">
+                <label>
+                  Gas {index + 1}
+                  {multiGas.gasSources.length > 1 && (
+                    <button
+                      type="button"
+                      className="remove-gas-btn"
+                      onClick={() => removeGasSource(index)}
+                      title="Remove gas source"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </label>
+                <select
+                  value={source.id}
+                  onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                    updateGasSource(index, { id: event.target.value })
+                  }
+                >
+                  {getOptionsForSource(source).map((option: GasSelection) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="table-note">N2 auto-balances remaining fraction.</div>
-            </div>
-          )}
-          <div className="field">
-            <label>Gas 2</label>
-            <select
-              value={multiGas.gas2Id}
-              onChange={(event: ChangeEvent<HTMLSelectElement>) => updateField({ gas2Id: event.target.value })}
-            >
-              {optionForGas2.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {multiGas.gas2Id === "custom" && (
-            <div className="field">
-              <label>Gas 2 Mix</label>
-              <div className="dual-input">
+              <div className="field">
+                <label>Enabled</label>
                 <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.1}
-                  value={multiGas.gas2CustomO2 ?? 36}
-                  onFocus={selectOnFocus}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                    const { o2, he } = sanitizeCustomMix(Number(event.target.value), multiGas.gas2CustomHe ?? 0);
-                    updateField({ gas2CustomO2: o2, gas2CustomHe: he });
-                  }}
+                  type="checkbox"
+                  checked={source.enabled}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                    updateGasSource(index, { enabled: event.target.checked })
+                  }
                 />
-                <span className="dual-separator">O2%</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.1}
-                  value={multiGas.gas2CustomHe ?? 0}
-                  onFocus={selectOnFocus}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                    const { o2, he } = sanitizeCustomMix(multiGas.gas2CustomO2 ?? 36, Number(event.target.value));
-                    updateField({ gas2CustomO2: o2, gas2CustomHe: he });
-                  }}
-                />
-                <span className="dual-separator">He%</span>
               </div>
-              <div className="table-note">N2 auto-balances remaining fraction.</div>
             </div>
-          )}
-        </div>
+            {source.id === "custom" && (
+              <div className="field">
+                <label>Custom Mix</label>
+                <div className="dual-input">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    value={source.customO2 ?? 32}
+                    onFocus={selectOnFocus}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                      const { o2, he } = sanitizeCustomMix(Number(event.target.value), source.customHe ?? 0);
+                      updateGasSource(index, { customO2: o2, customHe: he });
+                    }}
+                  />
+                  <span className="dual-separator">O2%</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    value={source.customHe ?? 0}
+                    onFocus={selectOnFocus}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                      const { o2, he } = sanitizeCustomMix(source.customO2 ?? 32, Number(event.target.value));
+                      updateGasSource(index, { customO2: o2, customHe: he });
+                    }}
+                  />
+                  <span className="dual-separator">He%</span>
+                </div>
+                <div className="table-note">N2 auto-balances remaining fraction.</div>
+              </div>
+            )}
+            {index < multiGas.gasSources.length - 1 && <hr className="gas-source-divider" />}
+          </div>
+        ))}
+        {multiGas.gasSources.length < MAX_GAS_SOURCES && (
+          <button type="button" className="add-gas-btn" onClick={addGasSource}>
+            + Add Gas Source
+          </button>
+        )}
       </AccordionItem>
 
       <AccordionItem title="Target Blend" defaultOpen={true}>
@@ -372,36 +336,85 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             />
           </div>
         </div>
-        <button className="calculate-button" type="button" onClick={onCalculate}>
-          Calculate
-        </button>
       </AccordionItem>
 
-      {(result || error || notice) && (
-        <AccordionItem title="Fill Plan" isOpen={planOpen} onToggle={() => setPlanOpen(!planOpen)}>
-          {error && <div className="error">{error}</div>}
-          {!error && notice && <div className="warning">{notice}</div>}
-          {!error && result && (
-            <ol className="result-list">
-              {result.map((step, index) => (
-                <li key={step.label}>
-                  {index + 1}. {step.label}: {formatPressure(step.amount, settings.pressureUnit)}
-                  <span className="result-step-total">{"->"} Tank @ {formatPressure(step.total, settings.pressureUnit)}</span>
-                </li>
-              ))}
-            </ol>
+      {blendResult && (
+        <AccordionItem title="Blend Options" defaultOpen={true}>
+          {!blendResult.success && (
+            <div className="error">{blendResult.error}</div>
           )}
-          {!error && outcomeMeta && (
-            <div className="table-note">
-              Resulting mix ≈ {outcomeMeta.finalO2.toFixed(1)}% O2 / {outcomeMeta.finalHe.toFixed(1)}% He.
-              {outcomeMeta.similar && (
-                <>
-                  {" "}(ΔO2 {formatSignedPercent(outcomeMeta.deviationO2)}, ΔHe {formatSignedPercent(outcomeMeta.deviationHe)}).
-                </>
+
+          {blendResult.success && blendResult.alternatives.length > 0 && (
+            <>
+              <div className="alternatives-list">
+                {blendResult.alternatives.map((alt, index) => (
+                  <div
+                    key={index}
+                    className={`alternative-option ${index === blendResult.selectedIndex ? 'selected' : ''}`}
+                    onClick={() => selectAlternative(index)}
+                  >
+                    <div className="alternative-header">
+                      <input
+                        type="radio"
+                        name="blend-alternative"
+                        checked={index === blendResult.selectedIndex}
+                        onChange={() => selectAlternative(index)}
+                      />
+                      <span className="alternative-title">Option {index + 1}</span>
+                      <span className="alternative-cost">{formatCost(alt.estimatedCost)}</span>
+                    </div>
+                    <div className="alternative-gases">
+                      {alt.costBreakdown.map((item, i) => (
+                        <span key={i} className="alternative-gas">
+                          {item.gas}: {formatPressure(item.amount, settings.pressureUnit)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {selectedAlternative && (
+                <div className="fill-plan">
+                  <h4>Fill Order</h4>
+                  <ol className="result-list">
+                    {selectedAlternative.fillOrder.map((step, index) => {
+                      let runningTotal = multiGas.startPressure ?? 0;
+                      for (let i = 0; i <= index; i++) {
+                        runningTotal += selectedAlternative.fillOrder[i].amount;
+                      }
+                      runningTotal = Math.max(0, runningTotal);
+                      const isBleed = step.amount < 0;
+                      const action = isBleed ? "Drain" : "Add";
+                      const displayAmount = Math.abs(step.amount);
+                      return (
+                        <li key={index} className={isBleed ? "bleed-step" : ""}>
+                          {index + 1}. {action} {step.gas}: {formatPressure(displayAmount, settings.pressureUnit)}
+                          <span className="result-step-total">
+                            {"->"} Tank @ {formatPressure(runningTotal, settings.pressureUnit)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  <div className="table-note">
+                    Resulting mix ≈ {selectedAlternative.finalO2.toFixed(1)}% O2 / {selectedAlternative.finalHe.toFixed(1)}% He
+                  </div>
+                  <div className="cost-summary">
+                    Estimated cost: {formatCost(selectedAlternative.estimatedCost)}
+                  </div>
+                </div>
               )}
+            </>
+          )}
+
+          {blendResult.warnings.length > 0 && (
+            <div className="warnings">
+              {blendResult.warnings.map((warning, i) => (
+                <div key={i} className="warning">{warning}</div>
+              ))}
             </div>
           )}
-          {!error && outcomeMeta?.warning && <div className="warning">{outcomeMeta.warning}</div>}
         </AccordionItem>
       )}
     </>

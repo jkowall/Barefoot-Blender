@@ -536,3 +536,154 @@ td {
   padding-top: 4px;
   /* Slight separation from header */
 }
+
+/* Multi-Gas Dynamic Source Styles */
+.gas-source-row {
+  margin-bottom: 12px;
+}
+
+.gas-source-divider {
+  border: none;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  margin: 12px 0;
+}
+
+.remove-gas-btn {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: 8px;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+.remove-gas-btn:hover {
+  background: rgba(239, 68, 68, 0.4);
+}
+
+.add-gas-btn {
+  width: 100%;
+  padding: 10px 16px;
+  margin-top: 8px;
+  border: 1px dashed rgba(56, 189, 248, 0.4);
+  background: transparent;
+  color: #38bdf8;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s ease;
+}
+
+.add-gas-btn:hover {
+  background: rgba(56, 189, 248, 0.1);
+}
+
+/* Alternative Selection Styles */
+.alternatives-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.alternative-option {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.6);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.alternative-option:hover {
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.alternative-option.selected {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: #38bdf8;
+}
+
+.alternative-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.alternative-header input[type="radio"] {
+  width: auto;
+}
+
+.alternative-title {
+  font-weight: 600;
+  flex: 1;
+}
+
+.alternative-cost {
+  font-weight: 600;
+  color: #38bdf8;
+}
+
+.alternative-gases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.alternative-gas {
+  background: rgba(30, 41, 59, 0.8);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+/* Fill Plan Styles */
+.fill-plan {
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.fill-plan h4 {
+  margin: 0 0 10px 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.cost-summary {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  font-weight: 600;
+  color: #38bdf8;
+}
+
+.warnings {
+  margin-top: 12px;
+}
+
+/* Checkbox styling */
+.field input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+/* Bleed step styling */
+.bleed-step {
+  color: #fbbf24;
+  font-style: italic;
+}
