@@ -4,6 +4,7 @@ import { useSessionStore, type SessionState, type MultiGasInput, type GasSourceI
 import { solveNGasBlend, type GasSelection, type BlendAlternative } from "../utils/calculations";
 import { formatPressure } from "../utils/format";
 import { AccordionItem } from "./Accordion";
+import ErrorBoundary from "./ErrorBoundary";
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 const clampPressure = (value: number): number => Math.max(0, value);
@@ -53,7 +54,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
     if ((multiGas.startHe ?? 0) > 0) return true;
 
-    for (const source of multiGas.gasSources) {
+    for (const source of (multiGas.gasSources ?? [])) {
       if (!source.enabled) continue;
       const gas = resolveGas(source);
       if (gas && gas.he > 0) return true;
@@ -67,24 +68,30 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   };
 
   const selectOnFocus = (event: FocusEvent<HTMLInputElement>): void => {
-    event.target.select();
+    const target = event.target;
+    requestAnimationFrame(() => {
+      target.select();
+    });
   };
 
   const updateGasSource = (index: number, patch: Partial<GasSourceInput>): void => {
-    const newSources = [...multiGas.gasSources];
+    const newSources = [...(multiGas.gasSources ?? [])];
+    if (!newSources[index]) return;
     newSources[index] = { ...newSources[index], ...patch };
     updateField({ gasSources: newSources });
   };
 
   const addGasSource = (): void => {
-    if (multiGas.gasSources.length >= MAX_GAS_SOURCES) return;
+    const sources = multiGas.gasSources ?? [];
+    if (sources.length >= MAX_GAS_SOURCES) return;
     const newSource: GasSourceInput = { id: "air", enabled: true };
-    updateField({ gasSources: [...multiGas.gasSources, newSource] });
+    updateField({ gasSources: [...sources, newSource] });
   };
 
   const removeGasSource = (index: number): void => {
-    if (multiGas.gasSources.length <= 1) return;
-    const newSources = multiGas.gasSources.filter((_, i) => i !== index);
+    const sources = multiGas.gasSources ?? [];
+    if (sources.length <= 1) return;
+    const newSources = sources.filter((_, i) => i !== index);
     updateField({ gasSources: newSources });
   };
 
@@ -107,7 +114,8 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       return gasOptions.find((option) => option.id === source.id) ?? null;
     };
 
-    const enabledGases = multiGas.gasSources
+    const sources = multiGas.gasSources ?? [];
+    const enabledGases = sources
       .filter(s => s.enabled)
       .map(s => resolveGas(s))
       .filter((g): g is GasSelection => g !== null);
@@ -116,18 +124,29 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       return null;
     }
 
-    return solveNGasBlend(
-      { pressureUnit: settings.pressureUnit },
-      multiGas.targetPressure,
-      multiGas.targetO2,
-      hasHeliumAvailable ? (multiGas.targetHe ?? 0) : 0,
-      multiGas.startPressure ?? 0,
-      multiGas.startO2 ?? 21,
-      multiGas.startHe ?? 0,
-      enabledGases,
-      costSettings,
-      multiGas.selectedAlternativeIndex
-    );
+    try {
+      return solveNGasBlend(
+        { pressureUnit: settings.pressureUnit },
+        multiGas.targetPressure,
+        multiGas.targetO2,
+        hasHeliumAvailable ? (multiGas.targetHe ?? 0) : 0,
+        multiGas.startPressure ?? 0,
+        multiGas.startO2 ?? 21,
+        multiGas.startHe ?? 0,
+        enabledGases,
+        costSettings,
+        multiGas.selectedAlternativeIndex
+      );
+    } catch (err) {
+      console.error("MultiGas calculation error:", err);
+      return {
+        success: false,
+        alternatives: [],
+        selectedIndex: 0,
+        error: `Calculation error: ${err instanceof Error ? err.message : String(err)}`,
+        warnings: []
+      };
+    }
   }, [multiGas, settings.pressureUnit, costSettings, hasHeliumAvailable, gasOptions]);
 
   const selectedAlternative: BlendAlternative | null = useMemo(() => {
@@ -155,7 +174,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   };
 
   return (
-    <>
+    <ErrorBoundary fallback={<div className="error">MultiGasTab crashed. Please check the console for details.</div>}>
       <AccordionItem title="Start Tank" defaultOpen={true}>
         <div className="grid two">
           <div className="field">
@@ -165,11 +184,12 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               max={100}
               step={0.1}
-              value={multiGas.startO2 ?? 21}
+              value={multiGas.startO2 ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField({ startO2: clampPercent(Number(event.target.value)) })
-              }
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField({ startO2: val === "" ? undefined : Number(val) });
+              }}
             />
           </div>
           <div className="field">
@@ -179,11 +199,12 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               max={100}
               step={0.1}
-              value={multiGas.startHe ?? 0}
+              value={multiGas.startHe ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField({ startHe: clampPercent(Number(event.target.value)) })
-              }
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField({ startHe: val === "" ? undefined : Number(val) });
+              }}
             />
           </div>
           <div className="field">
@@ -192,24 +213,25 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               type="number"
               min={0}
               step={settings.pressureUnit === "psi" ? 10 : 1}
-              value={multiGas.startPressure ?? 0}
+              value={multiGas.startPressure ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField({ startPressure: clampPressure(Number(event.target.value)) })
-              }
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField({ startPressure: val === "" ? undefined : Number(val) });
+              }}
             />
           </div>
         </div>
       </AccordionItem>
 
       <AccordionItem title="Source Gases" defaultOpen={true}>
-        {multiGas.gasSources.map((source, index) => (
+        {(multiGas.gasSources ?? []).map((source, index) => (
           <div key={index} className="gas-source-row">
             <div className="grid two">
               <div className="field">
                 <label>
                   Gas {index + 1}
-                  {multiGas.gasSources.length > 1 && (
+                  {(multiGas.gasSources ?? []).length > 1 && (
                     <button
                       type="button"
                       className="remove-gas-btn"
@@ -253,11 +275,24 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                     min={0}
                     max={100}
                     step={0.1}
-                    value={source.customO2 ?? 32}
+                    value={source.customO2 ?? ""}
                     onFocus={selectOnFocus}
                     onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                      const { o2, he } = sanitizeCustomMix(Number(event.target.value), source.customHe ?? 0);
-                      updateGasSource(index, { customO2: o2, customHe: he });
+                      const val = event.target.value;
+                      const numVal = val === "" ? undefined : Number(val);
+                      // If undefined, pass 0 to sanitize for the other value, but allow this one to be undefined in state?
+                      // Actually customO2 is in GasSourceInput as optional now.
+                      // But updateGasSource takes Partial<GasSourceInput>.
+                      // We need to be careful with sanitizeCustomMix which expects numbers.
+                      // If we want to allow empty, we might need to skip sanitize or pass 0?
+                      // If we pass 0, it snaps to 0.
+                      // Let's just update raw value if it's empty, or sanitize if it's a number.
+                      if (numVal === undefined) {
+                        updateGasSource(index, { customO2: undefined });
+                      } else {
+                        const { o2, he } = sanitizeCustomMix(numVal, source.customHe ?? 0);
+                        updateGasSource(index, { customO2: o2, customHe: he });
+                      }
                     }}
                   />
                   <span className="dual-separator">O2%</span>
@@ -266,11 +301,17 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                     min={0}
                     max={100}
                     step={0.1}
-                    value={source.customHe ?? 0}
+                    value={source.customHe ?? ""}
                     onFocus={selectOnFocus}
                     onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                      const { o2, he } = sanitizeCustomMix(source.customO2 ?? 32, Number(event.target.value));
-                      updateGasSource(index, { customO2: o2, customHe: he });
+                      const val = event.target.value;
+                      const numVal = val === "" ? undefined : Number(val);
+                      if (numVal === undefined) {
+                        updateGasSource(index, { customHe: undefined });
+                      } else {
+                        const { o2, he } = sanitizeCustomMix(source.customO2 ?? 32, numVal);
+                        updateGasSource(index, { customO2: o2, customHe: he });
+                      }
                     }}
                   />
                   <span className="dual-separator">He%</span>
@@ -281,7 +322,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             {index < multiGas.gasSources.length - 1 && <hr className="gas-source-divider" />}
           </div>
         ))}
-        {multiGas.gasSources.length < MAX_GAS_SOURCES && (
+        {(multiGas.gasSources ?? []).length < MAX_GAS_SOURCES && (
           <button type="button" className="add-gas-btn" onClick={addGasSource}>
             + Add Gas Source
           </button>
@@ -297,11 +338,12 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               max={100}
               step={0.1}
-              value={multiGas.targetO2}
+              value={multiGas.targetO2 ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField({ targetO2: clampPercent(Number(event.target.value)) })
-              }
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField({ targetO2: val === "" ? undefined : Number(val) });
+              }}
             />
           </div>
           <div className="field">
@@ -311,12 +353,13 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               max={100}
               step={0.1}
-              value={hasHeliumAvailable ? (multiGas.targetHe ?? 0) : 0}
+              value={hasHeliumAvailable ? (multiGas.targetHe ?? "") : 0}
               disabled={!hasHeliumAvailable}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField({ targetHe: clampPercent(Number(event.target.value)) })
-              }
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField({ targetHe: val === "" ? undefined : Number(val) });
+              }}
             />
             {!hasHeliumAvailable && (
               <div className="table-note">No helium source available. Add a trimix gas or helium to the start tank.</div>
@@ -328,11 +371,12 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               type="number"
               min={0}
               step={settings.pressureUnit === "psi" ? 10 : 1}
-              value={multiGas.targetPressure}
+              value={multiGas.targetPressure ?? ""}
               onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                updateField({ targetPressure: clampPressure(Number(event.target.value)) })
-              }
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const val = event.target.value;
+                updateField({ targetPressure: val === "" ? undefined : Number(val) });
+              }}
             />
           </div>
         </div>
@@ -417,7 +461,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
           )}
         </AccordionItem>
       )}
-    </>
+    </ErrorBoundary>
   );
 };
 

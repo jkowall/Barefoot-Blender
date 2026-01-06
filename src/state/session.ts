@@ -2,12 +2,12 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type StandardBlendInput = {
-  startO2: number;
-  startHe: number;
-  startPressure: number;
-  targetO2: number;
-  targetHe: number;
-  targetPressure: number;
+  startO2?: number;
+  startHe?: number;
+  startPressure?: number;
+  targetO2?: number;
+  targetHe?: number;
+  targetPressure?: number;
   topGasId: string;
 };
 
@@ -19,13 +19,13 @@ export type GasSourceInput = {
 };
 
 export type MultiGasInput = {
-  gasSources: GasSourceInput[];
-  targetO2: number;
-  targetHe: number;
-  targetPressure: number;
-  startO2: number;
-  startHe: number;
-  startPressure: number;
+  gasSources?: GasSourceInput[];
+  targetO2?: number;
+  targetHe?: number;
+  targetPressure?: number;
+  startO2?: number;
+  startHe?: number;
+  startPressure?: number;
   selectedAlternativeIndex: number;
 };
 
@@ -46,10 +46,10 @@ export type UtilityInputs = {
 };
 
 export type TopOffInput = {
-  startO2: number;
-  startHe: number;
-  startPressure: number;
-  finalPressure: number;
+  startO2?: number;
+  startHe?: number;
+  startPressure?: number;
+  finalPressure?: number;
   topGasId: string;
 };
 

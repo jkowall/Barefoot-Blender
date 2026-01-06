@@ -272,7 +272,8 @@ button {
 }
 
 .calculate-button {
-  align-self: flex-start;
+  width: 100%;
+  margin-top: 12px;
   padding: 12px 24px;
   border-radius: 9999px;
   border: none;

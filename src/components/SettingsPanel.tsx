@@ -219,7 +219,7 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
 
         <div className="settings-actions">
           <button className="settings-close" type="button" onClick={onClose}>
-            Close
+            Save & Close
           </button>
         </div>
       </div>

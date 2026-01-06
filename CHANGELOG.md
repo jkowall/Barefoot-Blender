@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.1] - 2026-01-06
+
+### Fixed
+- **Persistent Crash**: Fixed "white screen" crash in Multi-Gas tab caused by invalid saved state (missing gas sources). Added a defensive check and a friendly Error Boundary.
+- **Input Editing**: Improved number input behavior. Fields can now be cleared completely (allowing empty state) and no longer "fight" the user by reverting to 0 or aggressively clamping values while typing.
+
 ## [0.6.0] - 2026-01-06
 
 ### Added

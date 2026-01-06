@@ -63,7 +63,10 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   }
 
   const selectOnFocus = (event: FocusEvent<HTMLInputElement>): void => {
-    event.target.select();
+    const target = event.target;
+    requestAnimationFrame(() => {
+      target.select();
+    });
   };
 
   const onCalculate = (): void => {

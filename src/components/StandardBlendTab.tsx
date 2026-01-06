@@ -97,7 +97,12 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   };
 
   const selectOnFocus = (event: FocusEvent<HTMLInputElement>): void => {
-    event.target.select();
+    // delay selection to allow browser default behavior (setting cursor) to finish
+    // so we can overwrite it with "select all"
+    const target = event.target;
+    requestAnimationFrame(() => {
+      target.select();
+    });
   };
 
   const onCalculate = (): void => {
