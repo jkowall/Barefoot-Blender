@@ -8,7 +8,8 @@ Source code: [github.com/jkowall/Barefoot-Blender](https://github.com/jkowall/Ba
 
 - **Standard Blend Planner** – Partial pressure blending with automatic bleed-down solutions, warnings, an interactive sensitivity slider, and reverse solvers for required start pressure and helium-free targets.
 - **Top-Off What-If** – Quick projections for topping a cylinder, including final mix readouts and a bleed/down sensitivity chart tied to the selected bank.
-- **Multi-Gas Trimix Mixing** – Linear solver for two source gases with Trimix presets, custom O₂/He mixes, target helium support, and resulting mix validation.
+- **Dynamic Multi-Gas Blending** – Support for 1-4 gas sources with add/remove buttons, linear solver for two source gases with Trimix presets, custom O₂/He mixes, target helium support, cost optimization, and fill order recommendations.
+- **Gas Cost Calculator** – Calculates the cost of gas fills based on user-configured prices per cubic foot, tank size, and rated pressure.
 - **Dive Utilities** – MOD, EAD, Best Mix, END, and density calculators that honor global PPO₂ and narcotic settings.
 - **Persistent Settings** – Local storage of preferred units, PPO₂ defaults, narcotic rules, and custom banked gases.
 - **Installable PWA** – Works fully offline after first load via Vite PWA service worker integration.
@@ -99,9 +100,9 @@ See [`CHANGELOG.md`](CHANGELOG.md) for a timeline of recent updates and feature 
 
 ## Credits
 
-- **Inspiration & Direction:** John Bentley, technical diving and gas-mixing expert — learn more at [barefootbentley.com](https://barefootbentley.com/) and don’t forget to follow his [YouTube channel](https://www.youtube.com/@barefootbentley).
-- **Development:** Jonah Kowall, open-source maintainer for OpenSearch and Jaeger; scuba technologist and longtime advocate of community-driven observability tooling.
-- **AI Pairing:** GitHub Copilot and OpenAI Codex (GPT-5-Codex Preview) assisted with programming and refactoring.
+- **Inspiration & Direction:** John Bentley, technical diving and gas-mixing expert — learn more at [barefootbentley.com](https://barefootbentley.com/) and don’t forget to follow his [YouTube channel](https://www.youtube.com/@barefootbentley) and [Instagram](https://www.instagram.com/barefoot_bentley).
+- **Development:** Jonah Kowall is an avid scuba diver on both open and closed circuit scuba. He is an open-source maintainer for OpenSearch and Jaeger and a longtime advocate of community-driven observability tooling. Check out his [YouTube channel](https://www.youtube.com/@jkowall) and [Instagram](https://www.instagram.com/jkowall).
+- **AI Pairing:** Google Antigravity and GitHub Copilot using Google Gemini Pro High and Claude Opus 4.5 assisted with programming and refactoring.
 
 ## License
 
