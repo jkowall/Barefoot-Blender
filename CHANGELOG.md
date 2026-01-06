@@ -2,6 +2,9 @@
 
 ## [0.6.5] - 2026-01-06
 
+### Changed
+- **Fill Instructions**: Reordered step directions to show the target pressure first, followed by the addition amount in parentheses. This allows blenders to focus on the next reading on their pressure gauge.
+
 ### Fixed
 - **Multi-Gas Blending**: Optimized bleed-down logic to suggest partial bleeds instead of always emptying the tank. This significantly reduces gas waste and cost when the target mix is reachable from a partial drain.
 
