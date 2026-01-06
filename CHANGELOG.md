@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.2] - 2026-01-05
+
+### Fixed
+- Multi-Gas tab no longer allows specifying a Target He % when no helium sources are available. The input is now disabled with an explanatory message when neither the start tank nor selected source gases contain helium.
+
 ## [0.5.1] - 2026-01-05
 
 ### Fixed

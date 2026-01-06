@@ -68,6 +68,31 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     return topOffOptions.find((option) => option.id === id) ?? trimixPresets.find((preset) => preset.id === id) ?? null;
   };
 
+  // Check if helium is available from any source (start tank or selected gases)
+  const hasHeliumAvailable = useMemo(() => {
+    // Helper to resolve a gas selection inline
+    const getGasHe = (id: string, customO2?: number, customHe?: number): number => {
+      if (id === "custom") {
+        const { he } = sanitizeCustomMix(customO2 ?? 32, customHe ?? 0);
+        return he;
+      }
+      const found = topOffOptions.find((option) => option.id === id) ?? trimixPresets.find((preset) => preset.id === id);
+      return found?.he ?? 0;
+    };
+
+    // Check start tank helium
+    const startHe = multiGas.startHe ?? 0;
+    if (startHe > 0) return true;
+
+    // Check Gas 1 for helium
+    if (getGasHe(multiGas.gas1Id, multiGas.gas1CustomO2, multiGas.gas1CustomHe) > 0) return true;
+
+    // Check Gas 2 for helium
+    if (getGasHe(multiGas.gas2Id, multiGas.gas2CustomO2, multiGas.gas2CustomHe) > 0) return true;
+
+    return false;
+  }, [multiGas.startHe, multiGas.gas1Id, multiGas.gas1CustomO2, multiGas.gas1CustomHe, multiGas.gas2Id, multiGas.gas2CustomO2, multiGas.gas2CustomHe, topOffOptions]);
+
   const updateField = (patch: Partial<MultiGasInput>): void => {
     setMultiGas({ ...multiGas, ...patch });
   };
@@ -322,12 +347,16 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               min={0}
               max={100}
               step={0.1}
-              value={multiGas.targetHe ?? 0}
+              value={hasHeliumAvailable ? (multiGas.targetHe ?? 0) : 0}
+              disabled={!hasHeliumAvailable}
               onFocus={selectOnFocus}
               onChange={(event: ChangeEvent<HTMLInputElement>) =>
                 updateField({ targetHe: clampPercent(Number(event.target.value)) })
               }
             />
+            {!hasHeliumAvailable && (
+              <div className="table-note">No helium source available. Add a trimix gas or helium to the start tank.</div>
+            )}
           </div>
           <div className="field">
             <label>Target Pressure ({settings.pressureUnit.toUpperCase()})</label>
