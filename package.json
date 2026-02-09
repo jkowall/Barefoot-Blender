@@ -23,7 +23,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.35.0",
     "eslint-plugin-react-hooks": "^7.0.1",
-    "typescript": "5.3.3",
+    "typescript": "5.9.3",
     "vite": "^7.1.12",
     "vite-plugin-pwa": "^1.1.0"
   }
