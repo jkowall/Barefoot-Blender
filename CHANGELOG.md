@@ -3,24 +3,30 @@
 ## [0.6.5] - 2026-01-06
 
 ### Changed
+
 - **Fill Instructions**: Reordered step directions to show the target pressure first, followed by the addition amount in parentheses. This allows blenders to focus on the next reading on their pressure gauge.
+- **Dependencies**: Upgraded React and React DOM to version 19.x to ensure architectural alignment and resolve CI version mismatches.
 
 ### Fixed
+
 - **Multi-Gas Blending**: Optimized bleed-down logic to suggest partial bleeds instead of always emptying the tank. This significantly reduces gas waste and cost when the target mix is reachable from a partial drain.
 
 ## [0.6.4] - 2026-01-06
 
 ### Changed
+
 - **Settings UI**: Moved Tank Size and Rated Pressure settings from the General tab to the Pricing tab for better context.
 
 ## [0.6.3] - 2026-01-06
 
 ### Fixed
+
 - **Input Behavior**: Resolved issue where clearing number inputs resulted in '0' causing editing friction. Inputs can now be fully cleared.
 
 ## [0.6.2] - 2026-01-06
 
 ### Changed
+
 - **Settings UI**: Complete redesign of the Settings panel using a tabbed interface (General, Gases, Pricing) for better organization.
 - **Calculate Button**: Updated "Calculate" buttons to be full-width for improved mobile usability.
 - **UI Layout**: Added pinned headers and footers to the Settings panel to keep navigation and actions always visible.
@@ -28,12 +34,14 @@
 ## [0.6.1] - 2026-01-06
 
 ### Fixed
+
 - **Persistent Crash**: Fixed "white screen" crash in Multi-Gas tab caused by invalid saved state (missing gas sources). Added a defensive check and a friendly Error Boundary.
 - **Input Editing**: Improved number input behavior. Fields can now be cleared completely (allowing empty state) and no longer "fight" the user by reverting to 0 or aggressively clamping values while typing.
 
 ## [0.6.0] - 2026-01-06
 
 ### Added
+
 - **Dynamic Multi-Gas Blending**: Support for 1-4 gas sources with add/remove buttons
 - **N-Gas Solver**: 2-gas and 3-gas blend calculations using linear algebra (Cramer's rule)
 - **Cost Optimization**: Alternatives ranked by estimated cost based on O₂/He prices
@@ -42,24 +50,29 @@
 - **Alternative Selection**: Interactive UI to choose between multiple valid blend options
 
 ### Changed
+
 - Multi-Gas tab completely rewritten for dynamic source management
 - Blend Options accordion now always expanded for better visibility
 - State structure updated: `MultiGasInput` now uses `gasSources[]` array (breaking change for stored sessions)
 
 ### Fixed
+
 - Duplicate blend alternatives are now deduplicated based on gas combination and amounts
 
 ## [0.5.2] - 2026-01-05
 
 ### Fixed
+
 - Multi-Gas tab no longer allows specifying a Target He % when no helium sources are available. The input is now disabled with an explanatory message when neither the start tank nor selected source gases contain helium.
 
 ## [0.5.1] - 2026-01-05
 
 ### Fixed
+
 - Multi-Gas tab fill plan now correctly accounts for starting pressure when calculating cumulative fill totals. Previously, the "Tank @" pressures were off by the start pressure amount.
 
 ## v0.5.0
+
 - **Feature:** Multi-Bank Blending: Added "Start Tank" input to Multi-Gas Match tab.
 - **UI:** Refactored all tabs (Standard, Multi-Gas, Top-Off, Utilities) to use collapsible Accordion sections for better usability.
 - **UI:** Improved organization of Utilities tab metrics.
@@ -68,31 +81,36 @@
 ## [0.4.3] - 2026-01-04
 
 ### Added
+
 - Manual input fields in "Top-Off What-If" tab to calculate bleed-down from a target final mix.
 
 ## [0.4.2] - 2026-01-04
 
 ### Fixed
+
 - Resolved lint errors in `UtilitiesTab.tsx` and `main.tsx`.
 
 ## [0.4.1] - 2026-01-04
 
 ### Changed
+
 - Reordered Utilities tab metrics: "Best Mix" grouped with "MOD", "EAD" grouped with "END".
 
 ## [0.4.0] - 2026-01-04
 
 ### Added
+
 - Unit Converter utility for Depth (m/ft) and Pressure (bar/psi)
 - "Max END" input to Best Mix calculator for Helium suggestions
 
 ### Changed
+
 - Utilities tab now uses a collapsible Accordion UI layout
 - Best Mix calculator now suggests Helium/Oxygen trimix blends instead of just O2%
 
 ### Fixed
-- Metric calculation errors in MOD and END (removed double-conversion bugs)
 
+- Metric calculation errors in MOD and END (removed double-conversion bugs)
 
 All notable changes to this project will be documented here. This file follows reverse chronological order, with the newest release at the top.
 
