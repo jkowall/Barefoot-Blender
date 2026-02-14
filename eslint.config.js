@@ -6,7 +6,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/", "node_modules/"],
+    ignores: ["dist/", "node_modules/", "eslint.config.js"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -19,7 +19,7 @@ export default tseslint.config(
         ...globals.es2023,
       },
       parserOptions: {
-        project: ["./tsconfig.json"],
+        project: ["./tsconfig.json", "./tsconfig.node.json"],
         tsconfigRootDir: import.meta.dirname,
       },
     },
