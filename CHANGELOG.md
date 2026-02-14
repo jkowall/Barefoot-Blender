@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.6] - 2026-02-14
+
+### Changed
+
+- **Performance Optimization**: Reduced iteration counts for iterative solvers in `calculations.ts` (bleed-down and reverse solvers) from 40/50 to 25. This provides significant performance gains while maintaining precision far beyond physical measurement limits (~0.001 PSI).
+
 ## [0.6.5] - 2026-01-06
 
 ### Changed

@@ -220,7 +220,7 @@ const findBleedSolution = (inputs: BlendInputs): SolveOutcome & { bleedPressure?
     requiresBleed: true
   };
 
-  for (let i = 0; i < 40; i += 1) {
+  for (let i = 0; i < 25; i += 1) {
     const mid = (low + high) / 2;
     const scaledInputs: BlendInputs = {
       ...inputs,
@@ -471,7 +471,7 @@ export const solveRequiredStartPressure = (
   let high = targetPressurePsi;
   let best: { startPsi: number; result: BlendResult } | null = { startPsi: targetPressurePsi, result: upper };
 
-  for (let i = 0; i < 50; i += 1) {
+  for (let i = 0; i < 25; i += 1) {
     const mid = (low + high) / 2;
     const attempt = evaluate(mid);
     if (!attempt.success || attempt.steps.some((step) => step.kind === "bleed")) {
@@ -535,7 +535,7 @@ export const solveMaxTargetWithoutHelium = (
   let high = maxHe;
   let best: { he: number; result: BlendResult } | null = null;
 
-  for (let i = 0; i < 50; i += 1) {
+  for (let i = 0; i < 25; i += 1) {
     const mid = (low + high) / 2;
     const candidate: StandardBlendInput = {
       ...inputs,
