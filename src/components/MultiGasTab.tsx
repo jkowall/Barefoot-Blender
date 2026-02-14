@@ -127,8 +127,8 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     try {
       return solveNGasBlend(
         { pressureUnit: settings.pressureUnit },
-        multiGas.targetPressure,
-        multiGas.targetO2,
+        multiGas.targetPressure ?? 0,
+        multiGas.targetO2 ?? 32,
         hasHeliumAvailable ? (multiGas.targetHe ?? 0) : 0,
         multiGas.startPressure ?? 0,
         multiGas.startO2 ?? 21,

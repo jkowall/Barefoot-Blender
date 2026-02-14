@@ -114,7 +114,15 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
     const blendResult = calculateStandardBlend(
       { pressureUnit: settings.pressureUnit },
-      standardBlend,
+      {
+        ...standardBlend,
+        startPressure: standardBlend.startPressure ?? 0,
+        targetPressure: standardBlend.targetPressure ?? 3000,
+        targetO2: standardBlend.targetO2 ?? 32,
+        startO2: standardBlend.startO2 ?? 21,
+        startHe: standardBlend.startHe ?? 0,
+        targetHe: standardBlend.targetHe ?? 0
+      },
       selectedTopGas
     );
     setResult(blendResult);
@@ -146,7 +154,12 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       const adjustedStartPsi = Math.max(0, startPressurePsi + deltaPsi);
       const candidate: StandardBlendInput = {
         ...standardBlend,
-        startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit)
+        startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit),
+        targetPressure: standardBlend.targetPressure ?? 3000,
+        targetO2: standardBlend.targetO2 ?? 32,
+        startO2: standardBlend.startO2 ?? 21,
+        startHe: standardBlend.startHe ?? 0,
+        targetHe: standardBlend.targetHe ?? 0
       };
       return calculateStandardBlend({ pressureUnit: settings.pressureUnit }, candidate, selectedTopGas);
     };
@@ -235,7 +248,15 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     }
     return solveRequiredStartPressure(
       { pressureUnit: settings.pressureUnit },
-      standardBlend,
+      {
+        ...standardBlend,
+        startPressure: standardBlend.startPressure ?? 0,
+        targetPressure: standardBlend.targetPressure ?? 3000,
+        targetO2: standardBlend.targetO2 ?? 32,
+        startO2: standardBlend.startO2 ?? 21,
+        startHe: standardBlend.startHe ?? 0,
+        targetHe: standardBlend.targetHe ?? 0
+      },
       selectedTopGas
     );
   }, [result, selectedTopGas, settings.pressureUnit, standardBlend]);
@@ -246,7 +267,15 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     }
     return solveMaxTargetWithoutHelium(
       { pressureUnit: settings.pressureUnit },
-      standardBlend,
+      {
+        ...standardBlend,
+        startPressure: standardBlend.startPressure ?? 0,
+        targetPressure: standardBlend.targetPressure ?? 3000,
+        targetO2: standardBlend.targetO2 ?? 32,
+        startO2: standardBlend.startO2 ?? 21,
+        startHe: standardBlend.startHe ?? 0,
+        targetHe: standardBlend.targetHe ?? 0
+      },
       selectedTopGas
     );
   }, [result, selectedTopGas, settings.pressureUnit, standardBlend]);

@@ -271,16 +271,16 @@ export const calculateStandardBlend = (
   inputs: StandardBlendInput,
   topGas: GasSelection
 ): BlendResult => {
-  const startPressurePsi = fromDisplayPressure(inputs.startPressure, settings.pressureUnit);
-  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure, settings.pressureUnit);
+  const startPressurePsi = fromDisplayPressure(inputs.startPressure ?? 0, settings.pressureUnit);
+  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure ?? 0, settings.pressureUnit);
 
   const blendInputs: BlendInputs = {
     startPressure: startPressurePsi,
     targetPressure: targetPressurePsi,
-    startO2: inputs.startO2,
-    startHe: inputs.startHe,
-    targetO2: inputs.targetO2,
-    targetHe: inputs.targetHe,
+    startO2: inputs.startO2 ?? 21,
+    startHe: inputs.startHe ?? 0,
+    targetO2: inputs.targetO2 ?? 32,
+    targetHe: inputs.targetHe ?? 0,
     topGas
   };
 
@@ -937,7 +937,7 @@ export const calculateMultiGasBlend = (
   warning?: string;
   fallback?: MultiGasFallbackSuggestion;
 } => {
-  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure, settings.pressureUnit);
+  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure ?? 0, settings.pressureUnit);
   const startPressurePsi = fromDisplayPressure(inputs.startPressure ?? 0, settings.pressureUnit);
 
   if (targetPressurePsi <= tolerance) {
@@ -966,7 +966,7 @@ export const calculateMultiGasBlend = (
     };
   }
 
-  const targetO2Fraction = fraction(inputs.targetO2);
+  const targetO2Fraction = fraction(inputs.targetO2 ?? 32);
   const targetHe = inputs.targetHe ?? 0;
   const targetHeFraction = fraction(targetHe);
 
@@ -979,7 +979,7 @@ export const calculateMultiGasBlend = (
   }
 
   // Calculate required composition of the added gas
-  const startO2Fraction = fraction(inputs.startO2 ?? 0);
+  const startO2Fraction = fraction(inputs.startO2 ?? 21);
   const startHeFraction = fraction(inputs.startHe ?? 0);
 
   const neededO2Psi = targetPressurePsi * targetO2Fraction - startPressurePsi * startO2Fraction;
@@ -1680,8 +1680,8 @@ export const solveNGasBlend = (
   costSettings: CostSettings,
   selectedIndex: number = 0
 ): NGasBlendResult => {
-  const targetPressurePsi = fromDisplayPressure(targetPressure, settings.pressureUnit);
-  const startPressurePsi = fromDisplayPressure(startPressure, settings.pressureUnit);
+  const targetPressurePsi = fromDisplayPressure(targetPressure ?? 0, settings.pressureUnit);
+  const startPressurePsi = fromDisplayPressure(startPressure ?? 0, settings.pressureUnit);
 
   const warnings: string[] = [];
 
