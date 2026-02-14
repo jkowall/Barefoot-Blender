@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useState, useId } from "react";
 
 type AccordionItemProps = {
     title: string;
@@ -16,6 +16,8 @@ export const AccordionItem = ({
     onToggle
 }: AccordionItemProps): JSX.Element => {
     const [internalOpen, setInternalOpen] = useState(defaultOpen);
+    const id = useId();
+    const contentId = `accordion-content-${id}`;
 
     const isExpanded = isOpen !== undefined ? isOpen : internalOpen;
     const handleToggle = (): void => {
@@ -28,11 +30,24 @@ export const AccordionItem = ({
 
     return (
         <div className={`card accordion-card ${isExpanded ? "open" : ""}`}>
-            <button className="accordion-header" type="button" onClick={handleToggle}>
+            <button
+                className="accordion-header"
+                type="button"
+                onClick={handleToggle}
+                aria-expanded={isExpanded}
+                aria-controls={contentId}
+            >
                 <h2>{title}</h2>
-                <span className={`accordion-icon ${isExpanded ? "open" : ""}`}>{isExpanded ? "−" : "+"}</span>
+                <span className={`accordion-icon ${isExpanded ? "open" : ""}`} aria-hidden="true">
+                    {isExpanded ? "−" : "+"}
+                </span>
             </button>
-            <div className={`accordion-content ${isExpanded ? "open" : ""}`}>
+            <div
+                id={contentId}
+                className={`accordion-content ${isExpanded ? "open" : ""}`}
+                role="region"
+                aria-label={title}
+            >
                 {children}
             </div>
         </div>
