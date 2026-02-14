@@ -1,12 +1,10 @@
 import { useMemo, type ChangeEvent, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type MultiGasInput, type GasSourceInput } from "../state/session";
-import { solveNGasBlend, type GasSelection, type BlendAlternative } from "../utils/calculations";
+import { solveNGasBlend, type GasSelection, type BlendAlternative, clampPercent } from "../utils/calculations";
 import { formatPressure } from "../utils/format";
 import { AccordionItem } from "./Accordion";
 import ErrorBoundary from "./ErrorBoundary";
-
-const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 
 
 const MAX_GAS_SOURCES = 4;

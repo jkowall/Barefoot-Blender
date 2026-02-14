@@ -6,13 +6,14 @@ import {
   projectTopOffChart,
   type GasSelection,
   type TopOffResult,
-  type TopOffProjectionRow
+  type TopOffProjectionRow,
+  clampPercent
 } from "../utils/calculations";
 import { formatNumber, formatPercentage, formatPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 
-const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
+
 const clampPressure = (value: number): number => Math.max(0, value);
 
 type Props = {
