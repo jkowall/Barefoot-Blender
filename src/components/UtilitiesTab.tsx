@@ -6,12 +6,12 @@ import {
   calculateDensity,
   calculateEAD,
   calculateEND,
-  calculateMOD
+  calculateMOD,
+  clampPercent
 } from "../utils/calculations";
 import { formatNumber } from "../utils/format";
 import { AccordionItem } from "./Accordion";
 
-const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 
 const clampDepth = (value: number): number => Math.max(0, value);
 

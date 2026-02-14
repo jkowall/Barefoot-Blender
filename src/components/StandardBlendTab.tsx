@@ -8,13 +8,13 @@ import {
   summarizeBlendVolumes,
   solveRequiredStartPressure,
   solveMaxTargetWithoutHelium,
-  calculateGasCost
+  calculateGasCost,
+  clampPercent
 } from "../utils/calculations";
 import { formatPercentage, formatPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 
-const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 
 const clampPressure = (value: number): number => Math.max(0, value);
 
