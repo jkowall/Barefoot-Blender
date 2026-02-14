@@ -79,7 +79,13 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
     const outcome = calculateTopOffBlend(
       { pressureUnit: settings.pressureUnit },
-      topOff,
+      {
+        ...topOff,
+        startPressure: topOff.startPressure ?? 0,
+        finalPressure: topOff.finalPressure ?? 3000,
+        startO2: topOff.startO2 ?? 32,
+        startHe: topOff.startHe ?? 0
+      },
       selectedTopGas
     );
     setResult(outcome);
@@ -126,7 +132,10 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
     const simulatedInput: TopOffInput = {
       ...topOff,
-      startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit)
+      startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit),
+      finalPressure: topOff.finalPressure ?? 3000,
+      startO2: topOff.startO2 ?? 32,
+      startHe: topOff.startHe ?? 0
     };
 
     return calculateTopOffBlend(
