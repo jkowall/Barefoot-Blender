@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.7] - 2026-02-15
+
+### Improved
+
+- **Accessibility**: Replaced manual input fields in Standard Blend tab with a new `NumberInput` component. This ensures all labels are clickable (focusing the input) and improves accessibility for screen readers.
+
 ## [0.6.6] - 2026-02-14
 
 ### Changed
