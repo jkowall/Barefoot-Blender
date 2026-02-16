@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.7] - 2026-02-16
+
+### Changed
+
+- **Accessibility**: Introduced `NumberInput` component to ensure all numeric inputs have properly associated labels for screen readers.
+- **Usability**: Unified `selectOnFocus` behavior across Standard Blend and Settings tabs for consistent data entry experience.
+
 ## [0.6.6] - 2026-02-14
 
 ### Changed

@@ -1,6 +1,7 @@
 import { useState, type ChangeEvent } from "react";
 import { useSettingsStore, type GasDefinition, type DepthUnit, type PressureUnit } from "../state/settings";
 import { formatPercentage } from "../utils/format";
+import { NumberInput } from "./NumberInput";
 
 const pressureUnits: PressureUnit[] = ["psi", "bar"];
 const depthUnits: DepthUnit[] = ["ft", "m"];
@@ -95,32 +96,20 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
 
               <div className="section-title" style={{ marginTop: 16 }}>Defaults</div>
               <div className="grid two">
-                <div className="field">
-                  <label>Max PPO2</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.05}
-                    value={settings.defaultMaxPPO2 ?? ""}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                      const val = event.target.value;
-                      setDefaultMaxPPO2(val === "" ? undefined : Math.max(0, Number(val)));
-                    }}
-                  />
-                </div>
-                <div className="field">
-                  <label>Contingency PPO2</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.05}
-                    value={settings.defaultContingencyPPO2 ?? ""}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                      const val = event.target.value;
-                      setDefaultContingencyPPO2(val === "" ? undefined : Math.max(0, Number(val)));
-                    }}
-                  />
-                </div>
+                <NumberInput
+                  label="Max PPO2"
+                  min={0}
+                  step={0.05}
+                  value={settings.defaultMaxPPO2}
+                  onChange={(val) => setDefaultMaxPPO2(val === undefined ? undefined : Math.max(0, val))}
+                />
+                <NumberInput
+                  label="Contingency PPO2"
+                  min={0}
+                  step={0.05}
+                  value={settings.defaultContingencyPPO2}
+                  onChange={(val) => setDefaultContingencyPPO2(val === undefined ? undefined : Math.max(0, val))}
+                />
               </div>
             </>
           )}
@@ -153,32 +142,26 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                     />
                   </div>
                   <div className="grid two">
-                    <div className="field">
-                      <label>O2 %</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.1}
-                        value={gas.o2}
-                        onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                          handleGasChange(gas, { o2: Math.min(100, Math.max(0, Number(event.target.value))) })
-                        }
-                      />
-                    </div>
-                    <div className="field">
-                      <label>He %</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.1}
-                        value={gas.he}
-                        onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                          handleGasChange(gas, { he: Math.min(100, Math.max(0, Number(event.target.value))) })
-                        }
-                      />
-                    </div>
+                    <NumberInput
+                      label="O2 %"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      value={gas.o2}
+                      onChange={(val) =>
+                        handleGasChange(gas, { o2: Math.min(100, Math.max(0, val ?? 0)) })
+                      }
+                    />
+                    <NumberInput
+                      label="He %"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      value={gas.he}
+                      onChange={(val) =>
+                        handleGasChange(gas, { he: Math.min(100, Math.max(0, val ?? 0)) })
+                      }
+                    />
                   </div>
                   <div className="table-note">Remaining N2: {formatPercentage(Math.max(0, 100 - gas.o2 - gas.he))}</div>
                   {settings.customGases.length > 1 && (
@@ -203,62 +186,38 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
             <>
               <div className="section-title">Pricing</div>
               <div className="grid two">
-                <div className="field">
-                  <label>O₂ Price ($/cu ft)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={settings.pricePerCuFtO2 ?? ""}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                      const val = event.target.value;
-                      setPricePerCuFtO2(val === "" ? undefined : Math.max(0, Number(val)));
-                    }}
-                  />
-                </div>
-                <div className="field">
-                  <label>He Price ($/cu ft)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={settings.pricePerCuFtHe ?? ""}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                      const val = event.target.value;
-                      setPricePerCuFtHe(val === "" ? undefined : Math.max(0, Number(val)));
-                    }}
-                  />
-                </div>
+                <NumberInput
+                  label="O₂ Price ($/cu ft)"
+                  min={0}
+                  step={0.01}
+                  value={settings.pricePerCuFtO2}
+                  onChange={(val) => setPricePerCuFtO2(val === undefined ? undefined : Math.max(0, val))}
+                />
+                <NumberInput
+                  label="He Price ($/cu ft)"
+                  min={0}
+                  step={0.01}
+                  value={settings.pricePerCuFtHe}
+                  onChange={(val) => setPricePerCuFtHe(val === undefined ? undefined : Math.max(0, val))}
+                />
               </div>
 
               <div className="section-title" style={{ marginTop: 16 }}>Default Tank</div>
               <div className="grid two">
-                <div className="field">
-                  <label>Tank Size (cu ft)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={settings.defaultTankSizeCuFt ?? ""}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                      const val = event.target.value;
-                      setDefaultTankSizeCuFt(val === "" ? undefined : Math.max(1, Number(val)));
-                    }}
-                  />
-                </div>
-                <div className="field">
-                  <label>Tank Rated Pressure (PSI)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    step={100}
-                    value={settings.tankRatedPressure ?? ""}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                      const val = event.target.value;
-                      setTankRatedPressure(val === "" ? undefined : Math.max(1, Number(val)));
-                    }}
-                  />
-                </div>
+                <NumberInput
+                  label="Tank Size (cu ft)"
+                  min={1}
+                  step={1}
+                  value={settings.defaultTankSizeCuFt}
+                  onChange={(val) => setDefaultTankSizeCuFt(val === undefined ? undefined : Math.max(1, val))}
+                />
+                <NumberInput
+                  label="Tank Rated Pressure (PSI)"
+                  min={1}
+                  step={100}
+                  value={settings.tankRatedPressure}
+                  onChange={(val) => setTankRatedPressure(val === undefined ? undefined : Math.max(1, val))}
+                />
               </div>
               <div className="table-note">Common tanks: AL80 (80 cu ft @ 3000 PSI), HP100 (100 cu ft @ 3442 PSI)</div>
             </>
