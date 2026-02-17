@@ -5,6 +5,7 @@ import { solveNGasBlend, type GasSelection, type BlendAlternative, clampPercent 
 import { formatPressure } from "../utils/format";
 import { AccordionItem } from "./Accordion";
 import ErrorBoundary from "./ErrorBoundary";
+import { NumberInput } from "./NumberInput";
 
 
 const MAX_GAS_SOURCES = 4;
@@ -175,50 +176,29 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     <ErrorBoundary fallback={<div className="error">MultiGasTab crashed. Please check the console for details.</div>}>
       <AccordionItem title="Start Tank" defaultOpen={true}>
         <div className="grid two">
-          <div className="field">
-            <label>Start O2 %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={multiGas.startO2 ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField({ startO2: val === "" ? undefined : Number(val) });
-              }}
-            />
-          </div>
-          <div className="field">
-            <label>Start He %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={multiGas.startHe ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField({ startHe: val === "" ? undefined : Number(val) });
-              }}
-            />
-          </div>
-          <div className="field">
-            <label>Start Pressure ({settings.pressureUnit.toUpperCase()})</label>
-            <input
-              type="number"
-              min={0}
-              step={settings.pressureUnit === "psi" ? 10 : 1}
-              value={multiGas.startPressure ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField({ startPressure: val === "" ? undefined : Number(val) });
-              }}
-            />
-          </div>
+          <NumberInput
+            label="Start O2 %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={multiGas.startO2}
+            onChange={(val) => updateField({ startO2: val })}
+          />
+          <NumberInput
+            label="Start He %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={multiGas.startHe}
+            onChange={(val) => updateField({ startHe: val })}
+          />
+          <NumberInput
+            label={`Start Pressure (${settings.pressureUnit.toUpperCase()})`}
+            min={0}
+            step={settings.pressureUnit === "psi" ? 10 : 1}
+            value={multiGas.startPressure}
+            onChange={(val) => updateField({ startPressure: val })}
+          />
         </div>
       </AccordionItem>
 
@@ -329,54 +309,35 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
       <AccordionItem title="Target Blend" defaultOpen={true}>
         <div className="grid two">
+          <NumberInput
+            label="Target O2 %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={multiGas.targetO2}
+            onChange={(val) => updateField({ targetO2: val })}
+          />
           <div className="field">
-            <label>Target O2 %</label>
-            <input
-              type="number"
+            <NumberInput
+              label="Target He %"
               min={0}
               max={100}
               step={0.1}
-              value={multiGas.targetO2 ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField({ targetO2: val === "" ? undefined : Number(val) });
-              }}
-            />
-          </div>
-          <div className="field">
-            <label>Target He %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={hasHeliumAvailable ? (multiGas.targetHe ?? "") : 0}
+              value={hasHeliumAvailable ? multiGas.targetHe : 0}
               disabled={!hasHeliumAvailable}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField({ targetHe: val === "" ? undefined : Number(val) });
-              }}
+              onChange={(val) => updateField({ targetHe: val })}
             />
             {!hasHeliumAvailable && (
               <div className="table-note">No helium source available. Add a trimix gas or helium to the start tank.</div>
             )}
           </div>
-          <div className="field">
-            <label>Target Pressure ({settings.pressureUnit.toUpperCase()})</label>
-            <input
-              type="number"
-              min={0}
-              step={settings.pressureUnit === "psi" ? 10 : 1}
-              value={multiGas.targetPressure ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField({ targetPressure: val === "" ? undefined : Number(val) });
-              }}
-            />
-          </div>
+          <NumberInput
+            label={`Target Pressure (${settings.pressureUnit.toUpperCase()})`}
+            min={0}
+            step={settings.pressureUnit === "psi" ? 10 : 1}
+            value={multiGas.targetPressure}
+            onChange={(val) => updateField({ targetPressure: val })}
+          />
         </div>
       </AccordionItem>
 
