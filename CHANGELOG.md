@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.7] - 2026-02-18
+
+### Changed
+
+- **Accessibility**: Introduced reusable `NumberInput` component to ensure all numeric inputs have programmatically associated labels and consistent focus behavior.
+- **Standard Blend**: Updated Standard Blend tab to use the new accessible `NumberInput` component.
+
 ## [0.6.6] - 2026-02-14
 
 ### Changed
