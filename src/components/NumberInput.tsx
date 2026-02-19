@@ -10,6 +10,7 @@ export type NumberInputProps = {
   disabled?: boolean;
   onBlur?: () => void;
   selectOnFocus?: boolean;
+  placeholder?: string;
   className?: string;
 };
 
@@ -23,6 +24,7 @@ export const NumberInput = ({
   disabled,
   onBlur,
   selectOnFocus = true,
+  placeholder,
   className,
 }: NumberInputProps): JSX.Element => {
   const id = useId();
@@ -57,6 +59,7 @@ export const NumberInput = ({
         onFocus={handleFocus}
         onChange={handleChange}
         onBlur={onBlur}
+        placeholder={placeholder}
       />
     </div>
   );

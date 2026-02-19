@@ -317,7 +317,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             value={multiGas.targetO2}
             onChange={(val) => updateField({ targetO2: val })}
           />
-          <div className="field">
+          <div>
             <NumberInput
               label="Target He %"
               min={0}
