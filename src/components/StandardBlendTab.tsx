@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type StandardBlendInput } from "../state/session";
 import {
@@ -14,6 +14,7 @@ import {
 import { formatPercentage, formatPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
+import { NumberInput } from "./NumberInput";
 
 
 const clampPressure = (value: number): number => Math.max(0, value);
@@ -94,15 +95,6 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
   const updateField = <K extends keyof StandardBlendInput>(key: K, value: StandardBlendInput[K]): void => {
     setStandardBlend({ ...standardBlend, [key]: value });
-  };
-
-  const selectOnFocus = (event: FocusEvent<HTMLInputElement>): void => {
-    // delay selection to allow browser default behavior (setting cursor) to finish
-    // so we can overwrite it with "select all"
-    const target = event.target;
-    requestAnimationFrame(() => {
-      target.select();
-    });
   };
 
   const onCalculate = (): void => {
@@ -292,105 +284,63 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     <>
       <AccordionItem title="Start Tank" defaultOpen={true}>
         <div className="grid two">
-          <div className="field">
-            <label>Start O2 %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={standardBlend.startO2 ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField("startO2", val === "" ? undefined : Number(val));
-              }}
-              onBlur={() => updateField("startO2", clampPercent(standardBlend.startO2 ?? 0))}
-            />
-          </div>
-          <div className="field">
-            <label>Start He %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={standardBlend.startHe ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField("startHe", val === "" ? undefined : Number(val));
-              }}
-              onBlur={() => updateField("startHe", clampPercent(standardBlend.startHe ?? 0))}
-            />
-          </div>
-          <div className="field">
-            <label>Start Pressure ({settings.pressureUnit.toUpperCase()})</label>
-            <input
-              type="number"
-              min={0}
-              step={settings.pressureUnit === "psi" ? 10 : 1}
-              value={standardBlend.startPressure ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField("startPressure", val === "" ? undefined : Number(val));
-              }}
-              onBlur={() => updateField("startPressure", clampPressure(standardBlend.startPressure ?? 0))}
-            />
-          </div>
+          <NumberInput
+            label="Start O2 %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={standardBlend.startO2}
+            onChange={(val) => updateField("startO2", val)}
+            onBlur={() => updateField("startO2", clampPercent(standardBlend.startO2 ?? 0))}
+          />
+          <NumberInput
+            label="Start He %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={standardBlend.startHe}
+            onChange={(val) => updateField("startHe", val)}
+            onBlur={() => updateField("startHe", clampPercent(standardBlend.startHe ?? 0))}
+          />
+          <NumberInput
+            label={`Start Pressure (${settings.pressureUnit.toUpperCase()})`}
+            min={0}
+            step={settings.pressureUnit === "psi" ? 10 : 1}
+            value={standardBlend.startPressure}
+            onChange={(val) => updateField("startPressure", val)}
+            onBlur={() => updateField("startPressure", clampPressure(standardBlend.startPressure ?? 0))}
+          />
         </div>
       </AccordionItem>
 
       <AccordionItem title="Target Blend" defaultOpen={true}>
         <div className="grid two">
-          <div className="field">
-            <label>Target O2 %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={standardBlend.targetO2 ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField("targetO2", val === "" ? undefined : Number(val));
-              }}
-              onBlur={() => updateField("targetO2", clampPercent(standardBlend.targetO2 ?? 0))}
-            />
-          </div>
-          <div className="field">
-            <label>Target He %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={standardBlend.targetHe ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField("targetHe", val === "" ? undefined : Number(val));
-              }}
-              onBlur={() => updateField("targetHe", clampPercent(standardBlend.targetHe ?? 0))}
-            />
-          </div>
-          <div className="field">
-            <label>Target Pressure ({settings.pressureUnit.toUpperCase()})</label>
-            <input
-              type="number"
-              min={0}
-              step={settings.pressureUnit === "psi" ? 10 : 1}
-              value={standardBlend.targetPressure ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField("targetPressure", val === "" ? undefined : Number(val));
-              }}
-              onBlur={() => updateField("targetPressure", clampPressure(standardBlend.targetPressure ?? 0))}
-            />
-          </div>
+          <NumberInput
+            label="Target O2 %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={standardBlend.targetO2}
+            onChange={(val) => updateField("targetO2", val)}
+            onBlur={() => updateField("targetO2", clampPercent(standardBlend.targetO2 ?? 0))}
+          />
+          <NumberInput
+            label="Target He %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={standardBlend.targetHe}
+            onChange={(val) => updateField("targetHe", val)}
+            onBlur={() => updateField("targetHe", clampPercent(standardBlend.targetHe ?? 0))}
+          />
+          <NumberInput
+            label={`Target Pressure (${settings.pressureUnit.toUpperCase()})`}
+            min={0}
+            step={settings.pressureUnit === "psi" ? 10 : 1}
+            value={standardBlend.targetPressure}
+            onChange={(val) => updateField("targetPressure", val)}
+            onBlur={() => updateField("targetPressure", clampPressure(standardBlend.targetPressure ?? 0))}
+          />
         </div>
       </AccordionItem>
 
