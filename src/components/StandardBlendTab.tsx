@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type StandardBlendInput } from "../state/session";
-import { NumberInput } from "./NumberInput";
 import {
   calculateStandardBlend,
   type BlendResult,
@@ -15,6 +14,7 @@ import {
 import { formatPercentage, formatPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
+import { NumberInput } from "./NumberInput";
 
 
 const clampPressure = (value: number): number => Math.max(0, value);

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
+import { useMemo, useState } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState } from "../state/session";
 import {
@@ -11,6 +11,7 @@ import {
 } from "../utils/calculations";
 import { formatNumber } from "../utils/format";
 import { AccordionItem } from "./Accordion";
+import { NumberInput } from "./NumberInput";
 
 
 const clampDepth = (value: number): number => Math.max(0, value);
@@ -75,37 +76,25 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
     setUtilities(patch);
   };
 
-  const selectOnFocus = (event: FocusEvent<HTMLInputElement>): void => {
-    event.target.select();
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       <AccordionItem title="Maximum Operating Depth" defaultOpen={true}>
         <div className="grid two">
-          <div className="field">
-            <label>Gas O2 %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={utilities.modGasO2 ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ modGasO2: event.target.value === "" ? undefined : clampPercent(Number(event.target.value)) })}
-            />
-          </div>
-          <div className="field">
-            <label>Max PPO2</label>
-            <input
-              type="number"
-              min={0}
-              step={0.1}
-              value={utilities.modMaxPPO2 ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ modMaxPPO2: event.target.value === "" ? undefined : Math.max(0, Number(event.target.value)) })}
-            />
-          </div>
+          <NumberInput
+            label="Gas O2 %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={utilities.modGasO2}
+            onChange={(val) => update({ modGasO2: val === undefined ? undefined : clampPercent(val) })}
+          />
+          <NumberInput
+            label="Max PPO2"
+            min={0}
+            step={0.1}
+            value={utilities.modMaxPPO2}
+            onChange={(val) => update({ modMaxPPO2: val === undefined ? undefined : Math.max(0, val) })}
+          />
         </div>
         <div style={{ marginTop: "12px" }}>
           <div>Working MOD: {formatNumber(modResult.mod, 1)} {settings.depthUnit}</div>
@@ -115,39 +104,27 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
 
       <AccordionItem title="Best Mix">
         <div className="grid two">
-          <div className="field">
-            <label>Target Depth ({settings.depthUnit})</label>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={utilities.bestMixDepth ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixDepth: event.target.value === "" ? undefined : clampDepth(Number(event.target.value)) })}
-            />
-          </div>
-          <div className="field">
-            <label>Target PPO2</label>
-            <input
-              type="number"
-              min={0}
-              step={0.1}
-              value={utilities.bestMixPPO2 ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixPPO2: event.target.value === "" ? undefined : Math.max(0, Number(event.target.value)) })}
-            />
-          </div>
-          <div className="field">
-            <label>Max END ({settings.depthUnit})</label>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={utilities.bestMixMaxEND ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ bestMixMaxEND: event.target.value === "" ? undefined : Math.max(0, Number(event.target.value)) })}
-            />
-          </div>
+          <NumberInput
+            label={`Target Depth (${settings.depthUnit})`}
+            min={0}
+            step={1}
+            value={utilities.bestMixDepth}
+            onChange={(val) => update({ bestMixDepth: val === undefined ? undefined : clampDepth(val) })}
+          />
+          <NumberInput
+            label="Target PPO2"
+            min={0}
+            step={0.1}
+            value={utilities.bestMixPPO2}
+            onChange={(val) => update({ bestMixPPO2: val === undefined ? undefined : Math.max(0, val) })}
+          />
+          <NumberInput
+            label={`Max END (${settings.depthUnit})`}
+            min={0}
+            step={1}
+            value={utilities.bestMixMaxEND}
+            onChange={(val) => update({ bestMixMaxEND: val === undefined ? undefined : Math.max(0, val) })}
+          />
         </div>
         <div style={{ marginTop: "12px" }}>
           <div>Best Mix: {formatNumber(bestMixResult.o2, 1)}% O2, {formatNumber(bestMixResult.he, 1)}% He</div>
@@ -156,29 +133,21 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
 
       <AccordionItem title="Equivalent Air Depth">
         <div className="grid two">
-          <div className="field">
-            <label>Gas O2 %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={utilities.eadO2 ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ eadO2: event.target.value === "" ? undefined : clampPercent(Number(event.target.value)) })}
-            />
-          </div>
-          <div className="field">
-            <label>Depth ({settings.depthUnit})</label>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={utilities.eadDepth ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ eadDepth: event.target.value === "" ? undefined : clampDepth(Number(event.target.value)) })}
-            />
-          </div>
+          <NumberInput
+            label="Gas O2 %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={utilities.eadO2}
+            onChange={(val) => update({ eadO2: val === undefined ? undefined : clampPercent(val) })}
+          />
+          <NumberInput
+            label={`Depth (${settings.depthUnit})`}
+            min={0}
+            step={1}
+            value={utilities.eadDepth}
+            onChange={(val) => update({ eadDepth: val === undefined ? undefined : clampDepth(val) })}
+          />
         </div>
         <div style={{ marginTop: "12px" }}>
           <div>EAD: {formatNumber(eadResult, 1)} {settings.depthUnit}</div>
@@ -187,41 +156,29 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
 
       <AccordionItem title="Equivalent Narcotic Depth">
         <div className="grid two">
-          <div className="field">
-            <label>Gas O2 %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={utilities.endO2 ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ endO2: event.target.value === "" ? undefined : clampPercent(Number(event.target.value)) })}
-            />
-          </div>
-          <div className="field">
-            <label>Gas He %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={utilities.endHe ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ endHe: event.target.value === "" ? undefined : clampPercent(Number(event.target.value)) })}
-            />
-          </div>
-          <div className="field">
-            <label>Depth ({settings.depthUnit})</label>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={utilities.endDepth ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ endDepth: event.target.value === "" ? undefined : clampDepth(Number(event.target.value)) })}
-            />
-          </div>
+          <NumberInput
+            label="Gas O2 %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={utilities.endO2}
+            onChange={(val) => update({ endO2: val === undefined ? undefined : clampPercent(val) })}
+          />
+          <NumberInput
+            label="Gas He %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={utilities.endHe}
+            onChange={(val) => update({ endHe: val === undefined ? undefined : clampPercent(val) })}
+          />
+          <NumberInput
+            label={`Depth (${settings.depthUnit})`}
+            min={0}
+            step={1}
+            value={utilities.endDepth}
+            onChange={(val) => update({ endDepth: val === undefined ? undefined : clampDepth(val) })}
+          />
         </div>
         <div style={{ marginTop: "12px" }}>
           <div>END: {formatNumber(endResult, 1)} {settings.depthUnit}</div>
@@ -231,41 +188,29 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
 
       <AccordionItem title="Gas Density">
         <div className="grid two">
-          <div className="field">
-            <label>Gas O2 %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={utilities.densityO2 ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ densityO2: event.target.value === "" ? undefined : clampPercent(Number(event.target.value)) })}
-            />
-          </div>
-          <div className="field">
-            <label>Gas He %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={utilities.densityHe ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ densityHe: event.target.value === "" ? undefined : clampPercent(Number(event.target.value)) })}
-            />
-          </div>
-          <div className="field">
-            <label>Depth ({settings.depthUnit})</label>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={utilities.densityDepth ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => update({ densityDepth: event.target.value === "" ? undefined : clampDepth(Number(event.target.value)) })}
-            />
-          </div>
+          <NumberInput
+            label="Gas O2 %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={utilities.densityO2}
+            onChange={(val) => update({ densityO2: val === undefined ? undefined : clampPercent(val) })}
+          />
+          <NumberInput
+            label="Gas He %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={utilities.densityHe}
+            onChange={(val) => update({ densityHe: val === undefined ? undefined : clampPercent(val) })}
+          />
+          <NumberInput
+            label={`Depth (${settings.depthUnit})`}
+            min={0}
+            step={1}
+            value={utilities.densityDepth}
+            onChange={(val) => update({ densityDepth: val === undefined ? undefined : clampDepth(val) })}
+          />
         </div>
         <div style={{ marginTop: "12px" }}>
           <div>Density: {formatNumber(densityResult, 2)} g/L</div>

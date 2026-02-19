@@ -1,10 +1,11 @@
 # Changelog
 
-## [0.6.7] - 2026-02-15
+## [0.6.7] - 2026-02-19
 
-### Improved
+### Changed
 
-- **Accessibility**: Replaced manual input fields in Standard Blend tab with a new `NumberInput` component. This ensures all labels are clickable (focusing the input) and improves accessibility for screen readers.
+- **UX/Accessibility**: Standardized all numeric input fields using a new `NumberInput` component. This ensures consistent label association (for screen readers) and auto-select-on-focus behavior across the application.
+- **Multi-Gas Tab**: Improved the "Custom Mix" input layout to use standard labeled inputs instead of a custom dual-input widget, improving accessibility and consistency.
 
 ## [0.6.6] - 2026-02-14
 

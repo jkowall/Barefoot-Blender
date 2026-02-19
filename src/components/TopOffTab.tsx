@@ -12,6 +12,7 @@ import {
 import { formatNumber, formatPercentage, formatPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
+import { NumberInput } from "./NumberInput";
 
 
 const clampPressure = (value: number): number => Math.max(0, value);
@@ -150,72 +151,44 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     <>
       <AccordionItem title="Start Tank" defaultOpen={true}>
         <div className="grid two">
-          <div className="field">
-            <label>Current O2 %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={topOff.startO2 ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField("startO2", val === "" ? undefined : Number(val));
-              }}
-              onBlur={() => updateField("startO2", clampPercent(topOff.startO2 ?? 0))}
-            />
-          </div>
-          <div className="field">
-            <label>Current He %</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={topOff.startHe ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField("startHe", val === "" ? undefined : Number(val));
-              }}
-              onBlur={() => updateField("startHe", clampPercent(topOff.startHe ?? 0))}
-            />
-          </div>
-          <div className="field">
-            <label>Current Pressure ({settings.pressureUnit.toUpperCase()})</label>
-            <input
-              type="number"
-              min={0}
-              step={settings.pressureUnit === "psi" ? 10 : 1}
-              value={topOff.startPressure ?? ""}
-              onFocus={selectOnFocus}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const val = event.target.value;
-                updateField("startPressure", val === "" ? undefined : Number(val));
-              }}
-              onBlur={() => updateField("startPressure", clampPressure(topOff.startPressure ?? 0))}
-            />
-          </div>
+          <NumberInput
+            label="Current O2 %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={topOff.startO2}
+            onChange={(val) => updateField("startO2", val)}
+            onBlur={() => updateField("startO2", clampPercent(topOff.startO2 ?? 0))}
+          />
+          <NumberInput
+            label="Current He %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={topOff.startHe}
+            onChange={(val) => updateField("startHe", val)}
+            onBlur={() => updateField("startHe", clampPercent(topOff.startHe ?? 0))}
+          />
+          <NumberInput
+            label={`Current Pressure (${settings.pressureUnit.toUpperCase()})`}
+            min={0}
+            step={settings.pressureUnit === "psi" ? 10 : 1}
+            value={topOff.startPressure}
+            onChange={(val) => updateField("startPressure", val)}
+            onBlur={() => updateField("startPressure", clampPressure(topOff.startPressure ?? 0))}
+          />
         </div>
       </AccordionItem>
 
       <AccordionItem title="Top-Off Goal" defaultOpen={true}>
-        <div className="field">
-          <label>Final Pressure ({settings.pressureUnit.toUpperCase()})</label>
-          <input
-            type="number"
-            min={0}
-            step={settings.pressureUnit === "psi" ? 10 : 1}
-            value={topOff.finalPressure ?? ""}
-            onFocus={selectOnFocus}
-            onChange={(event: ChangeEvent<HTMLInputElement>) => {
-              const val = event.target.value;
-              updateField("finalPressure", val === "" ? undefined : Number(val));
-            }}
-            onBlur={() => updateField("finalPressure", clampPressure(topOff.finalPressure ?? 0))}
-          />
-        </div>
+        <NumberInput
+          label={`Final Pressure (${settings.pressureUnit.toUpperCase()})`}
+          min={0}
+          step={settings.pressureUnit === "psi" ? 10 : 1}
+          value={topOff.finalPressure}
+          onChange={(val) => updateField("finalPressure", val)}
+          onBlur={() => updateField("finalPressure", clampPressure(topOff.finalPressure ?? 0))}
+        />
       </AccordionItem>
 
       <AccordionItem title="Top-Off Gas" defaultOpen={true}>
