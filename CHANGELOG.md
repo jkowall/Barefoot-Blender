@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.8] - 2026-02-21
+
+### Changed
+
+- **UX/Accessibility**: Improved the `UnitConverter` component in the Utilities tab. Inputs now have accessible labels (`htmlFor`, `id`), select their content on focus for easier editing, and unit dropdowns have proper ARIA labels.
+
 ## [0.6.7] - 2026-02-19
 
 ### Changed
