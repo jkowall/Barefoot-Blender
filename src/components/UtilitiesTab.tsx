@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useId, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState } from "../state/session";
 import {
@@ -223,11 +223,17 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
 };
 
 const UnitConverter = (): JSX.Element => {
+  const depthId = useId();
+  const pressureId = useId();
   const [depthValue, setDepthValue] = useState<number | undefined>(10);
   const [depthUnit, setDepthUnit] = useState<"m" | "ft">("m");
 
   const [pressureValue, setPressureValue] = useState<number | undefined>(200);
   const [pressureUnit, setPressureUnit] = useState<"bar" | "psi">("bar");
+
+  const handleFocus = (event: FocusEvent<HTMLInputElement>): void => {
+    requestAnimationFrame(() => event.target.select());
+  };
 
   const convertedDepth = useMemo(() => {
     const val = depthValue ?? 0;
@@ -250,18 +256,21 @@ const UnitConverter = (): JSX.Element => {
       <h2>Unit Converter</h2>
       <div className="grid two">
         <div className="field">
-          <label>Depth</label>
+          <label htmlFor={depthId}>Depth</label>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <input
+              id={depthId}
               type="number"
               value={depthValue ?? ""}
               onChange={(e) => {
                 const val = e.target.value;
                 setDepthValue(val === "" ? undefined : Math.max(0, Number(val)));
               }}
+              onFocus={handleFocus}
               style={{ flex: 1 }}
             />
             <select
+              aria-label="Depth unit"
               value={depthUnit}
               onChange={(e) => setDepthUnit(e.target.value as "m" | "ft")}
               style={{ width: "auto" }}
@@ -273,18 +282,21 @@ const UnitConverter = (): JSX.Element => {
           <div>= {formatNumber(convertedDepth.value, 1)} {convertedDepth.unit}</div>
         </div>
         <div className="field">
-          <label>Pressure</label>
+          <label htmlFor={pressureId}>Pressure</label>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <input
+              id={pressureId}
               type="number"
               value={pressureValue ?? ""}
               onChange={(e) => {
                 const val = e.target.value;
                 setPressureValue(val === "" ? undefined : Math.max(0, Number(val)));
               }}
+              onFocus={handleFocus}
               style={{ flex: 1 }}
             />
             <select
+              aria-label="Pressure unit"
               value={pressureUnit}
               onChange={(e) => setPressureUnit(e.target.value as "bar" | "psi")}
               style={{ width: "auto" }}
