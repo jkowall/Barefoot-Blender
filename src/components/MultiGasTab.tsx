@@ -6,6 +6,7 @@ import { formatPressure } from "../utils/format";
 import { AccordionItem } from "./Accordion";
 import ErrorBoundary from "./ErrorBoundary";
 import { NumberInput } from "./NumberInput";
+import { SelectInput } from "./SelectInput";
 
 
 const MAX_GAS_SOURCES = 4;
@@ -199,33 +200,32 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         {(multiGas.gasSources ?? []).map((source, index) => (
           <div key={index} className="gas-source-row">
             <div className="grid two">
-              <div className="field">
-                <label>
-                  Gas {index + 1}
-                  {(multiGas.gasSources ?? []).length > 1 && (
+              <SelectInput
+                label={`Gas ${index + 1}`}
+                labelAction={
+                  (multiGas.gasSources ?? []).length > 1 && (
                     <button
                       type="button"
                       className="remove-gas-btn"
                       onClick={() => removeGasSource(index)}
                       title="Remove gas source"
+                      aria-label={`Remove Gas ${index + 1}`}
                     >
                       ✕
                     </button>
-                  )}
-                </label>
-                <select
-                  value={source.id}
-                  onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                    updateGasSource(index, { id: event.target.value })
-                  }
-                >
-                  {getOptionsForSource(source).map((option: GasSelection) => (
-                    <option key={option.id} value={option.id}>
-                      {option.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  )
+                }
+                value={source.id}
+                onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                  updateGasSource(index, { id: event.target.value })
+                }
+              >
+                {getOptionsForSource(source).map((option: GasSelection) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+              </SelectInput>
               <div className="field">
                 <label>Enabled</label>
                 <input
