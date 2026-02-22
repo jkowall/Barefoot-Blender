@@ -15,6 +15,7 @@ import { formatPercentage, formatPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
+import { SelectInput } from "./SelectInput";
 
 
 const clampPressure = (value: number): number => Math.max(0, value);
@@ -345,21 +346,19 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       </AccordionItem>
 
       <AccordionItem title="Top-Off Gas" defaultOpen={true}>
-        <div className="field">
-          <label>Select Gas</label>
-          <select
-            value={selectedTopGas?.id ?? ""}
-            onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-              updateField("topGasId", event.target.value)
-            }
-          >
-            {topOffOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.name} ({formatPercentage(option.o2)} O2 / {formatPercentage(option.he)} He)
-              </option>
-            ))}
-          </select>
-        </div>
+        <SelectInput
+          label="Select Gas"
+          value={selectedTopGas?.id ?? ""}
+          onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+            updateField("topGasId", event.target.value)
+          }
+        >
+          {topOffOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name} ({formatPercentage(option.o2)} O2 / {formatPercentage(option.he)} He)
+            </option>
+          ))}
+        </SelectInput>
         <div className="table-note">What gas is being used other than oxygen and helium?</div>
         <button className="calculate-button" type="button" onClick={onCalculate}>
           Calculate
