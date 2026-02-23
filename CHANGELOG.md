@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.10] - 2026-02-24
+
+### Fixed
+
+- **Security**: Added Content Security Policy (CSP) meta tag to `index.html` to improve security against XSS and injection attacks.
+
 ## [0.6.9] - 2026-02-24
 
 ### Changed
