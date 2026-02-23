@@ -1,6 +1,74 @@
 import { expect, test, describe } from "bun:test";
-import { calculateTopOffBlend } from "./calculations";
+import { calculateTopOffBlend, calculateBestMix } from "./calculations";
 import type { GasSelection, TopOffResult } from "./calculations";
+
+describe("calculateBestMix", () => {
+  test("Standard Nitrox: Depth 30m, PPO2 1.4, END 30m", () => {
+    // 30m = 4 ATA
+    // Max O2 = 1.4 / 4 = 0.35 => 35%
+    // END 30m = 4 ATA
+    // Safe N2 = (4) * 0.79 = 3.16 ATA
+    // Max N2 fraction = 3.16 / 4 = 0.79
+    // He = 1 - 0.35 - 0.79 = -0.14 => 0
+    const result = calculateBestMix(30, 1.4, 30, "m");
+    expect(result.o2).toBeCloseTo(35, 1);
+    expect(result.he).toBeCloseTo(0, 1);
+  });
+
+  test("Deep Trimix: Depth 60m, PPO2 1.4, END 30m", () => {
+    // 60m = 7 ATA
+    // Max O2 = 1.4 / 7 = 0.20 => 20%
+    // END 30m = 4 ATA
+    // Safe N2 = 4 * 0.79 = 3.16 ATA
+    // Max N2 fraction = 3.16 / 7 = 0.4514
+    // He = 1 - 0.20 - 0.4514 = 0.3486 => ~35%
+    const result = calculateBestMix(60, 1.4, 30, "m");
+    expect(result.o2).toBeCloseTo(20, 1);
+    expect(result.he).toBeCloseTo(34.9, 1);
+  });
+
+  test("Imperial Units: Depth 100ft, PPO2 1.4, END 100ft", () => {
+    // 100ft ~ 4 ATA
+    // O2 ~ 1.4 / 4 = 35%
+    // END 100ft = Depth => N2 can be max
+    // He should be 0
+    const result = calculateBestMix(100, 1.4, 100, "ft");
+    expect(result.o2).toBeCloseTo(34.7, 1);
+    expect(result.he).toBeCloseTo(0, 1);
+  });
+
+  test("High END tolerance: Depth 60m, PPO2 1.4, END 60m", () => {
+    // 60m = 7 ATA. Target PPO2 1.4 => 20% O2.
+    // Air has 79% N2. END=Depth means we accept Air's N2 loading (79%).
+    // Remaining space: 100 - 20 = 80%.
+    // Allowed N2: 79%.
+    // So we must use 1% He to avoid exceeding Air's N2 partial pressure.
+    const result = calculateBestMix(60, 1.4, 60, "m");
+    expect(result.o2).toBeCloseTo(20, 1);
+    expect(result.he).toBeCloseTo(1, 1);
+  });
+
+  test("Low END tolerance: Depth 30m, PPO2 1.4, END 10m", () => {
+    // 30m = 4 ATA
+    // O2 = 35%
+    // END 10m = 2 ATA
+    // Safe N2 = 2 * 0.79 = 1.58 ATA
+    // Max N2 fraction = 1.58 / 4 = 0.395
+    // He = 1 - 0.35 - 0.395 = 0.255 => 25.5%
+    const result = calculateBestMix(30, 1.4, 10, "m");
+    expect(result.o2).toBeCloseTo(35, 1);
+    expect(result.he).toBeCloseTo(25.5, 1);
+  });
+
+  test("100% O2 Cap: Shallow depth", () => {
+    // Depth 0m = 1 ATA
+    // Target PPO2 1.4
+    // Calc O2 = 1.4 / 1 = 140% => cap at 100%
+    const result = calculateBestMix(0, 1.4, 30, "m");
+    expect(result.o2).toBe(100);
+    expect(result.he).toBe(0);
+  });
+});
 
 describe("calculateTopOffBlend", () => {
   const settingsPsi = { pressureUnit: "psi" as const };
