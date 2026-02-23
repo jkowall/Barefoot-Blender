@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { calculateTopOffBlend } from "./calculations";
+import { calculateTopOffBlend, clampPressure } from "./calculations";
 import type { GasSelection, TopOffResult } from "./calculations";
 
 describe("calculateTopOffBlend", () => {
@@ -194,5 +194,22 @@ describe("calculateTopOffBlend", () => {
     expect(result.success).toBe(true);
     expect(result.finalO2).toBe(32);
     expect(result.addedPressure).toBe(0);
+  });
+});
+
+describe("clampPressure", () => {
+  test("returns the value if positive", () => {
+    expect(clampPressure(100)).toBe(100);
+    expect(clampPressure(0.1)).toBe(0.1);
+  });
+
+  test("returns 0 if value is 0", () => {
+    expect(clampPressure(0)).toBe(0);
+  });
+
+  test("returns 0 if value is negative", () => {
+    expect(clampPressure(-1)).toBe(0);
+    expect(clampPressure(-100)).toBe(0);
+    expect(clampPressure(-0.0001)).toBe(0);
   });
 });

@@ -7,15 +7,13 @@ import {
   type GasSelection,
   type TopOffResult,
   type TopOffProjectionRow,
-  clampPercent
+  clampPercent,
+  clampPressure
 } from "../utils/calculations";
 import { formatNumber, formatPercentage, formatPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
-
-
-const clampPressure = (value: number): number => Math.max(0, value);
 
 type Props = {
   settings: SettingsSnapshot;

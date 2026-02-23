@@ -75,6 +75,8 @@ const fraction = (percent: number): number => percent / 100;
 
 export const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 
+export const clampPressure = (value: number): number => Math.max(0, value);
+
 const sanitizeMix = (o2: number, he: number): { valid: boolean; message?: string } => {
   if (o2 < 0 || he < 0) {
     return { valid: false, message: "Gas fractions cannot be negative." };

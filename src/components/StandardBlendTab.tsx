@@ -9,16 +9,14 @@ import {
   solveRequiredStartPressure,
   solveMaxTargetWithoutHelium,
   calculateGasCost,
-  clampPercent
+  clampPercent,
+  clampPressure
 } from "../utils/calculations";
 import { formatPercentage, formatPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
 import { SelectInput } from "./SelectInput";
-
-
-const clampPressure = (value: number): number => Math.max(0, value);
 
 const SENSITIVITY_RANGE_PSI = 300;
 const SENSITIVITY_STEP_PSI = 10;
