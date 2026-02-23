@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.10] - 2026-02-25
+
+### Added
+
+- **Tests**: Added comprehensive unit tests for `calculateDensity` function in `src/utils/calculations.ts`.
+
 ## [0.6.9] - 2026-02-24
 
 ### Changed
