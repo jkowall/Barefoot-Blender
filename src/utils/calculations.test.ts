@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { calculateTopOffBlend } from "./calculations";
+import { calculateTopOffBlend, calculateEAD } from "./calculations";
 import type { GasSelection, TopOffResult } from "./calculations";
 
 describe("calculateTopOffBlend", () => {
@@ -194,5 +194,56 @@ describe("calculateTopOffBlend", () => {
     expect(result.success).toBe(true);
     expect(result.finalO2).toBe(32);
     expect(result.addedPressure).toBe(0);
+  });
+});
+
+describe("calculateEAD", () => {
+  test("Air (21% O2) at 60ft", () => {
+    // Air should have an EAD exactly equal to depth
+    const result = calculateEAD(21, 60, "ft");
+    expect(result).toBeCloseTo(60, 1);
+  });
+
+  test("EAN32 (32% O2) at 100ft", () => {
+    // Should be shallower than actual depth
+    // ~81.5ft
+    const result = calculateEAD(32, 100, "ft");
+    expect(result).toBeLessThan(100);
+    expect(result).toBeCloseTo(81.5, 1);
+  });
+
+  test("EAN36 (36% O2) at 30m", () => {
+    // Metric check
+    // Ambient = 30/10 + 1 = 4 ATA
+    // N2 fraction = 0.64
+    // EAD = (4 * 0.64 / 0.79 - 1) * 10
+    // = (3.24 - 1) * 10 = 22.4m
+    const result = calculateEAD(36, 30, "m");
+    expect(result).toBeLessThan(30);
+    expect(result).toBeCloseTo(22.4, 1);
+  });
+
+  test("100% O2 at 20ft", () => {
+    // Pure O2 has no nitrogen, so EAD calculation yields negative, clamped to 0
+    // (ambient * 0 / 0.79 - 1) -> negative
+    const result = calculateEAD(100, 20, "ft");
+    expect(result).toBe(0);
+  });
+
+  test("Surface (0 depth)", () => {
+    // At surface, ambient = 1 ATA.
+    // Air: (1 * 0.79 / 0.79 - 1) = 0.
+    const result = calculateEAD(21, 0, "ft");
+    expect(result).toBe(0);
+  });
+
+  test("Hypoxic Mix (10% O2) at 100ft", () => {
+    // Should be deeper than actual depth because N2 fraction (0.90) > 0.79
+    // Ambient = 4.03 ATA
+    // EAD = (4.03 * 0.90 / 0.79 - 1) * 33
+    // = (4.59 - 1) * 33 = 118.5 ft
+    const result = calculateEAD(10, 100, "ft");
+    expect(result).toBeGreaterThan(100);
+    expect(result).toBeCloseTo(118.5, 1);
   });
 });

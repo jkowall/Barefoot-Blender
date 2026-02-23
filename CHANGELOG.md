@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.10] - 2026-02-23
+
+### Fixed
+
+- **Testing**: Added missing unit tests for `calculateEAD` to improve test coverage for decompression calculations.
+
 ## [0.6.9] - 2026-02-24
 
 ### Changed
