@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.10] - 2026-02-24
+
+### Changed
+
+- **Code Health**: Refactored signed pressure formatting logic into a shared utility (`formatSignedPressure`) and applied it across Standard Blend, Multi-Gas, and Top-Off tabs for consistency.
+
 ## [0.6.9] - 2026-02-24
 
 ### Changed

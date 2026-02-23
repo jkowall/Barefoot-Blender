@@ -2,7 +2,7 @@ import { useMemo, type ChangeEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type MultiGasInput, type GasSourceInput } from "../state/session";
 import { solveNGasBlend, type GasSelection, type BlendAlternative, clampPercent } from "../utils/calculations";
-import { formatPressure } from "../utils/format";
+import { formatPressure, formatSignedPressure } from "../utils/format";
 import { AccordionItem } from "./Accordion";
 import ErrorBoundary from "./ErrorBoundary";
 import { NumberInput } from "./NumberInput";
@@ -366,12 +366,11 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                       runningTotal = Math.max(0, runningTotal);
                       const isBleed = step.amount < 0;
                       const action = isBleed ? "Drain" : "Add";
-                      const displayAmount = Math.abs(step.amount);
                       return (
                         <li key={index} className={isBleed ? "bleed-step" : ""}>
                           {index + 1}. {action} {step.gas}: {formatPressure(runningTotal, settings.pressureUnit)}
                           <span className="result-step-total">
-                            ({isBleed ? "-" : "+"}{formatPressure(displayAmount, settings.pressureUnit)})
+                            ({formatSignedPressure(step.amount, settings.pressureUnit)})
                           </span>
                         </li>
                       );
