@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { calculateTopOffBlend } from "./calculations";
+import { calculateTopOffBlend, rankGasesByCost } from "./calculations";
 import type { GasSelection, TopOffResult } from "./calculations";
 
 describe("calculateTopOffBlend", () => {
@@ -194,5 +194,43 @@ describe("calculateTopOffBlend", () => {
     expect(result.success).toBe(true);
     expect(result.finalO2).toBe(32);
     expect(result.addedPressure).toBe(0);
+  });
+});
+
+describe("rankGasesByCost", () => {
+  const costSettings = {
+    pricePerCuFtO2: 0.5,
+    pricePerCuFtHe: 2.0,
+    tankSizeCuFt: 80,
+    tankRatedPressure: 3000,
+  };
+
+  test("Sorts gases by cost (cheapest first)", () => {
+    const gases: GasSelection[] = [
+      { id: "g1", name: "Expensive (He)", o2: 10, he: 50 },
+      { id: "g2", name: "Cheap (Air)", o2: 21, he: 0 },
+      { id: "g3", name: "Medium (Nitrox)", o2: 32, he: 0 },
+    ];
+
+    const sorted = rankGasesByCost(gases, costSettings);
+
+    expect(sorted[0].id).toBe("g2");
+    expect(sorted[1].id).toBe("g3");
+    expect(sorted[2].id).toBe("g1");
+  });
+
+  test("Sorts gases by cost with custom reference pressure", () => {
+    const gases: GasSelection[] = [
+      { id: "g1", name: "Expensive (He)", o2: 10, he: 50 },
+      { id: "g2", name: "Cheap (Air)", o2: 21, he: 0 },
+      { id: "g3", name: "Medium (Nitrox)", o2: 32, he: 0 },
+    ];
+
+    // Using a large reference pressure shouldn't change the order for linear costs
+    const sorted = rankGasesByCost(gases, costSettings, 5000);
+
+    expect(sorted[0].id).toBe("g2");
+    expect(sorted[1].id).toBe("g3");
+    expect(sorted[2].id).toBe("g1");
   });
 });

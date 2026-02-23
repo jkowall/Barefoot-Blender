@@ -1253,12 +1253,12 @@ const estimateGasPressureCost = (
  */
 export const rankGasesByCost = (
   gases: GasSelection[],
-  costSettings: CostSettings
+  costSettings: CostSettings,
+  referencePressure: number = 100
 ): GasSelection[] => {
-  const referenceAmount = 100; // Use 100 PSI as reference for ranking
   return [...gases].sort((a, b) => {
-    const costA = estimateGasPressureCost(a, referenceAmount, costSettings);
-    const costB = estimateGasPressureCost(b, referenceAmount, costSettings);
+    const costA = estimateGasPressureCost(a, referencePressure, costSettings);
+    const costB = estimateGasPressureCost(b, referencePressure, costSettings);
     return costA - costB;
   });
 };
