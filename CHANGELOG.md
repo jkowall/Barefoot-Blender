@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.10] - 2026-02-25
+
+### Fixed
+
+- **Security**: Removed `server: { host: true }` from Vite configuration to restrict the development server to localhost by default. This prevents unintended exposure to the local network.
+
 ## [0.6.9] - 2026-02-24
 
 ### Changed
