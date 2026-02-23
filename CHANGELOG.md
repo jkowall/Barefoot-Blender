@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.9] - 2026-02-24
+
+### Changed
+
+- **UX/Accessibility**: Standardized inputs in the `SettingsPanel` component using `NumberInput` and `SelectInput`. This ensures consistent label association, better accessibility for screen readers, and improved UX with auto-select-on-focus for numeric fields.
+
 ## [0.6.8] - 2026-02-21
 
 ### Changed
