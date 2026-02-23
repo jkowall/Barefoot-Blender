@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.10] - 2026-02-24
+
+### Internal
+
+- **Testing**: Added comprehensive unit tests for `calculateMOD` function in `src/utils/calculations.ts` to ensure safety and correctness of Maximum Operating Depth calculations.
+
 ## [0.6.9] - 2026-02-24
 
 ### Changed

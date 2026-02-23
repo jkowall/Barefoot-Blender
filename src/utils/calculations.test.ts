@@ -1,6 +1,57 @@
 import { expect, test, describe } from "bun:test";
-import { calculateTopOffBlend } from "./calculations";
+import { calculateTopOffBlend, calculateMOD } from "./calculations";
 import type { GasSelection, TopOffResult } from "./calculations";
+
+describe("calculateMOD", () => {
+  test("Standard Air (21%) at 1.4/1.6 ppO2 (Imperial)", () => {
+    const result = calculateMOD(21, 1.4, 1.6, "ft");
+    // MOD: (1.4 / 0.21 - 1) * 33 = (20/3 - 1) * 33 = 17/3 * 33 = 187
+    expect(result.mod).toBeCloseTo(187, 1);
+    // Contingency: (1.6 / 0.21 - 1) * 33 = (160/21 - 1) * 33 = 139/21 * 33 = 139 * 11 / 7 ≈ 218.43
+    expect(result.contingency).toBeCloseTo(218.43, 1);
+  });
+
+  test("Standard Air (21%) at 1.4/1.6 ppO2 (Metric)", () => {
+    const result = calculateMOD(21, 1.4, 1.6, "m");
+    // MOD: (1.4 / 0.21 - 1) * 10 ≈ 56.67
+    expect(result.mod).toBeCloseTo(56.67, 1);
+    // Contingency: (1.6 / 0.21 - 1) * 10 ≈ 66.19
+    expect(result.contingency).toBeCloseTo(66.19, 1);
+  });
+
+  test("Pure Oxygen (100%) at 1.6 ppO2 (Imperial)", () => {
+    const result = calculateMOD(100, 1.6, 1.6, "ft");
+    // MOD: (1.6 / 1.0 - 1) * 33 = 0.6 * 33 = 19.8
+    expect(result.mod).toBeCloseTo(19.8, 1);
+    expect(result.contingency).toBeCloseTo(19.8, 1);
+  });
+
+  test("Pure Oxygen (100%) at 1.6 ppO2 (Metric)", () => {
+    const result = calculateMOD(100, 1.6, 1.6, "m");
+    // MOD: (1.6 / 1.0 - 1) * 10 = 6
+    expect(result.mod).toBeCloseTo(6, 1);
+  });
+
+  test("Hypoxic Trimix (10%) at 1.2/1.4 ppO2 (Imperial)", () => {
+    const result = calculateMOD(10, 1.2, 1.4, "ft");
+    // MOD: (1.2 / 0.10 - 1) * 33 = 11 * 33 = 363
+    expect(result.mod).toBeCloseTo(363, 1);
+    // Contingency: (1.4 / 0.10 - 1) * 33 = 13 * 33 = 429
+    expect(result.contingency).toBeCloseTo(429, 1);
+  });
+
+  test("0% O2 returns 0 depth", () => {
+    const result = calculateMOD(0, 1.4, 1.6, "ft");
+    expect(result.mod).toBe(0);
+    expect(result.contingency).toBe(0);
+  });
+
+  test("Negative O2 returns 0 depth", () => {
+    const result = calculateMOD(-10, 1.4, 1.6, "ft");
+    expect(result.mod).toBe(0);
+    expect(result.contingency).toBe(0);
+  });
+});
 
 describe("calculateTopOffBlend", () => {
   const settingsPsi = { pressureUnit: "psi" as const };
