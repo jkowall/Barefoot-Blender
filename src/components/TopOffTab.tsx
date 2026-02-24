@@ -10,7 +10,7 @@ import {
   clampPercent,
   clampPressure
 } from "../utils/calculations";
-import { formatNumber, formatPercentage, formatPressure } from "../utils/format";
+import { formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
@@ -234,7 +234,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
           {result.success && (
             <div className="result-note">
               Add {selectedTopGas?.name ?? "chosen gas"}: {formatPressure(result.finalPressure, settings.pressureUnit)}
-              <span className="result-step-total"> (+{formatPressure(result.addedPressure, settings.pressureUnit)})</span>
+              <span className="result-step-total"> ({formatSignedPressure(result.addedPressure, settings.pressureUnit)})</span>
             </div>
           )}
           {result.warnings.map((warning) => (
@@ -343,7 +343,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               </div>
               <div className="result-note">
                 Bleed tank to {formatPressure(adjustedStartPsi, settings.pressureUnit)}, then add {selectedTopGas?.name ?? "chosen gas"}: {formatPressure(bleedPreview.finalPressure, settings.pressureUnit)}
-                <span className="result-step-total"> (+{formatPressure(bleedPreview.addedPressure, settings.pressureUnit)})</span>
+                <span className="result-step-total"> ({formatSignedPressure(bleedPreview.addedPressure, settings.pressureUnit)})</span>
               </div>
               {bleedPreview.warnings.map((warning) => (
                 <div key={warning} className="warning">
