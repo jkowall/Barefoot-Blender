@@ -10,6 +10,17 @@ export const formatPercentage = (value: number, decimals = 1): string => `${clam
 export const formatPressure = (valuePsi: number, unit: PressureUnit, decimals = 0): string =>
   `${clampPrecision(toDisplayPressure(valuePsi, unit), decimals)} ${unit.toUpperCase()}`;
 
+export const formatSignedPressure = (valuePsi: number, unit: PressureUnit, decimals = 0): string => {
+  const magnitude = formatPressure(Math.abs(valuePsi), unit, decimals);
+  if (valuePsi > 0) {
+    return `+${magnitude}`;
+  }
+  if (valuePsi < 0) {
+    return `-${magnitude}`;
+  }
+  return magnitude;
+};
+
 export const formatDepth = (valueFeet: number, unit: DepthUnit, decimals = 0): string =>
   `${clampPrecision(toDisplayDepth(valueFeet, unit), decimals)} ${unit}`;
 
