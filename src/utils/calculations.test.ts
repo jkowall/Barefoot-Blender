@@ -414,8 +414,6 @@ describe("calculateTopOffBlend", () => {
     };
     const topGas: GasSelection = { id: "air", name: "Air", o2: 21, he: 0 };
 
-    // Final O2 = (500 * 0.32 + 2500 * 0.21) / 3000
-    // Final O2 = (160 + 525) / 3000 = 685 / 3000 = 0.228333... => 22.83%
     const result = calculateTopOffBlend(settingsPsi, inputs, topGas);
 
     expect(result.success).toBe(true);
@@ -552,8 +550,6 @@ describe("calculateTopOffBlend", () => {
 
     expect(result.success).toBe(true);
     expect(result.finalO2).toBeCloseTo(21, 1);
-    // addedPressure is in PSI internally
-    // 150 bar * 14.5037738 = 2175.56 PSI
     expect(result.addedPressure).toBeCloseTo(150 * 14.5037738, 2);
   });
 
