@@ -13,4 +13,15 @@ export const formatPressure = (valuePsi: number, unit: PressureUnit, decimals = 
 export const formatDepth = (valueFeet: number, unit: DepthUnit, decimals = 0): string =>
   `${clampPrecision(toDisplayDepth(valueFeet, unit), decimals)} ${unit}`;
 
+export const formatSignedPressure = (valuePsi: number, unit: PressureUnit, decimals = 0): string => {
+  const magnitude = formatPressure(Math.abs(valuePsi), unit, decimals);
+  if (valuePsi > 0) {
+    return `+${magnitude}`;
+  }
+  if (valuePsi < 0) {
+    return `-${magnitude}`;
+  }
+  return magnitude;
+};
+
 export const formatNumber = (value: number, decimals = 1): string => `${clampPrecision(value, decimals)}`;

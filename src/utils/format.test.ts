@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { formatPercentage, formatPressure, formatDepth, formatNumber } from "./format";
+import { formatPercentage, formatPressure, formatSignedPressure, formatDepth, formatNumber } from "./format";
 import type { PressureUnit, DepthUnit } from "../state/settings";
 
 describe("formatPercentage", () => {
@@ -90,6 +90,30 @@ describe("formatPressure", () => {
   test("handles non-finite numbers", () => {
     expect(formatPressure(Infinity, PSI)).toBe("0 PSI");
     expect(formatPressure(NaN, BAR)).toBe("0 BAR");
+  });
+});
+
+describe("formatSignedPressure", () => {
+  test("formats positive psi", () => {
+    expect(formatSignedPressure(100, "psi")).toBe("+100 PSI");
+  });
+
+  test("formats negative psi", () => {
+    expect(formatSignedPressure(-100, "psi")).toBe("-100 PSI");
+  });
+
+  test("formats zero psi", () => {
+    expect(formatSignedPressure(0, "psi")).toBe("0 PSI");
+  });
+
+  test("formats small positive psi", () => {
+    // 0.0001 PSI -> +0 PSI with 0 decimals
+    expect(formatSignedPressure(0.0001, "psi")).toBe("+0 PSI");
+  });
+
+  test("formats small negative psi", () => {
+    // -0.0001 PSI -> -0 PSI with 0 decimals
+    expect(formatSignedPressure(-0.0001, "psi")).toBe("-0 PSI");
   });
 });
 
