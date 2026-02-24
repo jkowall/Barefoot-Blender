@@ -1,94 +1,11 @@
 import { expect, test, describe } from "bun:test";
 import { calculateTopOffBlend, calculateStandardBlend, calculateGasCost } from "./calculations";
-import type { GasSelection } from "./calculations";
+import type { GasSelection, TopOffResult } from "./calculations";
 import type { StandardBlendInput } from "../state/session";
 
 const air: GasSelection = { id: "air", name: "Air", o2: 21, he: 0 };
-
-describe("calculateGasCost", () => {
-  test("Happy path: Standard inputs", () => {
-    // 80 cuft tank at 3000 psi
-    // Added 500 psi O2 and 500 psi He
-    const oxygenPsi = 500;
-    const heliumPsi = 500;
-    const tankSizeCuFt = 80;
-    const tankRatedPressure = 3000;
-    const pricePerCuFtO2 = 0.5;
-    const pricePerCuFtHe = 1.0;
-
-    const result = calculateGasCost(
-      oxygenPsi,
-      heliumPsi,
-      tankSizeCuFt,
-      tankRatedPressure,
-      pricePerCuFtO2,
-      pricePerCuFtHe
-    );
-
-    // Volume per 500 psi = (500 / 3000) * 80 = 13.333... cuft
-    const expectedVolume = (500 / 3000) * 80;
-    expect(result.oxygenCuFt).toBeCloseTo(expectedVolume, 3);
-    expect(result.heliumCuFt).toBeCloseTo(expectedVolume, 3);
-
-    const expectedO2Cost = expectedVolume * 0.5;
-    const expectedHeCost = expectedVolume * 1.0;
-    expect(result.oxygenCost).toBeCloseTo(expectedO2Cost, 3);
-    expect(result.heliumCost).toBeCloseTo(expectedHeCost, 3);
-    expect(result.totalCost).toBeCloseTo(expectedO2Cost + expectedHeCost, 3);
-  });
-
-  test("Zero pressure results in zero cost", () => {
-    const result = calculateGasCost(0, 0, 80, 3000, 0.5, 1.0);
-    expect(result.oxygenCuFt).toBe(0);
-    expect(result.heliumCuFt).toBe(0);
-    expect(result.oxygenCost).toBe(0);
-    expect(result.heliumCost).toBe(0);
-    expect(result.totalCost).toBe(0);
-  });
-
-  test("Zero price results in zero cost with volume", () => {
-    const result = calculateGasCost(1000, 1000, 80, 3000, 0, 0);
-    const expectedVolume = (1000 / 3000) * 80;
-    expect(result.oxygenCuFt).toBeCloseTo(expectedVolume, 3);
-    expect(result.heliumCuFt).toBeCloseTo(expectedVolume, 3);
-    expect(result.oxygenCost).toBe(0);
-    expect(result.heliumCost).toBe(0);
-    expect(result.totalCost).toBe(0);
-  });
-
-  test("Safety check: Zero rated pressure returns zero volume", () => {
-    const result = calculateGasCost(500, 500, 80, 0, 0.5, 1.0);
-    expect(result.oxygenCuFt).toBe(0);
-    expect(result.heliumCuFt).toBe(0);
-    expect(result.oxygenCost).toBe(0);
-    expect(result.heliumCost).toBe(0);
-    expect(result.totalCost).toBe(0);
-  });
-
-  test("Safety check: Negative rated pressure returns zero volume", () => {
-    const result = calculateGasCost(500, 500, 80, -3000, 0.5, 1.0);
-    expect(result.oxygenCuFt).toBe(0);
-    expect(result.heliumCuFt).toBe(0);
-    expect(result.totalCost).toBe(0);
-  });
-
-  test("Zero tank size results in zero volume", () => {
-    const result = calculateGasCost(500, 500, 0, 3000, 0.5, 1.0);
-    expect(result.oxygenCuFt).toBe(0);
-    expect(result.heliumCuFt).toBe(0);
-    expect(result.totalCost).toBe(0);
-  });
-
-  test("Mixed inputs: Only O2 added", () => {
-    const result = calculateGasCost(600, 0, 100, 3000, 0.3, 2.0);
-    // (600/3000)*100 = 20 cuft
-    expect(result.oxygenCuFt).toBeCloseTo(20, 3);
-    expect(result.heliumCuFt).toBe(0);
-    expect(result.oxygenCost).toBeCloseTo(20 * 0.3, 3);
-    expect(result.heliumCost).toBe(0);
-    expect(result.totalCost).toBeCloseTo(6, 3);
-  });
-});
+const oxygen: GasSelection = { id: "oxygen", name: "Oxygen", o2: 100, he: 0 };
+const helium: GasSelection = { id: "helium", name: "Helium", o2: 0, he: 100 };
 
 describe("calculateStandardBlend", () => {
   const settingsPsi = { pressureUnit: "psi" as const };
@@ -149,14 +66,6 @@ describe("calculateStandardBlend", () => {
     // 630 + 0.79X = 960
     // 0.79X = 330
     // X = 330 / 0.79 = 417.72... (Same amount of O2 added as empty case because we are effectively just adding on top of existing air to reach same target mix/pressure, and the "Air" portion is just extending the existing Air).
-    // Wait, check math.
-    // Target: 3000 * 0.32 = 960 O2.
-    // Start: 500 * 0.21 = 105 O2.
-    // Need: 855 O2 from 2500 PSI addition.
-    // X + (2500 - X) * 0.21 = 855
-    // X + 525 - 0.21X = 855
-    // 0.79X = 330.
-    // Yes, exact same O2 add.
 
     const oxygenStep = result.steps.find(s => s.kind === "oxygen");
     expect(oxygenStep?.amount).toBeCloseTo(417.72, 1);
@@ -308,38 +217,6 @@ describe("calculateStandardBlend", () => {
     const result = calculateStandardBlend(settingsBar, inputs, air);
 
     expect(result.success).toBe(true);
-    // 100 bar start (Air). Target 200 bar EAN32.
-    // In PSI: Start ~1450. Target ~2900. Added ~1450.
-    // Calculation should be consistent.
-    // Need to verify amounts.
-    // Start O2: 100 * 0.21 = 21. Target O2: 200 * 0.32 = 64.
-    // Needed: 43 O2 units.
-    // Added 100 units. X + (100 - X) * 0.21 = 43.
-    // X + 21 - 0.21X = 43.
-    // 0.79X = 22.
-    // X = 22 / 0.79 = 27.848... bar.
-    // Y = 72.151... bar.
-
-    // Result amounts are in PSI/units?
-    // The `BlendStep` struct has `amount`. `solveBlend` works in PSI internally if passed PSI.
-    // `calculateStandardBlend` converts input display units to PSI, solves, and returns steps.
-    // **CRITICAL**: The `amount` in `BlendStep` returned by `solveBlend` (and `calculateStandardBlend`) is in **PSI**.
-    // The inputs are converted via `fromDisplayPressure`.
-    // The result steps are NOT converted back to display pressure in `calculateStandardBlend`.
-    // Wait, let's verify `calculateStandardBlend` implementation.
-
-    /*
-      const startPressurePsi = fromDisplayPressure(inputs.startPressure ?? 0, settings.pressureUnit);
-      ...
-      const primary = solveBlend(blendInputs);
-      ...
-      if (primary.helium ...) steps.push({ ..., amount: primary.helium ... })
-
-      So the output steps are in PSI.
-    */
-
-    // So for Bar test, we expect the result amounts to be in PSI.
-    // 27.848 bar * 14.503... = ~403.9 PSI.
 
     const o2Step = result.steps.find(s => s.kind === "oxygen");
     const o2Bar = 27.848;
@@ -347,6 +224,176 @@ describe("calculateStandardBlend", () => {
 
     // Allow small rounding differences (within 1 PSI) due to unit conversions
     expect(o2Step?.amount).toBeCloseTo(expectedPsi, 0);
+  });
+});
+
+describe("calculateGasCost", () => {
+  test("Happy path: Standard inputs", () => {
+    // 80 cuft tank at 3000 psi
+    // Added 500 psi O2 and 500 psi He
+    const oxygenPsi = 500;
+    const heliumPsi = 500;
+    const tankSizeCuFt = 80;
+    const tankRatedPressure = 3000;
+    const pricePerCuFtO2 = 0.5;
+    const pricePerCuFtHe = 1.0;
+
+    const result = calculateGasCost(
+      oxygenPsi,
+      heliumPsi,
+      tankSizeCuFt,
+      tankRatedPressure,
+      pricePerCuFtO2,
+      pricePerCuFtHe
+    );
+
+    // Volume per 500 psi = (500 / 3000) * 80 = 13.333... cuft
+    const expectedVolume = (500 / 3000) * 80;
+    expect(result.oxygenCuFt).toBeCloseTo(expectedVolume, 3);
+    expect(result.heliumCuFt).toBeCloseTo(expectedVolume, 3);
+
+    const expectedO2Cost = expectedVolume * 0.5;
+    const expectedHeCost = expectedVolume * 1.0;
+    expect(result.oxygenCost).toBeCloseTo(expectedO2Cost, 3);
+    expect(result.heliumCost).toBeCloseTo(expectedHeCost, 3);
+    expect(result.totalCost).toBeCloseTo(expectedO2Cost + expectedHeCost, 3);
+  });
+
+  test("Zero pressure results in zero cost", () => {
+    const result = calculateGasCost(0, 0, 80, 3000, 0.5, 1.0);
+    expect(result.oxygenCuFt).toBe(0);
+    expect(result.heliumCuFt).toBe(0);
+    expect(result.oxygenCost).toBe(0);
+    expect(result.heliumCost).toBe(0);
+    expect(result.totalCost).toBe(0);
+  });
+
+  test("Zero price results in zero cost with volume", () => {
+    const result = calculateGasCost(1000, 1000, 80, 3000, 0, 0);
+    const expectedVolume = (1000 / 3000) * 80;
+    expect(result.oxygenCuFt).toBeCloseTo(expectedVolume, 3);
+    expect(result.heliumCuFt).toBeCloseTo(expectedVolume, 3);
+    expect(result.oxygenCost).toBe(0);
+    expect(result.heliumCost).toBe(0);
+    expect(result.totalCost).toBe(0);
+  });
+
+  test("Safety check: Zero rated pressure returns zero volume", () => {
+    const result = calculateGasCost(500, 500, 80, 0, 0.5, 1.0);
+    expect(result.oxygenCuFt).toBe(0);
+    expect(result.heliumCuFt).toBe(0);
+    expect(result.oxygenCost).toBe(0);
+    expect(result.heliumCost).toBe(0);
+    expect(result.totalCost).toBe(0);
+  });
+
+  test("Safety check: Negative rated pressure returns zero volume", () => {
+    const result = calculateGasCost(500, 500, 80, -3000, 0.5, 1.0);
+    expect(result.oxygenCuFt).toBe(0);
+    expect(result.heliumCuFt).toBe(0);
+    expect(result.totalCost).toBe(0);
+  });
+
+  test("Zero tank size results in zero volume", () => {
+    const result = calculateGasCost(500, 500, 0, 3000, 0.5, 1.0);
+    expect(result.oxygenCuFt).toBe(0);
+    expect(result.heliumCuFt).toBe(0);
+    expect(result.totalCost).toBe(0);
+  });
+
+  test("Mixed inputs: Only O2 added", () => {
+    const result = calculateGasCost(600, 0, 100, 3000, 0.3, 2.0);
+    // (600/3000)*100 = 20 cuft
+    expect(result.oxygenCuFt).toBeCloseTo(20, 3);
+    expect(result.heliumCuFt).toBe(0);
+    expect(result.oxygenCost).toBeCloseTo(20 * 0.3, 3);
+    expect(result.heliumCost).toBe(0);
+    expect(result.totalCost).toBeCloseTo(6, 3);
+  });
+});
+
+describe("calculateGasCost", () => {
+  test("Happy path: Standard inputs", () => {
+    // 80 cuft tank at 3000 psi
+    // Added 500 psi O2 and 500 psi He
+    const oxygenPsi = 500;
+    const heliumPsi = 500;
+    const tankSizeCuFt = 80;
+    const tankRatedPressure = 3000;
+    const pricePerCuFtO2 = 0.5;
+    const pricePerCuFtHe = 1.0;
+
+    const result = calculateGasCost(
+      oxygenPsi,
+      heliumPsi,
+      tankSizeCuFt,
+      tankRatedPressure,
+      pricePerCuFtO2,
+      pricePerCuFtHe
+    );
+
+    // Volume per 500 psi = (500 / 3000) * 80 = 13.333... cuft
+    const expectedVolume = (500 / 3000) * 80;
+    expect(result.oxygenCuFt).toBeCloseTo(expectedVolume, 3);
+    expect(result.heliumCuFt).toBeCloseTo(expectedVolume, 3);
+
+    const expectedO2Cost = expectedVolume * 0.5;
+    const expectedHeCost = expectedVolume * 1.0;
+    expect(result.oxygenCost).toBeCloseTo(expectedO2Cost, 3);
+    expect(result.heliumCost).toBeCloseTo(expectedHeCost, 3);
+    expect(result.totalCost).toBeCloseTo(expectedO2Cost + expectedHeCost, 3);
+  });
+
+  test("Zero pressure results in zero cost", () => {
+    const result = calculateGasCost(0, 0, 80, 3000, 0.5, 1.0);
+    expect(result.oxygenCuFt).toBe(0);
+    expect(result.heliumCuFt).toBe(0);
+    expect(result.oxygenCost).toBe(0);
+    expect(result.heliumCost).toBe(0);
+    expect(result.totalCost).toBe(0);
+  });
+
+  test("Zero price results in zero cost with volume", () => {
+    const result = calculateGasCost(1000, 1000, 80, 3000, 0, 0);
+    const expectedVolume = (1000 / 3000) * 80;
+    expect(result.oxygenCuFt).toBeCloseTo(expectedVolume, 3);
+    expect(result.heliumCuFt).toBeCloseTo(expectedVolume, 3);
+    expect(result.oxygenCost).toBe(0);
+    expect(result.heliumCost).toBe(0);
+    expect(result.totalCost).toBe(0);
+  });
+
+  test("Safety check: Zero rated pressure returns zero volume", () => {
+    const result = calculateGasCost(500, 500, 80, 0, 0.5, 1.0);
+    expect(result.oxygenCuFt).toBe(0);
+    expect(result.heliumCuFt).toBe(0);
+    expect(result.oxygenCost).toBe(0);
+    expect(result.heliumCost).toBe(0);
+    expect(result.totalCost).toBe(0);
+  });
+
+  test("Safety check: Negative rated pressure returns zero volume", () => {
+    const result = calculateGasCost(500, 500, 80, -3000, 0.5, 1.0);
+    expect(result.oxygenCuFt).toBe(0);
+    expect(result.heliumCuFt).toBe(0);
+    expect(result.totalCost).toBe(0);
+  });
+
+  test("Zero tank size results in zero volume", () => {
+    const result = calculateGasCost(500, 500, 0, 3000, 0.5, 1.0);
+    expect(result.oxygenCuFt).toBe(0);
+    expect(result.heliumCuFt).toBe(0);
+    expect(result.totalCost).toBe(0);
+  });
+
+  test("Mixed inputs: Only O2 added", () => {
+    const result = calculateGasCost(600, 0, 100, 3000, 0.3, 2.0);
+    // (600/3000)*100 = 20 cuft
+    expect(result.oxygenCuFt).toBeCloseTo(20, 3);
+    expect(result.heliumCuFt).toBe(0);
+    expect(result.oxygenCost).toBeCloseTo(20 * 0.3, 3);
+    expect(result.heliumCost).toBe(0);
+    expect(result.totalCost).toBeCloseTo(6, 3);
   });
 });
 
