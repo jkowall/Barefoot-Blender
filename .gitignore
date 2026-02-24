@@ -29,3 +29,4 @@ dist/
 
 # TypeScript cache
 *.tsbuildinfo
+package-lock.json
