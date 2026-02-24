@@ -6,6 +6,7 @@
 
 - **Security**: Added Content Security Policy (CSP) meta tag to `index.html` to improve security against XSS and injection attacks.
 - **Security**: Removed `server: { host: true }` from Vite configuration to restrict the development server to localhost by default. This prevents unintended exposure to the local network.
+- **Code Health**: Refactored signed pressure formatting logic into a shared utility (`formatSignedPressure`) and applied it across Standard Blend, Multi-Gas, and Top-Off tabs for consistency.
 
 ## [0.6.9] - 2026-02-24
 
