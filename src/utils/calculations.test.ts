@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { calculateTopOffBlend, calculateBestMix } from "./calculations";
+import { calculateTopOffBlend, calculateBestMix, calculateStandardBlend, calculateGasCost } from "./calculations";
 import type { GasSelection, TopOffResult } from "./calculations";
 import type { StandardBlendInput } from "../state/session";
 
