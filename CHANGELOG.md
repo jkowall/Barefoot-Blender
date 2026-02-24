@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.12] - 2026-02-24
+
+### Changed
+
+- **Code Health**: Refactored `rankGasesByCost` to accept an optional `referencePressure` parameter instead of a hardcoded constant, improving flexibility and testability.
+
+### Added
+
+- **Testing**: Added regression tests for `rankGasesByCost` covering default and custom reference pressure scenarios.
+
 ## [0.6.10] - 2026-02-25
 
 ### Fixed
