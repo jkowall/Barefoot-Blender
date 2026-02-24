@@ -61,7 +61,11 @@ describe("calculateStandardBlend", () => {
     expect(result.success).toBe(true);
     // Already have 500 PSI Air (105 O2). Need 960 total O2.
     // Added 2500 PSI. Let X be O2 added.
+<<<<<<< copilot/sub-pr-48
     // 105 + X + (2500 - X) * 0.21 = 960
+=======
+    // 105 + X + (2500 - X) * 0.21 = 960.
+>>>>>>> refactor/clamp-pressure-13709260438664254222
     // 105 + X + 525 - 0.21X = 960
     // 630 + 0.79X = 960
     // 0.79X = 330
@@ -311,6 +315,7 @@ describe("calculateGasCost", () => {
     expect(result.totalCost).toBeCloseTo(6, 3);
   });
 });
+<<<<<<< copilot/sub-pr-48
 
 describe("calculateGasCost", () => {
   test("Happy path: Standard inputs", () => {
@@ -396,6 +401,8 @@ describe("calculateGasCost", () => {
     expect(result.totalCost).toBeCloseTo(6, 3);
   });
 });
+=======
+>>>>>>> refactor/clamp-pressure-13709260438664254222
 
 describe("calculateTopOffBlend", () => {
   const settingsPsi = { pressureUnit: "psi" as const };
