@@ -224,6 +224,20 @@ const findBleedSolution = (inputs: BlendInputs): SolveOutcome & { bleedPressure?
     requiresBleed: true
   };
 
+  // Check if draining the tank completely is a valid solution
+  const emptyInputs: BlendInputs = {
+    ...inputs,
+    startPressure: 0
+  };
+  // Maintain fractions (though irrelevant at 0 pressure, keeps type/logic consistent)
+  emptyInputs.startO2 = inputs.startO2;
+  emptyInputs.startHe = inputs.startHe;
+
+  const emptyAttempt = solveBlend(emptyInputs);
+  if (emptyAttempt.success) {
+    best = { ...emptyAttempt, bleedPressure: 0 };
+  }
+
   for (let i = 0; i < 25; i += 1) {
     const mid = (low + high) / 2;
     const scaledInputs: BlendInputs = {
@@ -237,9 +251,9 @@ const findBleedSolution = (inputs: BlendInputs): SolveOutcome & { bleedPressure?
     const attempt = solveBlend(scaledInputs);
     if (attempt.success) {
       best = { ...attempt, bleedPressure: mid };
-      high = mid;
-    } else {
       low = mid;
+    } else {
+      high = mid;
     }
   }
 

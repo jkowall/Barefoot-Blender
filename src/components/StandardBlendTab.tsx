@@ -12,11 +12,12 @@ import {
   clampPercent,
   clampPressure
 } from "../utils/calculations";
-import { formatPercentage, formatPressure } from "../utils/format";
+import { formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
 import { SelectInput } from "./SelectInput";
+
 
 const SENSITIVITY_RANGE_PSI = 300;
 const SENSITIVITY_STEP_PSI = 10;
@@ -119,17 +120,6 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     setResult(blendResult);
     setSensitivityDeltaPsi(0);
     setPlanOpen(true);
-  };
-
-  const formatSignedPressure = (valuePsi: number): string => {
-    const magnitude = formatPressure(Math.abs(valuePsi), settings.pressureUnit);
-    if (valuePsi > 0) {
-      return `+${magnitude}`;
-    }
-    if (valuePsi < 0) {
-      return `-${magnitude}`;
-    }
-    return magnitude;
   };
 
   const sensitivityAnalysis = useMemo(() => {
@@ -393,7 +383,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                   return (
                     <li key={`${step.kind}-${index}`}>
                       {index + 1}. {descriptor} {gasLabel}: {formatPressure(runningPsi, settings.pressureUnit)}
-                      <span className="result-step-total"> ({formatSignedPressure(step.amount)})</span>
+                      <span className="result-step-total"> ({formatSignedPressure(step.amount, settings.pressureUnit)})</span>
                     </li>
                   );
                 })}
@@ -452,7 +442,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             <span>Baseline {formatPressure(startPressurePsi, settings.pressureUnit)}</span>
             <span>
               Adjusted {formatPressure(sensitivityAnalysis.adjustedStartPsi, settings.pressureUnit)}
-              {` (${formatSignedPressure(sensitivityAnalysis.deltaPsi)})`}
+              {` (${formatSignedPressure(sensitivityAnalysis.deltaPsi, settings.pressureUnit)})`}
             </span>
           </div>
 
@@ -461,15 +451,15 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               <div className="grid three">
                 <div className="stat">
                   <div className="stat-label">Helium Δ</div>
-                  <div className="stat-value">{formatSignedPressure(sensitivityAnalysis.differenceFromBase.helium)}</div>
+                  <div className="stat-value">{formatSignedPressure(sensitivityAnalysis.differenceFromBase.helium, settings.pressureUnit)}</div>
                 </div>
                 <div className="stat">
                   <div className="stat-label">Oxygen Δ</div>
-                  <div className="stat-value">{formatSignedPressure(sensitivityAnalysis.differenceFromBase.oxygen)}</div>
+                  <div className="stat-value">{formatSignedPressure(sensitivityAnalysis.differenceFromBase.oxygen, settings.pressureUnit)}</div>
                 </div>
                 <div className="stat">
                   <div className="stat-label">Top-Off Δ</div>
-                  <div className="stat-value">{formatSignedPressure(sensitivityAnalysis.differenceFromBase.topoff)}</div>
+                  <div className="stat-value">{formatSignedPressure(sensitivityAnalysis.differenceFromBase.topoff, settings.pressureUnit)}</div>
                 </div>
               </div>
 
@@ -478,9 +468,9 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                   <div className="per50-title">+{formatPressure(SENSITIVITY_METRIC_STEP_PSI, "psi")}{settings.pressureUnit === "psi" ? "" : ` (~${formatPressure(SENSITIVITY_METRIC_STEP_PSI, settings.pressureUnit)})`}</div>
                   {sensitivityAnalysis.perPlus ? (
                     <ul>
-                      <li>ΔHe {formatSignedPressure(sensitivityAnalysis.perPlus.difference.helium)}</li>
-                      <li>ΔO2 {formatSignedPressure(sensitivityAnalysis.perPlus.difference.oxygen)}</li>
-                      <li>ΔTop {formatSignedPressure(sensitivityAnalysis.perPlus.difference.topoff)}</li>
+                      <li>ΔHe {formatSignedPressure(sensitivityAnalysis.perPlus.difference.helium, settings.pressureUnit)}</li>
+                      <li>ΔO2 {formatSignedPressure(sensitivityAnalysis.perPlus.difference.oxygen, settings.pressureUnit)}</li>
+                      <li>ΔTop {formatSignedPressure(sensitivityAnalysis.perPlus.difference.topoff, settings.pressureUnit)}</li>
                     </ul>
                   ) : (
                     <div className="table-note">Out of range</div>
@@ -490,9 +480,9 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                   <div className="per50-title">-{formatPressure(SENSITIVITY_METRIC_STEP_PSI, "psi")}{settings.pressureUnit === "psi" ? "" : ` (~${formatPressure(SENSITIVITY_METRIC_STEP_PSI, settings.pressureUnit)})`}</div>
                   {sensitivityAnalysis.perMinus ? (
                     <ul>
-                      <li>ΔHe {formatSignedPressure(sensitivityAnalysis.perMinus.difference.helium)}</li>
-                      <li>ΔO2 {formatSignedPressure(sensitivityAnalysis.perMinus.difference.oxygen)}</li>
-                      <li>ΔTop {formatSignedPressure(sensitivityAnalysis.perMinus.difference.topoff)}</li>
+                      <li>ΔHe {formatSignedPressure(sensitivityAnalysis.perMinus.difference.helium, settings.pressureUnit)}</li>
+                      <li>ΔO2 {formatSignedPressure(sensitivityAnalysis.perMinus.difference.oxygen, settings.pressureUnit)}</li>
+                      <li>ΔTop {formatSignedPressure(sensitivityAnalysis.perMinus.difference.topoff, settings.pressureUnit)}</li>
                     </ul>
                   ) : (
                     <div className="table-note">Out of range</div>
@@ -522,7 +512,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                 <>
                   <div className="reverse-value">{formatPressure(requiredStart.startPressurePsi, settings.pressureUnit)}</div>
                   <div className="table-note">
-                    Needs {formatSignedPressure(requiredStart.startPressurePsi - startPressurePsi)} relative to current start.
+                    Needs {formatSignedPressure(requiredStart.startPressurePsi - startPressurePsi, settings.pressureUnit)} relative to current start.
                   </div>
                 </>
               ) : (
