@@ -1,5 +1,12 @@
 import { expect, test, describe } from "bun:test";
-import { calculateTopOffBlend, calculateBestMix, calculateStandardBlend, calculateGasCost } from "./calculations";
+import {
+  calculateTopOffBlend,
+  calculateBestMix,
+  calculateStandardBlend,
+  calculateGasCost,
+  calculateFillCostEstimate,
+  solveNGasBlend
+} from "./calculations";
 import type { GasSelection, TopOffResult } from "./calculations";
 import type { StandardBlendInput } from "../state/session";
 
@@ -657,5 +664,85 @@ describe("calculateTopOffBlend", () => {
     expect(result.success).toBe(true);
     expect(result.finalO2).toBe(32);
     expect(result.addedPressure).toBe(0);
+  });
+});
+
+describe("calculateFillCostEstimate", () => {
+  test("includes top-off gas pricing with air/N2 component", () => {
+    const result = calculateFillCostEstimate(
+      [
+        { label: "Oxygen", gas: { id: "oxygen", name: "Oxygen", o2: 100, he: 0 }, pressurePsi: 300 },
+        { label: "Air Top-Off", gas: { id: "air", name: "Air", o2: 21, he: 0 }, pressurePsi: 2700 }
+      ],
+      {
+        tankSizeCuFt: 80,
+        tankRatedPressure: 3000,
+        pricePerCuFtO2: 1.0,
+        pricePerCuFtHe: 3.5,
+        pricePerCuFtAir: 0.1
+      }
+    );
+
+    // Oxygen: (300/3000)*80 = 8 cuft @ $1.00
+    // Air unit price: 0.21*$1.00 + 0.79*$0.10 = $0.289
+    // Air top-off: (2700/3000)*80 = 72 cuft @ $0.289
+    expect(result.lines).toHaveLength(2);
+    expect(result.lines[0].cost).toBeCloseTo(8, 3);
+    expect(result.lines[1].unitPrice).toBeCloseTo(0.289, 3);
+    expect(result.totalCost).toBeCloseTo(28.808, 3);
+  });
+});
+
+describe("solveNGasBlend bank limits", () => {
+  const settings = { pressureUnit: "psi" as const };
+  const costSettings = {
+    tankSizeCuFt: 80,
+    tankRatedPressure: 3000,
+    pricePerCuFtO2: 1,
+    pricePerCuFtHe: 3.5,
+    pricePerCuFtAir: 0.1
+  };
+
+  test("fails when required gas exceeds available bank pressure", () => {
+    const result = solveNGasBlend(
+      settings,
+      3000,
+      40,
+      0,
+      0,
+      21,
+      0,
+      [
+        { id: "oxygen", name: "Oxygen", o2: 100, he: 0, maxPressurePsi: 500 },
+        { id: "air", name: "Air", o2: 21, he: 0 }
+      ],
+      costSettings
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("bank pressure limits");
+  });
+
+  test("succeeds when bank pressure limits are sufficient", () => {
+    const result = solveNGasBlend(
+      settings,
+      3000,
+      40,
+      0,
+      0,
+      21,
+      0,
+      [
+        { id: "oxygen", name: "Oxygen", o2: 100, he: 0, maxPressurePsi: 800 },
+        { id: "air", name: "Air", o2: 21, he: 0 }
+      ],
+      costSettings
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.alternatives.length).toBeGreaterThan(0);
+    const oxygenStep = result.alternatives[0].steps.find((step) => step.gas.id === "oxygen");
+    expect(oxygenStep).toBeDefined();
+    expect(oxygenStep?.amount).toBeLessThanOrEqual(800.01);
   });
 });

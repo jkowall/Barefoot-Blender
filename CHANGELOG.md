@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.12] - 2026-03-13
+
+### Added
+
+- **Bank-Aware Optimization**: Multi-Gas sources now support per-bank available pressure limits. The optimizer respects these limits when generating blend options and reports when targets are blocked by bank availability.
+- **Blend History + Recreate**: Standard Blend now saves successful plans to persistent history with one-tap recreate, per-entry remove, and clear-all controls.
+
+### Changed
+
+- **Fill Cost Calculator**: Expanded cost modeling to include top-off gas and air/N₂ pricing. Added `Air/N₂ Price` in Pricing settings and updated Standard Blend cost breakdown to show per-line gas pricing and total.
+- **Optimizer Cost Model**: Multi-Gas alternative ranking now accounts for O₂, He, and N₂ fractions when pricing mixed source gases.
+
 ## [0.6.10] - 2026-02-25
 
 ### Fixed

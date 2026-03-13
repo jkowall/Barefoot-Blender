@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
-import { useSessionStore, type SessionState, type StandardBlendInput } from "../state/session";
+import {
+  useSessionStore,
+  type SessionState,
+  type StandardBlendInput,
+  type StandardBlendHistoryEntry
+} from "../state/session";
 import {
   calculateStandardBlend,
   type BlendResult,
@@ -8,7 +13,7 @@ import {
   summarizeBlendVolumes,
   solveRequiredStartPressure,
   solveMaxTargetWithoutHelium,
-  calculateGasCost,
+  calculateFillCostEstimate,
   clampPercent
 } from "../utils/calculations";
 import { formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
@@ -31,7 +36,11 @@ type Props = {
 
 const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const standardBlend = useSessionStore((state: SessionState) => state.standardBlend);
+  const standardBlendHistory = useSessionStore((state: SessionState) => state.standardBlendHistory);
   const setStandardBlend = useSessionStore((state: SessionState) => state.setStandardBlend);
+  const addStandardBlendHistory = useSessionStore((state: SessionState) => state.addStandardBlendHistory);
+  const removeStandardBlendHistory = useSessionStore((state: SessionState) => state.removeStandardBlendHistory);
+  const clearStandardBlendHistory = useSessionStore((state: SessionState) => state.clearStandardBlendHistory);
   const [result, setResult] = useState<BlendResult | null>(null);
   const [sensitivityDeltaPsi, setSensitivityDeltaPsi] = useState(0);
   const [planOpen, setPlanOpen] = useState(false);
@@ -69,30 +78,49 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     if (!result || !result.success) {
       return null;
     }
-    if (result.steps.some((step) => step.kind === "bleed")) {
-      return null;
-    }
     return summarizeBlendVolumes(result);
   }, [result]);
 
-  const gasCost = useMemo(() => {
-    if (!baseVolumes) {
+  const fillCost = useMemo(() => {
+    if (!baseVolumes || !selectedTopGas) {
       return null;
     }
-    // Use fallback defaults in case settings were persisted before these fields existed
-    const tankSize = settings.defaultTankSizeCuFt ?? 80;
-    const ratedPressure = settings.tankRatedPressure ?? 3000;
-    const o2Price = settings.pricePerCuFtO2 ?? 1.0;
-    const hePrice = settings.pricePerCuFtHe ?? 3.5;
-    return calculateGasCost(
-      baseVolumes.oxygen,
-      baseVolumes.helium,
-      tankSize,
-      ratedPressure,
-      o2Price,
-      hePrice
+
+    return calculateFillCostEstimate(
+      [
+        {
+          label: "Oxygen",
+          gas: { id: "oxygen", name: "Oxygen", o2: 100, he: 0 },
+          pressurePsi: baseVolumes.oxygen
+        },
+        {
+          label: "Helium",
+          gas: { id: "helium", name: "Helium", o2: 0, he: 100 },
+          pressurePsi: baseVolumes.helium
+        },
+        {
+          label: `${selectedTopGas.name} Top-Off`,
+          gas: selectedTopGas,
+          pressurePsi: baseVolumes.topoff
+        }
+      ],
+      {
+        pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
+        pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
+        pricePerCuFtAir: settings.pricePerCuFtAir ?? 0.1,
+        tankSizeCuFt: settings.defaultTankSizeCuFt ?? 80,
+        tankRatedPressure: settings.tankRatedPressure ?? 3000
+      }
     );
-  }, [baseVolumes, settings.defaultTankSizeCuFt, settings.tankRatedPressure, settings.pricePerCuFtO2, settings.pricePerCuFtHe]);
+  }, [
+    baseVolumes,
+    selectedTopGas,
+    settings.defaultTankSizeCuFt,
+    settings.pricePerCuFtAir,
+    settings.pricePerCuFtHe,
+    settings.pricePerCuFtO2,
+    settings.tankRatedPressure
+  ]);
 
   const updateField = <K extends keyof StandardBlendInput>(key: K, value: StandardBlendInput[K]): void => {
     setStandardBlend({ ...standardBlend, [key]: value });
@@ -105,22 +133,90 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       return;
     }
 
+    const resolvedInput: StandardBlendInput = {
+      ...standardBlend,
+      startPressure: standardBlend.startPressure ?? 0,
+      targetPressure: standardBlend.targetPressure ?? 3000,
+      targetO2: standardBlend.targetO2 ?? 32,
+      startO2: standardBlend.startO2 ?? 21,
+      startHe: standardBlend.startHe ?? 0,
+      targetHe: standardBlend.targetHe ?? 0
+    };
+
     const blendResult = calculateStandardBlend(
       { pressureUnit: settings.pressureUnit },
-      {
-        ...standardBlend,
-        startPressure: standardBlend.startPressure ?? 0,
-        targetPressure: standardBlend.targetPressure ?? 3000,
-        targetO2: standardBlend.targetO2 ?? 32,
-        startO2: standardBlend.startO2 ?? 21,
-        startHe: standardBlend.startHe ?? 0,
-        targetHe: standardBlend.targetHe ?? 0
-      },
+      resolvedInput,
       selectedTopGas
     );
+
+    if (blendResult.success && blendResult.steps.length > 0) {
+      const volumes = summarizeBlendVolumes(blendResult);
+      const estimate = calculateFillCostEstimate(
+        [
+          {
+            label: "Oxygen",
+            gas: { id: "oxygen", name: "Oxygen", o2: 100, he: 0 },
+            pressurePsi: volumes.oxygen
+          },
+          {
+            label: "Helium",
+            gas: { id: "helium", name: "Helium", o2: 0, he: 100 },
+            pressurePsi: volumes.helium
+          },
+          {
+            label: `${selectedTopGas.name} Top-Off`,
+            gas: selectedTopGas,
+            pressurePsi: volumes.topoff
+          }
+        ],
+        {
+          pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
+          pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
+          pricePerCuFtAir: settings.pricePerCuFtAir ?? 0.1,
+          tankSizeCuFt: settings.defaultTankSizeCuFt ?? 80,
+          tankRatedPressure: settings.tankRatedPressure ?? 3000
+        }
+      );
+
+      const historyEntry: StandardBlendHistoryEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: new Date().toISOString(),
+        startPressurePsi: fromDisplayPressure(resolvedInput.startPressure, settings.pressureUnit),
+        targetPressurePsi: fromDisplayPressure(resolvedInput.targetPressure, settings.pressureUnit),
+        startO2: resolvedInput.startO2 ?? 21,
+        startHe: resolvedInput.startHe ?? 0,
+        targetO2: resolvedInput.targetO2 ?? 32,
+        targetHe: resolvedInput.targetHe ?? 0,
+        topGasId: selectedTopGas.id,
+        topGasName: selectedTopGas.name,
+        estimatedCost: estimate.totalCost,
+        steps: blendResult.steps.map((step) => ({
+          kind: step.kind,
+          amountPsi: step.amount,
+          gasName: step.kind === "topoff" ? selectedTopGas.name : step.gasName
+        }))
+      };
+      addStandardBlendHistory(historyEntry);
+    }
+
     setResult(blendResult);
     setSensitivityDeltaPsi(0);
     setPlanOpen(true);
+  };
+
+  const applyHistory = (entry: StandardBlendHistoryEntry): void => {
+    setStandardBlend({
+      startO2: entry.startO2,
+      startHe: entry.startHe,
+      startPressure: toDisplayPressure(entry.startPressurePsi, settings.pressureUnit),
+      targetO2: entry.targetO2,
+      targetHe: entry.targetHe,
+      targetPressure: toDisplayPressure(entry.targetPressurePsi, settings.pressureUnit),
+      topGasId: entry.topGasId
+    });
+    setResult(null);
+    setSensitivityDeltaPsi(0);
+    setPlanOpen(false);
   };
 
   const sensitivityAnalysis = useMemo(() => {
@@ -396,30 +492,75 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               {warning}
             </div>
           ))}
-          {gasCost && (gasCost.oxygenCuFt > 0 || gasCost.heliumCuFt > 0) && (
+          {fillCost && fillCost.lines.length > 0 && (
             <div className="cost-breakdown">
               <div className="section-title">Fill Cost</div>
               <div className="grid two">
-                {gasCost.oxygenCuFt > 0 && (
-                  <div className="cost-line">
-                    <span>O₂:</span>
-                    <span>{gasCost.oxygenCuFt.toFixed(2)} cu ft × ${settings.pricePerCuFtO2.toFixed(2)} = ${gasCost.oxygenCost.toFixed(2)}</span>
+                {fillCost.lines.map((line) => (
+                  <div key={line.label} className="cost-line">
+                    <span>{line.label}:</span>
+                    <span>{line.volumeCuFt.toFixed(2)} cu ft × ${line.unitPrice.toFixed(2)} = ${line.cost.toFixed(2)}</span>
                   </div>
-                )}
-                {gasCost.heliumCuFt > 0 && (
-                  <div className="cost-line">
-                    <span>He:</span>
-                    <span>{gasCost.heliumCuFt.toFixed(2)} cu ft × ${settings.pricePerCuFtHe.toFixed(2)} = ${gasCost.heliumCost.toFixed(2)}</span>
-                  </div>
-                )}
+                ))}
               </div>
               <div className="cost-total">
-                <strong>Total: ${gasCost.totalCost.toFixed(2)}</strong>
+                <strong>Total: ${fillCost.totalCost.toFixed(2)}</strong>
               </div>
             </div>
           )}
         </AccordionItem>
       )}
+
+      <AccordionItem title={`Blend History (${standardBlendHistory.length})`} defaultOpen={false}>
+        {standardBlendHistory.length === 0 && (
+          <div className="table-note">No saved blends yet.</div>
+        )}
+        {standardBlendHistory.length > 0 && (
+          <>
+            <div className="history-list">
+              {standardBlendHistory.map((entry) => (
+                <div key={entry.id} className="history-item">
+                  <div className="history-title">
+                    {formatPercentage(entry.targetO2)} O2 / {formatPercentage(entry.targetHe)} He @{" "}
+                    {formatPressure(entry.targetPressurePsi, settings.pressureUnit)}
+                  </div>
+                  <div className="table-note">
+                    {new Date(entry.createdAt).toLocaleString()} • Top-Off {entry.topGasName}
+                  </div>
+                  <div className="table-note">
+                    Start {formatPercentage(entry.startO2)} O2 / {formatPercentage(entry.startHe)} He @{" "}
+                    {formatPressure(entry.startPressurePsi, settings.pressureUnit)}
+                  </div>
+                  {entry.estimatedCost !== undefined && (
+                    <div className="table-note">Estimated Cost: ${entry.estimatedCost.toFixed(2)}</div>
+                  )}
+                  <div className="table-note">
+                    Steps: {entry.steps
+                      .map((step) => {
+                        const signedAmount = step.kind === "bleed" ? -step.amountPsi : step.amountPsi;
+                        return `${step.kind} ${formatSignedPressure(signedAmount, settings.pressureUnit)}`;
+                      })
+                      .join(", ")}
+                  </div>
+                  <div className="reverse-actions">
+                    <button className="settings-button" type="button" onClick={() => applyHistory(entry)}>
+                      Recreate
+                    </button>
+                    <button className="settings-close" type="button" onClick={() => removeStandardBlendHistory(entry.id)}>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="history-actions">
+              <button className="settings-close" type="button" onClick={clearStandardBlendHistory}>
+                Clear History
+              </button>
+            </div>
+          </>
+        )}
+      </AccordionItem>
 
       {result?.success && sensitivityAnalysis && (
         <AccordionItem title="Fill Sensitivity" defaultOpen={false}>

@@ -1,5 +1,6 @@
 import { memo, useMemo, type ChangeEvent } from "react";
 import type { GasSourceInput } from "../state/session";
+import type { PressureUnit } from "../state/settings";
 import { type GasSelection, clampPercent } from "../utils/calculations";
 import { NumberInput } from "./NumberInput";
 import { SelectInput } from "./SelectInput";
@@ -12,6 +13,7 @@ type Props = {
   onRemove: (index: number) => void;
   canRemove: boolean;
   showDivider: boolean;
+  pressureUnit: PressureUnit;
 };
 
 const sanitizeCustomMix = (o2: number, he: number): { o2: number; he: number } => {
@@ -28,7 +30,8 @@ export const GasSourceRow = memo(({
   onUpdate,
   onRemove,
   canRemove,
-  showDivider
+  showDivider,
+  pressureUnit
 }: Props): JSX.Element => {
   const options = useMemo(() => {
     const custom: GasSelection = {
@@ -117,7 +120,18 @@ export const GasSourceRow = memo(({
           <div className="table-note">N2 auto-balances remaining fraction.</div>
         </>
       )}
+      <NumberInput
+        label={`Bank Available Pressure (${pressureUnit.toUpperCase()})`}
+        min={0}
+        step={pressureUnit === "psi" ? 10 : 1}
+        value={source.maxPressure}
+        placeholder="Unlimited"
+        onChange={(val) => onUpdate(index, { maxPressure: val === undefined ? undefined : Math.max(0, val) })}
+      />
+      <div className="table-note">Limit this source to current bank pressure. Leave blank for no limit.</div>
       {showDivider && <hr className="gas-source-divider" />}
     </div>
   );
 });
+
+GasSourceRow.displayName = "GasSourceRow";
