@@ -20,6 +20,7 @@ type SettingsState = {
   customGases: GasDefinition[];
   pricePerCuFtO2?: number;
   pricePerCuFtHe?: number;
+  pricePerCuFtAir?: number;
   defaultTankSizeCuFt?: number;
   tankRatedPressure?: number;
   setPressureUnit: (unit: PressureUnit) => void;
@@ -31,6 +32,7 @@ type SettingsState = {
   removeCustomGas: (id: string) => void;
   setPricePerCuFtO2: (value: number | undefined) => void;
   setPricePerCuFtHe: (value: number | undefined) => void;
+  setPricePerCuFtAir: (value: number | undefined) => void;
   setDefaultTankSizeCuFt: (value: number | undefined) => void;
   setTankRatedPressure: (value: number | undefined) => void;
 };
@@ -59,6 +61,7 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
   customGases: [defaultGas],
   pricePerCuFtO2: 1.0,
   pricePerCuFtHe: 3.5,
+  pricePerCuFtAir: 0.1,
   defaultTankSizeCuFt: 80,
   tankRatedPressure: 3000,
   setPressureUnit: (unit: PressureUnit) => set({ pressureUnit: unit }),
@@ -82,6 +85,7 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
   },
   setPricePerCuFtO2: (value: number | undefined) => set({ pricePerCuFtO2: value }),
   setPricePerCuFtHe: (value: number | undefined) => set({ pricePerCuFtHe: value }),
+  setPricePerCuFtAir: (value: number | undefined) => set({ pricePerCuFtAir: value }),
   setDefaultTankSizeCuFt: (value: number | undefined) => set({ defaultTankSizeCuFt: value }),
   setTankRatedPressure: (value: number | undefined) => set({ tankRatedPressure: value })
 });

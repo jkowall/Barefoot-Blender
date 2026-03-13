@@ -1,8 +1,16 @@
 import { useMemo } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type MultiGasInput, type GasSourceInput } from "../state/session";
-import { solveNGasBlend, type GasSelection, type BlendAlternative, clampPercent } from "../utils/calculations";
+import {
+  solveNGasBlend,
+  type GasSelection,
+  type BlendAlternative,
+  type CostSettings,
+  type OptimizerGasSource,
+  clampPercent
+} from "../utils/calculations";
 import { formatPressure, formatSignedPressure } from "../utils/format";
+import { fromDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import ErrorBoundary from "./ErrorBoundary";
 import { NumberInput } from "./NumberInput";
@@ -36,25 +44,43 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
   // Check if helium is available from any source
   const hasHeliumAvailable = useMemo(() => {
-    const resolveGas = (source: GasSourceInput): GasSelection | null => {
+    const resolveGas = (source: GasSourceInput, index: number): OptimizerGasSource | null => {
       if (source.id === "custom") {
         const o2Val = clampPercent(source.customO2 ?? 32);
         const heVal = Math.min(100 - o2Val, Math.max(0, source.customHe ?? 0));
-        return { id: "custom", name: `Custom`, o2: o2Val, he: heVal };
+        return {
+          id: `custom-${index}`,
+          name: "Custom",
+          o2: o2Val,
+          he: heVal,
+          maxPressurePsi: source.maxPressure === undefined
+            ? undefined
+            : fromDisplayPressure(Math.max(0, source.maxPressure), settings.pressureUnit)
+        };
       }
-      return gasOptions.find((option) => option.id === source.id) ?? null;
+      const option = gasOptions.find((entry) => entry.id === source.id);
+      if (!option) {
+        return null;
+      }
+      return {
+        ...option,
+        id: `${option.id}-${index}`,
+        maxPressurePsi: source.maxPressure === undefined
+          ? undefined
+          : fromDisplayPressure(Math.max(0, source.maxPressure), settings.pressureUnit)
+      };
     };
 
     if ((multiGas.startHe ?? 0) > 0) return true;
 
-    for (const source of (multiGas.gasSources ?? [])) {
+    for (const [index, source] of (multiGas.gasSources ?? []).entries()) {
       if (!source.enabled) continue;
-      const gas = resolveGas(source);
+      const gas = resolveGas(source, index);
       if (gas && gas.he > 0) return true;
     }
 
     return false;
-  }, [multiGas.startHe, multiGas.gasSources, gasOptions]);
+  }, [multiGas.startHe, multiGas.gasSources, gasOptions, settings.pressureUnit]);
 
   const updateField = (patch: Partial<MultiGasInput>): void => {
     setMultiGas({ ...multiGas, ...patch });
@@ -82,29 +108,54 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   };
 
   // Cost settings from app settings
-  const costSettings = useMemo(() => ({
-    pricePerCuFtO2: settings.pricePerCuFtO2,
-    pricePerCuFtHe: settings.pricePerCuFtHe,
-    tankSizeCuFt: settings.defaultTankSizeCuFt,
-    tankRatedPressure: settings.tankRatedPressure
-  }), [settings]);
+  const costSettings = useMemo<CostSettings>(() => ({
+    pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
+    pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
+    pricePerCuFtAir: settings.pricePerCuFtAir ?? 0.1,
+    tankSizeCuFt: settings.defaultTankSizeCuFt ?? 80,
+    tankRatedPressure: settings.tankRatedPressure ?? 3000
+  }), [
+    settings.defaultTankSizeCuFt,
+    settings.pricePerCuFtAir,
+    settings.pricePerCuFtHe,
+    settings.pricePerCuFtO2,
+    settings.tankRatedPressure
+  ]);
 
   // Compute blend result
   const blendResult = useMemo(() => {
-    const resolveGas = (source: GasSourceInput): GasSelection | null => {
+    const resolveGas = (source: GasSourceInput, index: number): OptimizerGasSource | null => {
       if (source.id === "custom") {
         const o2Val = clampPercent(source.customO2 ?? 32);
         const heVal = Math.min(100 - o2Val, Math.max(0, source.customHe ?? 0));
-        return { id: "custom", name: `Custom (${o2Val.toFixed(1)} O2 / ${heVal.toFixed(1)} He)`, o2: o2Val, he: heVal };
+        return {
+          id: `custom-${index}`,
+          name: `Custom (${o2Val.toFixed(1)} O2 / ${heVal.toFixed(1)} He)`,
+          o2: o2Val,
+          he: heVal,
+          maxPressurePsi: source.maxPressure === undefined
+            ? undefined
+            : fromDisplayPressure(Math.max(0, source.maxPressure), settings.pressureUnit)
+        };
       }
-      return gasOptions.find((option) => option.id === source.id) ?? null;
+      const option = gasOptions.find((entry) => entry.id === source.id);
+      if (!option) {
+        return null;
+      }
+      return {
+        ...option,
+        id: `${option.id}-${index}`,
+        maxPressurePsi: source.maxPressure === undefined
+          ? undefined
+          : fromDisplayPressure(Math.max(0, source.maxPressure), settings.pressureUnit)
+      };
     };
 
     const sources = multiGas.gasSources ?? [];
     const enabledGases = sources
       .filter(s => s.enabled)
-      .map(s => resolveGas(s))
-      .filter((g): g is GasSelection => g !== null);
+      .map((source, index) => resolveGas(source, index))
+      .filter((g): g is OptimizerGasSource => g !== null);
 
     if (enabledGases.length === 0) {
       return null;
@@ -189,8 +240,10 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             onRemove={removeGasSource}
             canRemove={(multiGas.gasSources ?? []).length > 1}
             showDivider={index < (multiGas.gasSources ?? []).length - 1}
+            pressureUnit={settings.pressureUnit}
           />
         ))}
+        <div className="table-note">Set bank pressure limits per source to constrain optimization to currently available gas.</div>
         {(multiGas.gasSources ?? []).length < MAX_GAS_SOURCES && (
           <button type="button" className="add-gas-btn" onClick={addGasSource}>
             + Add Gas Source

@@ -15,6 +15,7 @@ export type GasSourceInput = {
   id: string;
   customO2?: number;
   customHe?: number;
+  maxPressure?: number;
   enabled: boolean;
 };
 
@@ -53,12 +54,35 @@ export type TopOffInput = {
   topGasId: string;
 };
 
+export type StandardBlendHistoryEntry = {
+  id: string;
+  createdAt: string;
+  startPressurePsi: number;
+  targetPressurePsi: number;
+  startO2: number;
+  startHe: number;
+  targetO2: number;
+  targetHe: number;
+  topGasId: string;
+  topGasName: string;
+  estimatedCost?: number;
+  steps: {
+    kind: "bleed" | "helium" | "oxygen" | "topoff";
+    amountPsi: number;
+    gasName: string;
+  }[];
+};
+
 export type SessionState = {
   standardBlend: StandardBlendInput;
+  standardBlendHistory: StandardBlendHistoryEntry[];
   multiGas: MultiGasInput;
   utilities: UtilityInputs;
   topOff: TopOffInput;
   setStandardBlend: (value: StandardBlendInput) => void;
+  addStandardBlendHistory: (value: StandardBlendHistoryEntry) => void;
+  removeStandardBlendHistory: (id: string) => void;
+  clearStandardBlendHistory: () => void;
   setMultiGas: (value: MultiGasInput) => void;
   setUtilities: (value: Partial<UtilityInputs>) => void;
   setTopOff: (value: TopOffInput) => void;
@@ -121,10 +145,20 @@ const defaultValues = {
 
 const sessionCreator = (set: SessionSetter): SessionState => ({
   standardBlend: { ...defaultValues.standardBlend },
+  standardBlendHistory: [],
   multiGas: { ...defaultValues.multiGas },
   utilities: { ...defaultValues.utilities },
   topOff: { ...defaultValues.topOff },
   setStandardBlend: (value) => set({ standardBlend: value }),
+  addStandardBlendHistory: (value) =>
+    set((state) => ({
+      standardBlendHistory: [value, ...state.standardBlendHistory].slice(0, 30)
+    })),
+  removeStandardBlendHistory: (id) =>
+    set((state) => ({
+      standardBlendHistory: state.standardBlendHistory.filter((entry) => entry.id !== id)
+    })),
+  clearStandardBlendHistory: () => set({ standardBlendHistory: [] }),
   setMultiGas: (value) => set({ multiGas: value }),
   setUtilities: (value) =>
     set((state) => ({ utilities: { ...state.utilities, ...value } })),

@@ -1159,6 +1159,27 @@ export type GasCostResult = {
   totalCost: number;
 };
 
+export type CostSettings = {
+  pricePerCuFtO2?: number;
+  pricePerCuFtHe?: number;
+  pricePerCuFtAir?: number;
+  tankSizeCuFt?: number;
+  tankRatedPressure?: number;
+};
+
+export type FillCostLine = {
+  label: string;
+  pressurePsi: number;
+  volumeCuFt: number;
+  unitPrice: number;
+  cost: number;
+};
+
+export type FillCostEstimate = {
+  lines: FillCostLine[];
+  totalCost: number;
+};
+
 /**
  * Calculate the cost of gas additions based on PSI values and tank specifications.
  * Formula: cuFt = (psi / tankRatedPressure) * tankSizeCuFt
@@ -1191,12 +1212,54 @@ export const calculateGasCost = (
   };
 };
 
+const calculateGasUnitPrice = (gas: GasSelection, costSettings: CostSettings): number => {
+  const pricePerCuFtO2 = costSettings.pricePerCuFtO2 ?? 0;
+  const pricePerCuFtHe = costSettings.pricePerCuFtHe ?? 0;
+  const pricePerCuFtAir = costSettings.pricePerCuFtAir ?? 0;
+
+  const o2Fraction = fraction(gas.o2);
+  const heFraction = fraction(gas.he);
+  const n2Fraction = Math.max(0, 1 - o2Fraction - heFraction);
+
+  return (o2Fraction * pricePerCuFtO2) + (heFraction * pricePerCuFtHe) + (n2Fraction * pricePerCuFtAir);
+};
+
+export const calculateFillCostEstimate = (
+  additions: { label: string; gas: GasSelection; pressurePsi: number }[],
+  costSettings: CostSettings
+): FillCostEstimate => {
+  const tankSizeCuFt = costSettings.tankSizeCuFt ?? 80;
+  const tankRatedPressure = costSettings.tankRatedPressure ?? 3000;
+
+  if (tankRatedPressure <= 0 || tankSizeCuFt <= 0) {
+    return { lines: [], totalCost: 0 };
+  }
+
+  const lines: FillCostLine[] = additions
+    .filter((entry) => entry.pressurePsi > tolerance)
+    .map((entry) => {
+      const volumeCuFt = (entry.pressurePsi / tankRatedPressure) * tankSizeCuFt;
+      const unitPrice = calculateGasUnitPrice(entry.gas, costSettings);
+      const cost = volumeCuFt * unitPrice;
+      return {
+        label: entry.label,
+        pressurePsi: entry.pressurePsi,
+        volumeCuFt,
+        unitPrice,
+        cost
+      };
+    });
+
+  const totalCost = lines.reduce((sum, line) => sum + line.cost, 0);
+  return { lines, totalCost };
+};
+
 // ============================================================================
 // N-GAS BLEND OPTIMIZER
 // ============================================================================
 
 export type BlendAlternative = {
-  steps: { gas: GasSelection; amount: number }[];
+  steps: { gas: OptimizerGasSource; amount: number }[];
   finalO2: number;
   finalHe: number;
   deviationO2: number;
@@ -1214,11 +1277,8 @@ export type NGasBlendResult = {
   warnings: string[];
 };
 
-type CostSettings = {
-  pricePerCuFtO2: number;
-  pricePerCuFtHe: number;
-  tankSizeCuFt: number;
-  tankRatedPressure: number;
+export type OptimizerGasSource = GasSelection & {
+  maxPressurePsi?: number;
 };
 
 /**
@@ -1238,23 +1298,28 @@ const getGasCostRank = (gas: GasSelection): number => {
  * If He price is 0/undefined, uses heuristic ranking.
  */
 const estimateGasPressureCost = (
-  gas: GasSelection,
+  gas: OptimizerGasSource,
   pressurePsi: number,
   costSettings: CostSettings
 ): number => {
-  const { pricePerCuFtO2, pricePerCuFtHe, tankSizeCuFt, tankRatedPressure } = costSettings;
+  const pricePerCuFtO2 = costSettings.pricePerCuFtO2 ?? 0;
+  const pricePerCuFtHe = costSettings.pricePerCuFtHe ?? 0;
+  const pricePerCuFtAir = costSettings.pricePerCuFtAir ?? 0;
+  const tankSizeCuFt = costSettings.tankSizeCuFt ?? 80;
+  const tankRatedPressure = costSettings.tankRatedPressure ?? 3000;
 
-  if (tankRatedPressure <= 0 || pressurePsi <= 0) return 0;
+  if (tankRatedPressure <= 0 || tankSizeCuFt <= 0 || pressurePsi <= 0) return 0;
 
   const cuFt = (pressurePsi / tankRatedPressure) * tankSizeCuFt;
   const o2Fraction = fraction(gas.o2);
   const heFraction = fraction(gas.he);
+  const n2Fraction = Math.max(0, 1 - o2Fraction - heFraction);
 
-  // If He price is configured, calculate actual cost
-  if (pricePerCuFtHe > 0) {
+  if (pricePerCuFtO2 > 0 || pricePerCuFtHe > 0 || pricePerCuFtAir > 0) {
     const o2Cost = cuFt * o2Fraction * pricePerCuFtO2;
     const heCost = cuFt * heFraction * pricePerCuFtHe;
-    return o2Cost + heCost;
+    const n2Cost = cuFt * n2Fraction * pricePerCuFtAir;
+    return o2Cost + heCost + n2Cost;
   }
 
   // Fallback: use rank-based heuristic (rank * base cost)
@@ -1266,9 +1331,9 @@ const estimateGasPressureCost = (
  * Sort gases by cost (cheapest first).
  */
 export const rankGasesByCost = (
-  gases: GasSelection[],
+  gases: OptimizerGasSource[],
   costSettings: CostSettings
-): GasSelection[] => {
+): OptimizerGasSource[] => {
   const referenceAmount = 100; // Use 100 PSI as reference for ranking
   return [...gases].sort((a, b) => {
     const costA = estimateGasPressureCost(a, referenceAmount, costSettings);
@@ -1286,8 +1351,8 @@ const tryTwoGasSolution = (
   addedPressure: number,
   neededO2Percent: number,
   neededHePercent: number,
-  gas1: GasSelection,
-  gas2: GasSelection
+  gas1: OptimizerGasSource,
+  gas2: OptimizerGasSource
 ): { gas1Amount: number; gas2Amount: number; finalO2: number; finalHe: number } | null => {
   const targetO2 = fraction(neededO2Percent);
   const targetHe = fraction(neededHePercent);
@@ -1380,7 +1445,7 @@ const trySingleGasSolution = (
   addedPressure: number,
   neededO2Percent: number,
   neededHePercent: number,
-  gas: GasSelection
+  gas: OptimizerGasSource
 ): { amount: number; finalO2: number; finalHe: number } | null => {
   // Single gas solution requires the gas composition to closely match the needed composition
   // Use tight tolerance (0.5%) to avoid false matches
@@ -1402,7 +1467,7 @@ const trySingleGasSolution = (
  * Get recommended fill order for a blend (He first, then O2, then diluent/Air).
  */
 export const getRecommendedFillOrder = (
-  steps: { gas: GasSelection; amount: number }[]
+  steps: { gas: OptimizerGasSource; amount: number }[]
 ): { gas: string; amount: number }[] => {
   // Sort by: pure He first, then by He content descending, then by O2 content descending
   const sorted = [...steps]
@@ -1438,9 +1503,9 @@ const tryThreeGasSolution = (
   addedPressure: number,
   neededO2Percent: number,
   neededHePercent: number,
-  gas1: GasSelection,
-  gas2: GasSelection,
-  gas3: GasSelection
+  gas1: OptimizerGasSource,
+  gas2: OptimizerGasSource,
+  gas3: OptimizerGasSource
 ): { gas1Amount: number; gas2Amount: number; gas3Amount: number; finalO2: number; finalHe: number } | null => {
   const targetO2 = fraction(neededO2Percent);
   const targetHe = fraction(neededHePercent);
@@ -1519,7 +1584,7 @@ export const generateBlendAlternatives = (
   startPressurePsi: number,
   startO2: number,
   startHe: number,
-  availableGases: GasSelection[],
+  availableGases: OptimizerGasSource[],
   costSettings: CostSettings,
   maxAlternatives: number = 5
 ): BlendAlternative[] => {
@@ -1538,17 +1603,23 @@ export const generateBlendAlternatives = (
 
   const alternatives: BlendAlternative[] = [];
   const enabledGases = availableGases.filter(g => g);
+  const canUseAmount = (gas: OptimizerGasSource, amount: number): boolean => {
+    if (gas.maxPressurePsi === undefined) {
+      return true;
+    }
+    return amount <= gas.maxPressurePsi + tolerance;
+  };
 
   // Try single-gas solutions
   for (const gas of enabledGases) {
     const solution = trySingleGasSolution(addedPressure, neededO2Percent, neededHePercent, gas);
-    if (solution) {
+    if (solution && canUseAmount(gas, solution.amount)) {
       // Compute actual final mix in the tank
       const totalPressure = startPressurePsi + solution.amount;
       const actualFinalO2 = (startPressurePsi * fraction(startO2) + solution.amount * fraction(gas.o2)) / totalPressure * 100;
       const actualFinalHe = (startPressurePsi * fraction(startHe) + solution.amount * fraction(gas.he)) / totalPressure * 100;
 
-      const steps = [{ gas, amount: solution.amount }];
+      const steps: { gas: OptimizerGasSource; amount: number }[] = [{ gas, amount: solution.amount }];
       const cost = estimateGasPressureCost(gas, solution.amount, costSettings);
       alternatives.push({
         steps,
@@ -1571,9 +1642,12 @@ export const generateBlendAlternatives = (
 
       const solution = tryTwoGasSolution(addedPressure, neededO2Percent, neededHePercent, gas1, gas2);
       if (solution && solution.gas1Amount > -tolerance && solution.gas2Amount > -tolerance) {
-        const steps: { gas: GasSelection; amount: number }[] = [];
+        const steps: { gas: OptimizerGasSource; amount: number }[] = [];
         if (solution.gas1Amount > tolerance) steps.push({ gas: gas1, amount: solution.gas1Amount });
         if (solution.gas2Amount > tolerance) steps.push({ gas: gas2, amount: solution.gas2Amount });
+        if (!canUseAmount(gas1, solution.gas1Amount) || !canUseAmount(gas2, solution.gas2Amount)) {
+          continue;
+        }
 
         // Compute actual final mix in the tank
         const totalAdd = solution.gas1Amount + solution.gas2Amount;
@@ -1621,10 +1695,17 @@ export const generateBlendAlternatives = (
           solution.gas2Amount > -tolerance &&
           solution.gas3Amount > -tolerance) {
 
-          const steps: { gas: GasSelection; amount: number }[] = [];
+          const steps: { gas: OptimizerGasSource; amount: number }[] = [];
           if (solution.gas1Amount > tolerance) steps.push({ gas: gas1, amount: solution.gas1Amount });
           if (solution.gas2Amount > tolerance) steps.push({ gas: gas2, amount: solution.gas2Amount });
           if (solution.gas3Amount > tolerance) steps.push({ gas: gas3, amount: solution.gas3Amount });
+          if (
+            !canUseAmount(gas1, solution.gas1Amount) ||
+            !canUseAmount(gas2, solution.gas2Amount) ||
+            !canUseAmount(gas3, solution.gas3Amount)
+          ) {
+            continue;
+          }
 
           // Compute actual final mix in the tank
           const totalAdd = solution.gas1Amount + solution.gas2Amount + solution.gas3Amount;
@@ -1667,7 +1748,10 @@ export const generateBlendAlternatives = (
   const seen = new Set<string>();
   const uniqueAlternatives: BlendAlternative[] = [];
   for (const alt of alternatives) {
-    const key = alt.fillOrder.map(s => `${s.gas}:${Math.round(s.amount)}`).sort().join('|');
+    const key = alt.steps
+      .map((step) => `${step.gas.id}:${Math.round(step.amount)}`)
+      .sort()
+      .join("|");
     if (!seen.has(key)) {
       seen.add(key);
       uniqueAlternatives.push(alt);
@@ -1692,7 +1776,7 @@ export const solveNGasBlend = (
   startPressure: number,
   startO2: number,
   startHe: number,
-  availableGases: GasSelection[],
+  availableGases: OptimizerGasSource[],
   costSettings: CostSettings,
   selectedIndex: number = 0
 ): NGasBlendResult => {
@@ -1785,7 +1869,9 @@ export const solveNGasBlend = (
       success: false,
       alternatives: [],
       selectedIndex: 0,
-      error: "No valid blend found with available gases. Try adding more gas sources or adjusting target.",
+      error: availableGases.some((gas) => gas.maxPressurePsi !== undefined)
+        ? "No valid blend found with the selected gases and bank pressure limits. Increase availability or adjust the target."
+        : "No valid blend found with available gases. Try adding more gas sources or adjusting target.",
       warnings
     };
   }
