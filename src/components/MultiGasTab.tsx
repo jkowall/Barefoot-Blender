@@ -111,12 +111,12 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const costSettings = useMemo<CostSettings>(() => ({
     pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
     pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
-    pricePerCuFtAir: settings.pricePerCuFtAir ?? 0.1,
+    pricePerCuFtTopOff: settings.pricePerCuFtTopOff ?? 0.1,
     tankSizeCuFt: settings.defaultTankSizeCuFt ?? 80,
     tankRatedPressure: settings.tankRatedPressure ?? 3000
   }), [
     settings.defaultTankSizeCuFt,
-    settings.pricePerCuFtAir,
+    settings.pricePerCuFtTopOff,
     settings.pricePerCuFtHe,
     settings.pricePerCuFtO2,
     settings.tankRatedPressure

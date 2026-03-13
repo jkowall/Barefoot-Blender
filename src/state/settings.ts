@@ -20,7 +20,7 @@ type SettingsState = {
   customGases: GasDefinition[];
   pricePerCuFtO2?: number;
   pricePerCuFtHe?: number;
-  pricePerCuFtAir?: number;
+  pricePerCuFtTopOff?: number;
   defaultTankSizeCuFt?: number;
   tankRatedPressure?: number;
   setPressureUnit: (unit: PressureUnit) => void;
@@ -32,9 +32,14 @@ type SettingsState = {
   removeCustomGas: (id: string) => void;
   setPricePerCuFtO2: (value: number | undefined) => void;
   setPricePerCuFtHe: (value: number | undefined) => void;
-  setPricePerCuFtAir: (value: number | undefined) => void;
+  setPricePerCuFtTopOff: (value: number | undefined) => void;
   setDefaultTankSizeCuFt: (value: number | undefined) => void;
   setTankRatedPressure: (value: number | undefined) => void;
+};
+
+type PersistedSettingsState = Partial<SettingsState> & {
+  // Legacy field name kept for migration from v0.6.12
+  pricePerCuFtAir?: number;
 };
 
 type SettingsSetter = (
@@ -61,7 +66,7 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
   customGases: [defaultGas],
   pricePerCuFtO2: 1.0,
   pricePerCuFtHe: 3.5,
-  pricePerCuFtAir: 0.1,
+  pricePerCuFtTopOff: 0.1,
   defaultTankSizeCuFt: 80,
   tankRatedPressure: 3000,
   setPressureUnit: (unit: PressureUnit) => set({ pressureUnit: unit }),
@@ -85,14 +90,28 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
   },
   setPricePerCuFtO2: (value: number | undefined) => set({ pricePerCuFtO2: value }),
   setPricePerCuFtHe: (value: number | undefined) => set({ pricePerCuFtHe: value }),
-  setPricePerCuFtAir: (value: number | undefined) => set({ pricePerCuFtAir: value }),
+  setPricePerCuFtTopOff: (value: number | undefined) => set({ pricePerCuFtTopOff: value }),
   setDefaultTankSizeCuFt: (value: number | undefined) => set({ defaultTankSizeCuFt: value }),
   setTankRatedPressure: (value: number | undefined) => set({ tankRatedPressure: value })
 });
 
 export const useSettingsStore = create<SettingsState>()(
   persist(settingsCreator, {
-    name: "barefoot-blender-settings"
+    name: "barefoot-blender-settings",
+    version: 2,
+    migrate: (persisted): PersistedSettingsState => {
+      const legacy = (persisted ?? {}) as PersistedSettingsState;
+      if (legacy.pricePerCuFtTopOff !== undefined) {
+        return legacy;
+      }
+      if (legacy.pricePerCuFtAir !== undefined) {
+        return {
+          ...legacy,
+          pricePerCuFtTopOff: legacy.pricePerCuFtAir
+        };
+      }
+      return legacy;
+    }
   })
 );
 

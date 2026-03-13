@@ -668,7 +668,7 @@ describe("calculateTopOffBlend", () => {
 });
 
 describe("calculateFillCostEstimate", () => {
-  test("includes top-off gas pricing with air/N2 component", () => {
+  test("includes top-off gas pricing component", () => {
     const result = calculateFillCostEstimate(
       [
         { label: "Oxygen", gas: { id: "oxygen", name: "Oxygen", o2: 100, he: 0 }, pressurePsi: 300 },
@@ -679,7 +679,7 @@ describe("calculateFillCostEstimate", () => {
         tankRatedPressure: 3000,
         pricePerCuFtO2: 1.0,
         pricePerCuFtHe: 3.5,
-        pricePerCuFtAir: 0.1
+        pricePerCuFtTopOff: 0.1
       }
     );
 
@@ -700,7 +700,7 @@ describe("solveNGasBlend bank limits", () => {
     tankRatedPressure: 3000,
     pricePerCuFtO2: 1,
     pricePerCuFtHe: 3.5,
-    pricePerCuFtAir: 0.1
+    pricePerCuFtTopOff: 0.1
   };
 
   test("fails when required gas exceeds available bank pressure", () => {

@@ -9,7 +9,7 @@
 
 ### Changed
 
-- **Fill Cost Calculator**: Expanded cost modeling to include top-off gas and air/N₂ pricing. Added `Air/N₂ Price` in Pricing settings and updated Standard Blend cost breakdown to show per-line gas pricing and total.
+- **Fill Cost Calculator**: Expanded cost modeling to include top-off gas pricing. Added `Top-Off Gas Price` in Pricing settings and updated Standard Blend cost breakdown to show per-line gas pricing and total.
 - **Optimizer Cost Model**: Multi-Gas alternative ranking now accounts for O₂, He, and N₂ fractions when pricing mixed source gases.
 
 ## [0.6.10] - 2026-02-25
