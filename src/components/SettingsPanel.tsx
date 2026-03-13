@@ -21,7 +21,7 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
     removeCustomGas,
     setPricePerCuFtO2,
     setPricePerCuFtHe,
-    setPricePerCuFtAir,
+    setPricePerCuFtTopOff,
     setDefaultTankSizeCuFt,
     setTankRatedPressure
   } = settings;
@@ -197,11 +197,11 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                   onChange={(val) => setPricePerCuFtHe(val === undefined ? undefined : Math.max(0, val))}
                 />
                 <NumberInput
-                  label="Air/N₂ Price ($/cu ft)"
+                  label="Top-Off Gas Price ($/cu ft)"
                   min={0}
                   step={0.01}
-                  value={settings.pricePerCuFtAir}
-                  onChange={(val) => setPricePerCuFtAir(val === undefined ? undefined : Math.max(0, val))}
+                  value={settings.pricePerCuFtTopOff}
+                  onChange={(val) => setPricePerCuFtTopOff(val === undefined ? undefined : Math.max(0, val))}
                 />
               </div>
 

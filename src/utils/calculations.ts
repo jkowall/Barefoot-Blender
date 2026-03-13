@@ -1162,7 +1162,7 @@ export type GasCostResult = {
 export type CostSettings = {
   pricePerCuFtO2?: number;
   pricePerCuFtHe?: number;
-  pricePerCuFtAir?: number;
+  pricePerCuFtTopOff?: number;
   tankSizeCuFt?: number;
   tankRatedPressure?: number;
 };
@@ -1215,13 +1215,13 @@ export const calculateGasCost = (
 const calculateGasUnitPrice = (gas: GasSelection, costSettings: CostSettings): number => {
   const pricePerCuFtO2 = costSettings.pricePerCuFtO2 ?? 0;
   const pricePerCuFtHe = costSettings.pricePerCuFtHe ?? 0;
-  const pricePerCuFtAir = costSettings.pricePerCuFtAir ?? 0;
+  const pricePerCuFtTopOff = costSettings.pricePerCuFtTopOff ?? 0;
 
   const o2Fraction = fraction(gas.o2);
   const heFraction = fraction(gas.he);
   const n2Fraction = Math.max(0, 1 - o2Fraction - heFraction);
 
-  return (o2Fraction * pricePerCuFtO2) + (heFraction * pricePerCuFtHe) + (n2Fraction * pricePerCuFtAir);
+  return (o2Fraction * pricePerCuFtO2) + (heFraction * pricePerCuFtHe) + (n2Fraction * pricePerCuFtTopOff);
 };
 
 export const calculateFillCostEstimate = (
@@ -1304,7 +1304,7 @@ const estimateGasPressureCost = (
 ): number => {
   const pricePerCuFtO2 = costSettings.pricePerCuFtO2 ?? 0;
   const pricePerCuFtHe = costSettings.pricePerCuFtHe ?? 0;
-  const pricePerCuFtAir = costSettings.pricePerCuFtAir ?? 0;
+  const pricePerCuFtTopOff = costSettings.pricePerCuFtTopOff ?? 0;
   const tankSizeCuFt = costSettings.tankSizeCuFt ?? 80;
   const tankRatedPressure = costSettings.tankRatedPressure ?? 3000;
 
@@ -1315,10 +1315,10 @@ const estimateGasPressureCost = (
   const heFraction = fraction(gas.he);
   const n2Fraction = Math.max(0, 1 - o2Fraction - heFraction);
 
-  if (pricePerCuFtO2 > 0 || pricePerCuFtHe > 0 || pricePerCuFtAir > 0) {
+  if (pricePerCuFtO2 > 0 || pricePerCuFtHe > 0 || pricePerCuFtTopOff > 0) {
     const o2Cost = cuFt * o2Fraction * pricePerCuFtO2;
     const heCost = cuFt * heFraction * pricePerCuFtHe;
-    const n2Cost = cuFt * n2Fraction * pricePerCuFtAir;
+    const n2Cost = cuFt * n2Fraction * pricePerCuFtTopOff;
     return o2Cost + heCost + n2Cost;
   }
 

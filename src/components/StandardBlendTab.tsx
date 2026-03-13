@@ -107,7 +107,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       {
         pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
         pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
-        pricePerCuFtAir: settings.pricePerCuFtAir ?? 0.1,
+        pricePerCuFtTopOff: settings.pricePerCuFtTopOff ?? 0.1,
         tankSizeCuFt: settings.defaultTankSizeCuFt ?? 80,
         tankRatedPressure: settings.tankRatedPressure ?? 3000
       }
@@ -116,7 +116,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     baseVolumes,
     selectedTopGas,
     settings.defaultTankSizeCuFt,
-    settings.pricePerCuFtAir,
+    settings.pricePerCuFtTopOff,
     settings.pricePerCuFtHe,
     settings.pricePerCuFtO2,
     settings.tankRatedPressure
@@ -172,7 +172,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         {
           pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
           pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
-          pricePerCuFtAir: settings.pricePerCuFtAir ?? 0.1,
+          pricePerCuFtTopOff: settings.pricePerCuFtTopOff ?? 0.1,
           tankSizeCuFt: settings.defaultTankSizeCuFt ?? 80,
           tankRatedPressure: settings.tankRatedPressure ?? 3000
         }
