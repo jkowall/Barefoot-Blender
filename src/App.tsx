@@ -82,11 +82,11 @@ const App = (): JSX.Element => {
         <footer className="app-footer">
           <span className="app-version">Version {APP_VERSION}</span>
           <div className="app-footer-links">
-            <a className="app-footer-link" href={CHANGELOG_URL} target="_blank" rel="noreferrer">
+            <a className="app-footer-link" href={CHANGELOG_URL} target="_blank" rel="noopener noreferrer">
               Release notes
             </a>
             <span className="app-footer-separator">•</span>
-            <a className="app-footer-link" href={REPO_URL} target="_blank" rel="noreferrer">
+            <a className="app-footer-link" href={REPO_URL} target="_blank" rel="noopener noreferrer">
               GitHub
             </a>
           </div>
