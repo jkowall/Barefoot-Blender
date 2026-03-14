@@ -1,6 +1,12 @@
 # Changelog
 
-## [0.6.10] - 2026-02-25
+## [0.6.12] - 2026-03-07
+
+### Changed
+
+- **Code Health**: Replaced `any` types with explicit `GasSourceInput` types in the `measure_options_alloc.ts` benchmark script to improve type safety and maintainability.
+
+## [0.6.11] - 2026-02-25
 
 ### Fixed
 
