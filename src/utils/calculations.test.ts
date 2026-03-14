@@ -8,12 +8,11 @@ import {
   calculateFillCostEstimate,
   solveNGasBlend
 } from "./calculations";
-import type { GasSelection, TopOffResult } from "./calculations";
+import type { GasSelection } from "./calculations";
 import type { MultiGasInput, StandardBlendInput } from "../state/session";
 
 const air: GasSelection = { id: "air", name: "Air", o2: 21, he: 0 };
 const oxygen: GasSelection = { id: "oxygen", name: "Oxygen", o2: 100, he: 0 };
-const helium: GasSelection = { id: "helium", name: "Helium", o2: 0, he: 100 };
 
 describe("calculateStandardBlend", () => {
   const settingsPsi = { pressureUnit: "psi" as const };

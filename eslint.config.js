@@ -12,6 +12,13 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
+    files: ["src/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+    },
+  },
+  {
     languageOptions: {
       ecmaVersion: 2023,
       globals: {
