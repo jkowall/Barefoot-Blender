@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.6.14] - 2026-03-14
+
+### Added
+
+- **Benchmarking**: Added a standalone `benchmark.js` script to compare direct cached access versus repeated `Array.find()` lookups for top-off gas selection.
+
+### Changed
+
+- **Benchmark Type Safety**: Updated `src/benchmarks/measure_options_alloc.ts` to use the explicit `GasSourceInput` type, including the required `enabled` field in mock inputs.
+- **Benchmark Performance**: Optimized the benchmark's baseline gas-option lookup with a cached `Set` of IDs instead of repeated nested scans.
+
+## [0.6.13] - 2026-03-13
+
+### Added
+
+- **Testing**: Added comprehensive unit tests for the `calculateEND` (Equivalent Narcotic Depth) function to ensure accuracy across metric/imperial units and different oxygen narcotic settings.
+
+## [0.6.12] - 2026-03-13
+
+### Added
+
+- **Bank-Aware Optimization**: Multi-Gas sources now support per-bank available pressure limits. The optimizer respects these limits when generating blend options and reports when targets are blocked by bank availability.
+- **Blend History + Recreate**: Standard Blend now saves successful plans to persistent history with one-tap recreate, per-entry remove, and clear-all controls.
+
+### Changed
+
+- **Fill Cost Calculator**: Expanded cost modeling to include top-off gas pricing. Added `Top-Off Gas Price` in Pricing settings and updated Standard Blend cost breakdown to show per-line gas pricing and total.
+- **Optimizer Cost Model**: Multi-Gas alternative ranking now accounts for O₂, He, and N₂ fractions when pricing mixed source gases.
+
+## [0.6.10] - 2026-02-25
+
+### Fixed
+
+- **Calculation Logic**: Fixed a bug in the bleed-down solver (`findBleedSolution`) where it could fail to find a valid solution when a complete tank drain was required or when the optimal bleed pressure was very low.
+- **Testing**: Added comprehensive unit tests for `calculateStandardBlend` to ensure correctness of standard nitrox, trimix, and bleed scenarios.
+- **Security**: Added Content Security Policy (CSP) meta tag to `index.html` to improve security against XSS and injection attacks.
+- **Security**: Removed `server: { host: true }` from Vite configuration to restrict the development server to localhost by default. This prevents unintended exposure to the local network.
+- **Code Health**: Refactored signed pressure formatting logic into a shared utility (`formatSignedPressure`) and applied it across Standard Blend, Multi-Gas, and Top-Off tabs for consistency.
+
 ## [0.6.9] - 2026-02-24
 
 ### Changed

@@ -46,6 +46,22 @@ npm run preview   # Preview production build locally
 npm run lint      # Run ESLint checks
 ```
 
+## Definition of Done
+
+A task is complete only when all items below are satisfied:
+
+1. Code changes are implemented and scoped to the request
+2. Tests/checks are updated if behavior changed
+3. Required verification commands run successfully (see Verification Matrix)
+4. Versioning/CHANGELOG impact is explicitly decided (required for release work only)
+5. Final response includes files changed, why, validation run, and residual risks
+
+## Ambiguity & Blocking Policy
+
+If requirements are ambiguous, use the smallest safe change that preserves current UI/UX and existing calculation semantics. Document assumptions in the final response.
+
+If blocked by missing requirements, state the blocker and propose the safest default behavior rather than stalling.
+
 ## Coding Conventions
 
 ### TypeScript
@@ -107,6 +123,21 @@ npm run lint      # Run ESLint checks
 
 ## Verification & Testing
 
+### Verification Matrix
+
+Run these commands based on the type of change:
+
+1. **UI, state, styling, or app wiring changes**:
+   - `npm run lint`
+   - `npm run build`
+2. **Calculation logic changes** (`src/utils/calculations.ts` and related math):
+   - `npm run lint`
+   - `npm run build`
+   - Run the known-value calculation vectors listed below
+   - Add/update lightweight regression coverage as described in "Calculation Regression Harness"
+3. **Documentation-only changes**:
+   - No build required unless docs reference commands/config changed by the same task
+
 ### Manual Testing Checklist
 
 Before submitting changes, verify:
@@ -126,6 +157,14 @@ Test blending scenarios against known values:
 - **MOD for 32% at PPO2 1.4**: Should equal ~111 ft (33.8 m)
 - **EAD for 32% at 100 ft**: Should equal ~82 ft
 - **Bleed-down**: Start He% > target He% should trigger drain instruction
+
+### Calculation Regression Harness
+
+Maintain a lightweight, repeatable regression harness for known-value calculation vectors.
+
+- Preferred: executable script/test target (for example `npm run verify:calc`)
+- Minimum acceptable: committed test file or script that validates the four vectors above
+- Requirement: when changing calculation logic, add or update regression cases in the harness
 
 ### Browser Testing
 
@@ -148,6 +187,15 @@ Test blending scenarios against known values:
 4. **Helium constraints**: Start He% > target He% requires bleed-down logic
 5. **PWA cache**: After changes, may need to close all tabs and reopen to see updates
 
+## Protected Areas (Do Not Touch Unless Asked)
+
+Avoid changing these unless the task explicitly requires it:
+
+- PWA/service worker caching strategy (`vite-plugin-pwa` config, offline behavior)
+- Deployment configuration (`wrangler.jsonc`, Cloudflare deployment settings)
+- Core gas bank defaults and blending assumptions in settings
+- Domain formulas or constants outside the requested scope
+
 ## Deployment
 
 **Production URL**: [https://trimix-blender.com](https://trimix-blender.com)
@@ -161,9 +209,16 @@ npx wrangler deploy   # Deploys to Cloudflare Pages
 
 Ensure authenticated via `npx wrangler login` first.
 
+## Commit & Push Expectations
+
+- Do not commit unless the user asks for a commit/push.
+- When committing in this repo, use signed commits: `git commit -S`.
+- Keep unrelated edits out of task commits.
+- Prefer one logical commit per task unless the user asks otherwise.
+
 ## Versioning & Release Checklist
 
-**Every new feature or bug fix requires the following updates:**
+Apply this checklist to release PRs, tagged releases, or merges to `main` intended for deployment. Do not force version bumps for every local fix PR.
 
 1. **Bump the version** in `package.json`:
    - `npm version patch` - Bug fixes and minor changes
@@ -188,7 +243,16 @@ Ensure authenticated via `npx wrangler login` first.
    git push
    ```
 
-> **Important**: Do not merge features or fixes without completing all versioning steps.
+> **Important**: Complete all versioning steps before publishing a release.
+
+## Assistant Final Response Format
+
+Final responses should include:
+
+1. Files changed
+2. What changed and why
+3. Validation commands run and outcomes
+4. Residual risks, assumptions, or follow-up work
 
 ## Key Domain Concepts
 

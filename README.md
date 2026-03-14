@@ -8,8 +8,9 @@ Source code: [github.com/jkowall/Barefoot-Blender](https://github.com/jkowall/Ba
 
 - **Standard Blend Planner** – Partial pressure blending with automatic bleed-down solutions, warnings, an interactive sensitivity slider, and reverse solvers for required start pressure and helium-free targets.
 - **Top-Off What-If** – Quick projections for topping a cylinder, including final mix readouts and a bleed/down sensitivity chart tied to the selected bank.
-- **Dynamic Multi-Gas Blending** – Support for 1-4 gas sources with add/remove buttons, linear solver for two source gases with Trimix presets, custom O₂/He mixes, target helium support, cost optimization, and fill order recommendations.
-- **Gas Cost Calculator** – Calculates the cost of gas fills based on user-configured prices per cubic foot, tank size, and rated pressure.
+- **Dynamic Multi-Gas Blending** – Support for 1-4 gas sources with add/remove buttons, per-source bank pressure limits, linear solver for two source gases with Trimix presets, custom O₂/He mixes, target helium support, cost optimization, and fill order recommendations.
+- **Gas Cost Calculator** – Calculates fill cost with O₂, He, and top-off gas line items using configurable O₂/He/Top-Off pricing, tank size, and rated pressure.
+- **Blend History + Recreate** – Stores successful Standard Blend plans locally with quick recreate/remove/clear actions.
 - **Dive Utilities** – MOD, EAD, Best Mix, END, and density calculators that honor global PPO₂ and narcotic settings.
 - **Persistent Settings** – Local storage of preferred units, PPO₂ defaults, narcotic rules, and custom banked gases.
 - **Installable PWA** – Works fully offline after first load via Vite PWA service worker integration.

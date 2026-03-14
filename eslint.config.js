@@ -6,11 +6,18 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/", "node_modules/", "eslint.config.js"],
+    ignores: ["dist/", "node_modules/", "eslint.config.js", "benchmark.js"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
+  {
+    files: ["src/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+    },
+  },
   {
     languageOptions: {
       ecmaVersion: 2023,
