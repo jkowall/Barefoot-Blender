@@ -7,14 +7,13 @@ import {
   calculateEAD,
   calculateEND,
   calculateMOD,
-  clampPercent
+  clampPercent,
+  clampDepth,
+  clampPressure
 } from "../utils/calculations";
 import { formatNumber } from "../utils/format";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
-
-
-const clampDepth = (value: number): number => Math.max(0, value);
 
 const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element => {
   const utilities = useSessionStore((state: SessionState) => state.utilities);
@@ -93,7 +92,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
             min={0}
             step={0.1}
             value={utilities.modMaxPPO2}
-            onChange={(val) => update({ modMaxPPO2: val === undefined ? undefined : Math.max(0, val) })}
+            onChange={(val) => update({ modMaxPPO2: val === undefined ? undefined : clampPressure(val) })}
           />
         </div>
         <div style={{ marginTop: "12px" }}>
@@ -116,14 +115,14 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
             min={0}
             step={0.1}
             value={utilities.bestMixPPO2}
-            onChange={(val) => update({ bestMixPPO2: val === undefined ? undefined : Math.max(0, val) })}
+            onChange={(val) => update({ bestMixPPO2: val === undefined ? undefined : clampPressure(val) })}
           />
           <NumberInput
             label={`Max END (${settings.depthUnit})`}
             min={0}
             step={1}
             value={utilities.bestMixMaxEND}
-            onChange={(val) => update({ bestMixMaxEND: val === undefined ? undefined : Math.max(0, val) })}
+            onChange={(val) => update({ bestMixMaxEND: val === undefined ? undefined : clampDepth(val) })}
           />
         </div>
         <div style={{ marginTop: "12px" }}>
@@ -264,7 +263,7 @@ const UnitConverter = (): JSX.Element => {
               value={depthValue ?? ""}
               onChange={(e) => {
                 const val = e.target.value;
-                setDepthValue(val === "" ? undefined : Math.max(0, Number(val)));
+                setDepthValue(val === "" ? undefined : clampDepth(Number(val)));
               }}
               onFocus={handleFocus}
               style={{ flex: 1 }}
@@ -290,7 +289,7 @@ const UnitConverter = (): JSX.Element => {
               value={pressureValue ?? ""}
               onChange={(e) => {
                 const val = e.target.value;
-                setPressureValue(val === "" ? undefined : Math.max(0, Number(val)));
+                setPressureValue(val === "" ? undefined : clampPressure(Number(val)));
               }}
               onFocus={handleFocus}
               style={{ flex: 1 }}

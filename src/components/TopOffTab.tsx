@@ -7,7 +7,8 @@ import {
   type GasSelection,
   type TopOffResult,
   type TopOffProjectionRow,
-  clampPercent
+  clampPercent,
+  clampPressure
 } from "../utils/calculations";
 import { formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
@@ -15,7 +16,6 @@ import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
 
 
-const clampPressure = (value: number): number => Math.max(0, value);
 
 type Props = {
   settings: SettingsSnapshot;
@@ -109,12 +109,12 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   };
 
   const adjustedStartPsi = useMemo(
-    () => Math.max(0, startPressurePsi - bleedPsi),
+    () => clampPressure(startPressurePsi - bleedPsi),
     [bleedPsi, startPressurePsi]
   );
 
   const bleedSliderMaxDisplay = useMemo(
-    () => toDisplayPressure(Math.max(0, startPressurePsi), settings.pressureUnit),
+    () => toDisplayPressure(clampPressure(startPressurePsi), settings.pressureUnit),
     [settings.pressureUnit, startPressurePsi]
   );
 
@@ -260,7 +260,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               onChange={(event: ChangeEvent<HTMLInputElement>) => {
                 const displayValue = Number(event.target.value);
                 const nextPsi = fromDisplayPressure(displayValue, settings.pressureUnit);
-                setBleedPsi(Math.max(0, Math.min(nextPsi, startPressurePsi)));
+                setBleedPsi(clampPressure(Math.min(nextPsi, startPressurePsi)));
               }}
             />
           </div>
@@ -305,7 +305,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                       if (Math.abs(denominator) > 1e-6) {
                         const neededStartPsi = numerator / denominator;
                         const neededBleed = startPressurePsi - neededStartPsi;
-                        setBleedPsi(Math.max(0, Math.min(neededBleed, startPressurePsi)));
+                        setBleedPsi(clampPressure(Math.min(neededBleed, startPressurePsi)));
                       }
                     }}
                   />
@@ -333,7 +333,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                       if (Math.abs(denominator) > 1e-6) {
                         const neededStartPsi = numerator / denominator;
                         const neededBleed = startPressurePsi - neededStartPsi;
-                        setBleedPsi(Math.max(0, Math.min(neededBleed, startPressurePsi)));
+                        setBleedPsi(clampPressure(Math.min(neededBleed, startPressurePsi)));
                       }
                     }}
                   />
