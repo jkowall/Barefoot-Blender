@@ -1088,8 +1088,8 @@ export const calculateMOD = (
     return { mod: 0, contingency: 0 };
   }
   const perAtm = depthPerAtm(unit);
-  const mod = (targetPPO2 / fractionO2 - 1) * perAtm;
-  const contingency = (contingencyPPO2 / fractionO2 - 1) * perAtm;
+  const mod = Math.max(0, (targetPPO2 / fractionO2 - 1) * perAtm);
+  const contingency = Math.max(0, (contingencyPPO2 / fractionO2 - 1) * perAtm);
   return { mod, contingency };
 };
 

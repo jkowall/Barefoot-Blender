@@ -8,6 +8,7 @@ import {
   calculateFillCostEstimate,
   solveNGasBlend,
   calculateEND,
+  calculateMOD,
   clampPressure,
   clampDepth,
   clampPercent
@@ -516,6 +517,55 @@ describe("calculateBestMix", () => {
     const result = calculateBestMix(0, 1.4, 30, "m");
     expect(result.o2).toBe(100);
     expect(result.he).toBe(0);
+  });
+});
+
+describe("calculateMOD", () => {
+  test("Standard Air (21%): Metric", () => {
+    // 1.4 / 0.21 = 6.666... ATA. 6.666 - 1 = 5.666... ATA depth.
+    // 5.666... * 10m/ATA = 56.66...m
+    const result = calculateMOD(21, 1.4, 1.6, "m");
+    expect(result.mod).toBeCloseTo(56.67, 1);
+    expect(result.contingency).toBeCloseTo(66.19, 1);
+  });
+
+  test("Standard Air (21%): Imperial", () => {
+    // 1.4 / 0.21 = 6.666... ATA. 6.666 - 1 = 5.666... ATA depth.
+    // 5.666... * 33ft/ATA = 187ft
+    const result = calculateMOD(21, 1.4, 1.6, "ft");
+    expect(result.mod).toBeCloseTo(187.0, 1);
+    expect(result.contingency).toBeCloseTo(218.4, 1);
+  });
+
+  test("Pure Oxygen (100%): Metric", () => {
+    // 1.4 / 1.0 = 1.4 ATA. 1.4 - 1 = 0.4 ATA depth.
+    // 0.4 * 10m/ATA = 4m
+    const result = calculateMOD(100, 1.4, 1.6, "m");
+    expect(result.mod).toBeCloseTo(4.0, 1);
+    expect(result.contingency).toBeCloseTo(6.0, 1);
+  });
+
+  test("Hypoxic Mix (10%): Metric", () => {
+    // 1.4 / 0.10 = 14 ATA. 14 - 1 = 13 ATA depth.
+    // 13 * 10m/ATA = 130m
+    const result = calculateMOD(10, 1.4, 1.6, "m");
+    expect(result.mod).toBeCloseTo(130.0, 1);
+    expect(result.contingency).toBeCloseTo(150.0, 1);
+  });
+
+  test("Edge Case: 0% Oxygen", () => {
+    const result = calculateMOD(0, 1.4, 1.6, "m");
+    expect(result.mod).toBe(0);
+    expect(result.contingency).toBe(0);
+  });
+
+  test("Edge Case: Target PPO2 less than oxygen fraction (negative depth)", () => {
+    // If we have 100% O2 but want 0.5 PPO2, we should already be at 0m (1 ATA).
+    // The calculation would give (0.5/1 - 1) * 10 = -5m.
+    // We expect it to be capped at 0m.
+    const result = calculateMOD(100, 0.5, 0.8, "m");
+    expect(result.mod).toBe(0);
+    expect(result.contingency).toBe(0);
   });
 });
 
