@@ -9,7 +9,8 @@ import {
   solveRequiredStartPressure,
   solveMaxTargetWithoutHelium,
   calculateGasCost,
-  clampPercent
+  clampPercent,
+  clampPressure
 } from "../utils/calculations";
 import { formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
@@ -18,7 +19,6 @@ import { NumberInput } from "./NumberInput";
 import { SelectInput } from "./SelectInput";
 
 
-const clampPressure = (value: number): number => Math.max(0, value);
 
 const SENSITIVITY_RANGE_PSI = 300;
 const SENSITIVITY_STEP_PSI = 10;
@@ -133,7 +133,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         return result;
       }
 
-      const adjustedStartPsi = Math.max(0, startPressurePsi + deltaPsi);
+      const adjustedStartPsi = clampPressure(startPressurePsi + deltaPsi);
       const candidate: StandardBlendInput = {
         ...standardBlend,
         startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit),
@@ -147,7 +147,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     };
 
     const currentBlend = computeBlend(sensitivityDeltaPsi);
-    const adjustedStartPsi = Math.max(0, startPressurePsi + sensitivityDeltaPsi);
+    const adjustedStartPsi = clampPressure(startPressurePsi + sensitivityDeltaPsi);
     const adjustedStartDisplay = toDisplayPressure(adjustedStartPsi, settings.pressureUnit);
 
     if (!currentBlend || !currentBlend.success) {
@@ -368,7 +368,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               <ol className="result-list">
                 {result.steps.map((step, index) => {
                   if (step.kind === "bleed") {
-                    const bleedTargetPsi = result.bleedPressure ?? Math.max(0, runningPsi - step.amount);
+                    const bleedTargetPsi = result.bleedPressure ?? clampPressure(runningPsi - step.amount);
                     runningPsi = bleedTargetPsi;
                     return (
                       <li key={step.kind}>

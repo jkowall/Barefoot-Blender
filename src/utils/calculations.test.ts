@@ -1,11 +1,41 @@
 import { expect, test, describe } from "bun:test";
-import { calculateTopOffBlend, calculateBestMix, calculateStandardBlend, calculateGasCost } from "./calculations";
-import type { GasSelection, TopOffResult } from "./calculations";
+import {
+  calculateTopOffBlend,
+  calculateBestMix,
+  calculateStandardBlend,
+  calculateGasCost,
+  clampPressure,
+  clampDepth,
+  clampPercent
+} from "./calculations";
+import type { GasSelection } from "./calculations";
 import type { StandardBlendInput } from "../state/session";
 
 const air: GasSelection = { id: "air", name: "Air", o2: 21, he: 0 };
 const oxygen: GasSelection = { id: "oxygen", name: "Oxygen", o2: 100, he: 0 };
 const helium: GasSelection = { id: "helium", name: "Helium", o2: 0, he: 100 };
+
+describe("Clamping Utilities", () => {
+  test("clampPressure correctly handles values", () => {
+    expect(clampPressure(100)).toBe(100);
+    expect(clampPressure(0)).toBe(0);
+    expect(clampPressure(-10)).toBe(0);
+  });
+
+  test("clampDepth correctly handles values", () => {
+    expect(clampDepth(30)).toBe(30);
+    expect(clampDepth(0)).toBe(0);
+    expect(clampDepth(-5)).toBe(0);
+  });
+
+  test("clampPercent correctly handles values", () => {
+    expect(clampPercent(50)).toBe(50);
+    expect(clampPercent(0)).toBe(0);
+    expect(clampPercent(-10)).toBe(0);
+    expect(clampPercent(100)).toBe(100);
+    expect(clampPercent(110)).toBe(100);
+  });
+});
 
 describe("calculateStandardBlend", () => {
   const settingsPsi = { pressureUnit: "psi" as const };
