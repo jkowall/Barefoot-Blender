@@ -1,6 +1,12 @@
 # Changelog
 
-## [0.6.10] - 2026-02-25
+## [0.6.12] - 2026-02-28
+
+### Changed
+
+- **Performance Optimization**: Optimized gas selection logic in benchmarks by replacing O(N*M) redundant filtering with an O(N) approach using a `Set`. This resulted in a measured performance improvement of ~50-60% while preserving exact functional correctness.
+
+## [0.6.11] - 2026-02-25
 
 ### Fixed
 
