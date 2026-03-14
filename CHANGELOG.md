@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.13] - 2026-03-13
+
+### Added
+
+- **Testing**: Added comprehensive unit tests for the `calculateEND` (Equivalent Narcotic Depth) function to ensure accuracy across metric/imperial units and different oxygen narcotic settings.
+
 ## [0.6.12] - 2026-03-13
 
 ### Added
