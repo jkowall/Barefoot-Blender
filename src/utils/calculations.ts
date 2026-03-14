@@ -827,10 +827,17 @@ const solveTwoGasBlend = (
 
   const resultO2 = (sanitizedGas1 * gas1O2Fraction + sanitizedGas2 * gas2O2Fraction) / totalPressure * 100;
   const resultHe = (sanitizedGas1 * gas1HeFraction + sanitizedGas2 * gas2HeFraction) / totalPressure * 100;
+  const heError = Math.abs(resultHe - targetHe);
+
+  if (!usedTrimixSolver && heError > 0.5) {
+    return {
+      success: false,
+      error: "Selected sources cannot meet the target helium percentage."
+    };
+  }
 
   let warning: string | undefined;
   if (usedTrimixSolver) {
-    const heError = Math.abs(resultHe - targetHe);
     if (heError > 0.5) {
       warning = "Helium target may require additional trimming with oxygen or helium.";
     }

@@ -2,13 +2,14 @@ import { expect, test, describe } from "bun:test";
 import {
   calculateTopOffBlend,
   calculateBestMix,
+  calculateMultiGasBlend,
   calculateStandardBlend,
   calculateGasCost,
   calculateFillCostEstimate,
   solveNGasBlend
 } from "./calculations";
 import type { GasSelection, TopOffResult } from "./calculations";
-import type { StandardBlendInput } from "../state/session";
+import type { MultiGasInput, StandardBlendInput } from "../state/session";
 
 const air: GasSelection = { id: "air", name: "Air", o2: 21, he: 0 };
 const oxygen: GasSelection = { id: "oxygen", name: "Oxygen", o2: 100, he: 0 };
@@ -231,6 +232,27 @@ describe("calculateStandardBlend", () => {
 
     // Allow small rounding differences (within 1 PSI) due to unit conversions
     expect(o2Step?.amount).toBeCloseTo(expectedPsi, 0);
+  });
+});
+
+describe("calculateMultiGasBlend", () => {
+  const settings = { pressureUnit: "psi" as const };
+
+  test("rejects unreachable helium targets when both source gases have no helium", () => {
+    const inputs: MultiGasInput = {
+      targetPressure: 3000,
+      targetO2: 32,
+      targetHe: 10,
+      startPressure: 0,
+      startO2: 21,
+      startHe: 0,
+      selectedAlternativeIndex: 0
+    };
+
+    const result = calculateMultiGasBlend(settings, inputs, oxygen, air);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Selected sources cannot meet the target helium percentage.");
   });
 });
 
