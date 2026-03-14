@@ -36,9 +36,8 @@ const getOptionsBaseline = (source: GasSourceInput): GasSelection[] => {
     o2: source.customO2 ?? 32,
     he: source.customHe ?? 0
   };
-  // The original code:
-  // return [...gasOptions, custom, ...trimixPresets.filter(t => !gasOptions.some(g => g.id === t.id))];
-  return [...gasOptions, custom, ...trimixPresets.filter(t => !gasOptions.some(g => g.id === t.id))];
+  const existingIds = new Set(gasOptions.map(g => g.id));
+  return [...gasOptions, custom, ...trimixPresets.filter(t => !existingIds.has(t.id))];
 };
 
 // Optimized implementation simulation

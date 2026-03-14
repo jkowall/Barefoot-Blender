@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.14] - 2026-03-14
+
+### Added
+
+- **Benchmarking**: Added a standalone `benchmark.js` script to compare direct cached access versus repeated `Array.find()` lookups for top-off gas selection.
+
+### Changed
+
+- **Benchmark Type Safety**: Updated `src/benchmarks/measure_options_alloc.ts` to use the explicit `GasSourceInput` type, including the required `enabled` field in mock inputs.
+- **Benchmark Performance**: Optimized the benchmark's baseline gas-option lookup with a cached `Set` of IDs instead of repeated nested scans.
+
 ## [0.6.13] - 2026-03-13
 
 ### Added
