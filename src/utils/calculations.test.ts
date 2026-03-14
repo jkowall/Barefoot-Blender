@@ -6,7 +6,8 @@ import {
   calculateStandardBlend,
   calculateGasCost,
   calculateFillCostEstimate,
-  solveNGasBlend
+  solveNGasBlend,
+  calculateEND
 } from "./calculations";
 import type { GasSelection } from "./calculations";
 import type { MultiGasInput, StandardBlendInput } from "../state/session";
@@ -765,5 +766,53 @@ describe("solveNGasBlend bank limits", () => {
     const oxygenStep = result.alternatives[0].steps.find((step) => step.gas.id === "oxygen");
     expect(oxygenStep).toBeDefined();
     expect(oxygenStep?.amount).toBeLessThanOrEqual(800.01);
+  });
+});
+
+describe("calculateEND", () => {
+  test("Air at 30m (Oxygen not narcotic)", () => {
+    // 30m = 4 ATA. Air is 79% N2.
+    // END = (4 * 0.79 / 0.79 - 1) * 10 = 30m
+    const result = calculateEND(21, 0, 30, "m", false);
+    expect(result).toBeCloseTo(30, 1);
+  });
+
+  test("Air at 30m (Oxygen narcotic)", () => {
+    // 30m = 4 ATA. Air is 100% narcotic.
+    // END = (4 * 1.0 / 0.79 - 1) * 10 = 40.63m
+    const result = calculateEND(21, 0, 30, "m", true);
+    expect(result).toBeCloseTo(40.63, 2);
+  });
+
+  test("Trimix 21/35 at 60m (Oxygen not narcotic)", () => {
+    // 60m = 7 ATA. N2 = 44%.
+    // END = (7 * 0.44 / 0.79 - 1) * 10 = 28.99m
+    const result = calculateEND(21, 35, 60, "m", false);
+    expect(result).toBeCloseTo(28.99, 2);
+  });
+
+  test("Trimix 21/35 at 200ft (Oxygen not narcotic)", () => {
+    // 200ft = 7.06 ATA. N2 = 44%.
+    // END = (7.06 * 0.44 / 0.79 - 1) * 33 = 96.77ft
+    const result = calculateEND(21, 35, 200, "ft", false);
+    expect(result).toBeCloseTo(96.77, 2);
+  });
+
+  test("Surface air (0m)", () => {
+    const result = calculateEND(21, 0, 0, "m", false);
+    expect(result).toBe(0);
+  });
+
+  test("Negative depth returns 0", () => {
+    const result = calculateEND(21, 0, -10, "m", false);
+    expect(result).toBe(0);
+  });
+
+  test("Pure Helium at depth returns 0 (hypothetical)", () => {
+    // 0% N2, 0% O2, 100% He.
+    // Narcotic fraction = 0.
+    // END = (ambient * 0 / 0.79 - 1) * 10 = -10 => 0
+    const result = calculateEND(0, 100, 50, "m", false);
+    expect(result).toBe(0);
   });
 });
