@@ -1,10 +1,5 @@
 import type { GasSelection } from "../utils/calculations";
-
-type CustomGasSource = {
-  id: string;
-  customO2?: number;
-  customHe?: number;
-};
+import type { GasSourceInput } from "../state/session";
 
 // Mocks
 const trimixPresets: GasSelection[] = [
@@ -25,15 +20,16 @@ const gasOptions: GasSelection[] = [
   ...trimixPresets
 ];
 
-const source = {
+const source: GasSourceInput = {
   id: "custom",
   customO2: 50,
-  customHe: 20
-} satisfies CustomGasSource;
+  customHe: 20,
+  enabled: true
+};
 
 // Current implementation simulation
 // Note: In real component, this function is re-created every render, but here we just measure execution time of the logic
-const getOptionsBaseline = (source: CustomGasSource): GasSelection[] => {
+const getOptionsBaseline = (source: GasSourceInput): GasSelection[] => {
   const custom: GasSelection = {
     id: "custom",
     name: `Custom (${(source.customO2 ?? 32).toFixed(1)} O2 / ${(source.customHe ?? 0).toFixed(1)} He)`,
@@ -46,7 +42,7 @@ const getOptionsBaseline = (source: CustomGasSource): GasSelection[] => {
 };
 
 // Optimized implementation simulation
-const getOptionsOptimized = (source: CustomGasSource): GasSelection[] => {
+const getOptionsOptimized = (source: GasSourceInput): GasSelection[] => {
   const custom: GasSelection = {
     id: "custom",
     name: `Custom (${(source.customO2 ?? 32).toFixed(1)} O2 / ${(source.customHe ?? 0).toFixed(1)} He)`,
