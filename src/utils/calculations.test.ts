@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { calculateTopOffBlend, calculateBestMix, calculateStandardBlend, calculateGasCost } from "./calculations";
+import { calculateTopOffBlend, calculateBestMix, calculateStandardBlend, calculateGasCost, calculateDensity } from "./calculations";
 import type { GasSelection, TopOffResult } from "./calculations";
 import type { StandardBlendInput } from "../state/session";
 
@@ -657,5 +657,46 @@ describe("calculateTopOffBlend", () => {
     expect(result.success).toBe(true);
     expect(result.finalO2).toBe(32);
     expect(result.addedPressure).toBe(0);
+  });
+});
+
+describe("calculateDensity", () => {
+  test("Air at surface (0m)", () => {
+    // 1 ATA
+    // Density: 0.21 * 1.429 + 0.79 * 1.2506 = 1.288064
+    const result = calculateDensity(21, 0, 0, "m");
+    expect(result).toBeCloseTo(1.288, 3);
+  });
+
+  test("Air at 10m depth", () => {
+    // 2 ATA
+    // Density: 1.288064 * 2 = 2.576128
+    const result = calculateDensity(21, 0, 10, "m");
+    expect(result).toBeCloseTo(2.576, 3);
+  });
+
+  test("Air at 33ft depth", () => {
+    // 2 ATA
+    // Density: 1.288064 * 2 = 2.576128
+    const result = calculateDensity(21, 0, 33, "ft");
+    expect(result).toBeCloseTo(2.576, 3);
+  });
+
+  test("Pure Oxygen at surface", () => {
+    const result = calculateDensity(100, 0, 0, "m");
+    expect(result).toBeCloseTo(1.429, 3);
+  });
+
+  test("Pure Helium at surface", () => {
+    const result = calculateDensity(0, 100, 0, "m");
+    expect(result).toBeCloseTo(0.1785, 4);
+  });
+
+  test("Trimix 18/45 at 60m", () => {
+    // Surface density: 0.18 * 1.429 + 0.45 * 0.1785 + 0.37 * 1.2506 = 0.800267
+    // 60m = 7 ATA
+    // 0.800267 * 7 = 5.601869
+    const result = calculateDensity(18, 45, 60, "m");
+    expect(result).toBeCloseTo(5.602, 3);
   });
 });
