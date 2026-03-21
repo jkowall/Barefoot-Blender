@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.15] - 2026-03-21
+
+### Fixed
+
+- **Security**: Replaced insecure `Math.random()` with `crypto.randomUUID()` for blend history ID generation to ensure cryptographic strength and avoid predictability.
+
 ## [0.6.14] - 2026-03-14
 
 ### Added

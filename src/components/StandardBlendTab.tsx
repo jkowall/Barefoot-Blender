@@ -179,7 +179,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       );
 
       const historyEntry: StandardBlendHistoryEntry = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
         startPressurePsi: fromDisplayPressure(resolvedInput.startPressure, settings.pressureUnit),
         targetPressurePsi: fromDisplayPressure(resolvedInput.targetPressure, settings.pressureUnit),
