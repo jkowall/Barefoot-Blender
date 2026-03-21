@@ -67,6 +67,18 @@ type SolveOutcome = {
   topoff?: number;
 };
 
+type BlendFractions = {
+  startO2Fraction: number;
+  startHeFraction: number;
+  startN2Fraction: number;
+  targetO2Fraction: number;
+  targetHeFraction: number;
+  targetN2: number;
+  topO2Fraction: number;
+  topHeFraction: number;
+  topN2Fraction: number;
+};
+
 const tolerance = 1e-6;
 
 const isCloseToZero = (value: number, eps = tolerance): boolean => Math.abs(value) <= eps;
@@ -92,61 +104,22 @@ const sanitizeMix = (o2: number, he: number): { valid: boolean; message?: string
   return { valid: true };
 };
 
-const solveBlend = (inputs: BlendInputs): SolveOutcome => {
+const solveBlendInternal = (
+  startPressure: number,
+  targetPressure: number,
+  fractions: BlendFractions
+): SolveOutcome => {
   const {
-    startPressure,
-    targetPressure,
-    startO2,
-    startHe,
-    targetO2,
-    targetHe,
-    topGas
-  } = inputs;
-
-  if (targetPressure <= 0) {
-    return { success: false, requiresBleed: false, message: "Target pressure must be greater than zero." };
-  }
-
-  if (startPressure > targetPressure + tolerance) {
-    return {
-      success: false,
-      requiresBleed: true,
-      message: "Target pressure is below current pressure. Bleed-down required."
-    };
-  }
-
-  const startCheck = sanitizeMix(startO2, startHe);
-  if (!startCheck.valid) {
-    return { success: false, requiresBleed: false, message: startCheck.message };
-  }
-  const targetCheck = sanitizeMix(targetO2, targetHe);
-  if (!targetCheck.valid) {
-    return { success: false, requiresBleed: false, message: targetCheck.message };
-  }
-  const topCheck = sanitizeMix(topGas.o2, topGas.he);
-  if (!topCheck.valid) {
-    return { success: false, requiresBleed: false, message: topCheck.message };
-  }
-
-  const targetN2 = 1 - fraction(targetO2) - fraction(targetHe);
-  if (targetN2 < -tolerance) {
-    return {
-      success: false,
-      requiresBleed: false,
-      message: "Target mix is not physically possible."
-    };
-  }
-
-  const startO2Fraction = fraction(startO2);
-  const startHeFraction = fraction(startHe);
-  const startN2Fraction = Math.max(0, 1 - startO2Fraction - startHeFraction);
-
-  const targetO2Fraction = fraction(targetO2);
-  const targetHeFraction = fraction(targetHe);
-
-  const topO2Fraction = fraction(topGas.o2);
-  const topHeFraction = fraction(topGas.he);
-  const topN2Fraction = Math.max(0, 1 - topO2Fraction - topHeFraction);
+    startO2Fraction,
+    startHeFraction,
+    startN2Fraction,
+    targetO2Fraction,
+    targetHeFraction,
+    targetN2,
+    topO2Fraction,
+    topHeFraction,
+    topN2Fraction
+  } = fractions;
 
   const dTotal = targetPressure - startPressure;
   const dO2 = targetPressure * targetO2Fraction - startPressure * startO2Fraction;
@@ -217,8 +190,77 @@ const solveBlend = (inputs: BlendInputs): SolveOutcome => {
   };
 };
 
+const solveBlend = (inputs: BlendInputs): SolveOutcome => {
+  const {
+    startPressure,
+    targetPressure,
+    startO2,
+    startHe,
+    targetO2,
+    targetHe,
+    topGas
+  } = inputs;
+
+  if (targetPressure <= 0) {
+    return { success: false, requiresBleed: false, message: "Target pressure must be greater than zero." };
+  }
+
+  if (startPressure > targetPressure + tolerance) {
+    return {
+      success: false,
+      requiresBleed: true,
+      message: "Target pressure is below current pressure. Bleed-down required."
+    };
+  }
+
+  const startCheck = sanitizeMix(startO2, startHe);
+  if (!startCheck.valid) {
+    return { success: false, requiresBleed: false, message: startCheck.message };
+  }
+  const targetCheck = sanitizeMix(targetO2, targetHe);
+  if (!targetCheck.valid) {
+    return { success: false, requiresBleed: false, message: targetCheck.message };
+  }
+  const topCheck = sanitizeMix(topGas.o2, topGas.he);
+  if (!topCheck.valid) {
+    return { success: false, requiresBleed: false, message: topCheck.message };
+  }
+
+  const targetN2 = 1 - fraction(targetO2) - fraction(targetHe);
+  if (targetN2 < -tolerance) {
+    return {
+      success: false,
+      requiresBleed: false,
+      message: "Target mix is not physically possible."
+    };
+  }
+
+  const startO2Fraction = fraction(startO2);
+  const startHeFraction = fraction(startHe);
+  const startN2Fraction = Math.max(0, 1 - startO2Fraction - startHeFraction);
+
+  const targetO2Fraction = fraction(targetO2);
+  const targetHeFraction = fraction(targetHe);
+
+  const topO2Fraction = fraction(topGas.o2);
+  const topHeFraction = fraction(topGas.he);
+  const topN2Fraction = Math.max(0, 1 - topO2Fraction - topHeFraction);
+
+  return solveBlendInternal(startPressure, targetPressure, {
+    startO2Fraction,
+    startHeFraction,
+    startN2Fraction,
+    targetO2Fraction,
+    targetHeFraction,
+    targetN2,
+    topO2Fraction,
+    topHeFraction,
+    topN2Fraction
+  });
+};
+
 const findBleedSolution = (inputs: BlendInputs): SolveOutcome & { bleedPressure?: number } => {
-  const { startPressure } = inputs;
+  const { startPressure, targetPressure, startO2, startHe, targetO2, targetHe, topGas } = inputs;
   let low = 0;
   let high = startPressure;
   let best: SolveOutcome & { bleedPressure?: number } = {
@@ -240,17 +282,23 @@ const findBleedSolution = (inputs: BlendInputs): SolveOutcome & { bleedPressure?
     best = { ...emptyAttempt, bleedPressure: 0 };
   }
 
-  for (let i = 0; i < 25; i += 1) {
-    const mid = (low + high) / 2;
-    const scaledInputs: BlendInputs = {
-      ...inputs,
-      startPressure: mid
-    };
-    // Maintain fractions by keeping composition identical during bleed-down search
-    scaledInputs.startO2 = inputs.startO2;
-    scaledInputs.startHe = inputs.startHe;
+  const fractions: BlendFractions = {
+    startO2Fraction: fraction(startO2),
+    startHeFraction: fraction(startHe),
+    startN2Fraction: Math.max(0, 1 - fraction(startO2) - fraction(startHe)),
+    targetO2Fraction: fraction(targetO2),
+    targetHeFraction: fraction(targetHe),
+    targetN2: 1 - fraction(targetO2) - fraction(targetHe),
+    topO2Fraction: fraction(topGas.o2),
+    topHeFraction: fraction(topGas.he),
+    topN2Fraction: Math.max(0, 1 - fraction(topGas.o2) - fraction(topGas.he))
+  };
 
-    const attempt = solveBlend(scaledInputs);
+  for (let i = 0; i < 25; i += 1) {
+    if (high - low < tolerance) break;
+    const mid = (low + high) / 2;
+
+    const attempt = solveBlendInternal(mid, targetPressure, fractions);
     if (attempt.success) {
       best = { ...attempt, bleedPressure: mid };
       low = mid;
@@ -467,17 +515,20 @@ export const solveRequiredStartPressure = (
     };
   }
 
-  const evaluate = (startPsi: number): BlendResult => {
-    const candidate: StandardBlendInput = {
-      ...inputs,
-      startPressure: toDisplayPressure(startPsi, settings.pressureUnit)
-    };
-    return calculateStandardBlend(settings, candidate, topGas);
+  const fractions: BlendFractions = {
+    startO2Fraction: fraction(inputs.startO2 ?? 21),
+    startHeFraction: fraction(inputs.startHe ?? 0),
+    startN2Fraction: Math.max(0, 1 - fraction(inputs.startO2 ?? 21) - fraction(inputs.startHe ?? 0)),
+    targetO2Fraction: fraction(inputs.targetO2 ?? 32),
+    targetHeFraction: fraction(inputs.targetHe ?? 0),
+    targetN2: 1 - fraction(inputs.targetO2 ?? 32) - fraction(inputs.targetHe ?? 0),
+    topO2Fraction: fraction(topGas.o2),
+    topHeFraction: fraction(topGas.he),
+    topN2Fraction: Math.max(0, 1 - fraction(topGas.o2) - fraction(topGas.he))
   };
 
-  const upper = evaluate(targetPressurePsi);
-  const upperVolumes = summarizeBlendVolumes(upper);
-  if (!upper.success || upper.steps.some((step) => step.kind === "bleed") || upperVolumes.helium > tolerance) {
+  const upper = solveBlendInternal(targetPressurePsi, targetPressurePsi, fractions);
+  if (!upper.success || (upper.helium ?? 0) > tolerance) {
     return {
       success: false,
       startPressurePsi: 0,
@@ -489,26 +540,35 @@ export const solveRequiredStartPressure = (
 
   let low = 0;
   let high = targetPressurePsi;
-  let best: { startPsi: number; result: BlendResult } | null = { startPsi: targetPressurePsi, result: upper };
+  let bestStartPsi: number = targetPressurePsi;
 
   for (let i = 0; i < 25; i += 1) {
+    if (high - low < tolerance) break;
     const mid = (low + high) / 2;
-    const attempt = evaluate(mid);
-    if (!attempt.success || attempt.steps.some((step) => step.kind === "bleed")) {
-      low = mid;
+    const attempt = solveBlendInternal(mid, targetPressurePsi, fractions);
+    if (!attempt.success || attempt.requiresBleed) {
+      high = mid;
       continue;
     }
 
-    const volumes = summarizeBlendVolumes(attempt);
-    if (volumes.helium <= tolerance) {
-      best = { startPsi: mid, result: attempt };
-      high = mid;
-    } else {
+    if ((attempt.helium ?? 0) <= tolerance) {
+      bestStartPsi = mid;
       low = mid;
+    } else {
+      high = mid;
     }
   }
 
-  if (!best) {
+  const evaluate = (startPsi: number): BlendResult => {
+    const candidate: StandardBlendInput = {
+      ...inputs,
+      startPressure: toDisplayPressure(startPsi, settings.pressureUnit)
+    };
+    return calculateStandardBlend(settings, candidate, topGas);
+  };
+
+  const bestResult = evaluate(bestStartPsi);
+  if (!bestResult.success) {
     return {
       success: false,
       startPressurePsi: 0,
@@ -520,9 +580,9 @@ export const solveRequiredStartPressure = (
 
   return {
     success: true,
-    startPressurePsi: best.startPsi,
-    blend: best.result,
-    warnings: best.result.warnings,
+    startPressurePsi: bestStartPsi,
+    blend: bestResult,
+    warnings: bestResult.warnings,
     errors: []
   };
 };
@@ -556,6 +616,7 @@ export const solveMaxTargetWithoutHelium = (
   let best: { he: number; result: BlendResult } | null = null;
 
   for (let i = 0; i < 25; i += 1) {
+    if (high - low < tolerance) break;
     const mid = (low + high) / 2;
     const candidate: StandardBlendInput = {
       ...inputs,
@@ -1835,6 +1896,7 @@ export const solveNGasBlend = (
 
     // 20 iterations is enough for < 1 PSI precision at 10000 PSI
     for (let i = 0; i < 20; i++) {
+      if (high - low < tolerance) break;
       const mid = (low + high) / 2;
       const attemptAlts = generateBlendAlternatives(
         targetPressurePsi,

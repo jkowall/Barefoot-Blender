@@ -187,6 +187,26 @@ describe("calculateStandardBlend", () => {
     expect(topStep?.amount).toBeCloseTo(3000, 1); // Fill fully with Air
   });
 
+  test("Bleed Required: Composition requires partial bleed", () => {
+    const inputs: StandardBlendInput = {
+      startPressure: 3000,
+      targetPressure: 3000,
+      startO2: 32,
+      startHe: 0,
+      targetO2: 25,
+      targetHe: 0,
+      topGasId: "air"
+    };
+
+    const result = calculateStandardBlend(settingsPsi, inputs, air);
+
+    expect(result.success).toBe(true);
+    const bleedStep = result.steps.find(s => s.kind === "bleed");
+    expect(bleedStep).toBeDefined();
+    expect(result.bleedPressure).toBeCloseTo(1090.9, 1);
+    expect(bleedStep?.amount).toBeCloseTo(1909.1, 1);
+  });
+
   test("Impossible Target: O2 + He > 100%", () => {
     const inputs: StandardBlendInput = {
       startPressure: 0,
