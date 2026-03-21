@@ -289,7 +289,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                       // P_added = P_total - P_start_adj.
 
                       const targetO2 = Number(e.target.value) / 100;
-                      const topO2 = topOffOptions.find(o => o.id === topOff.topGasId)?.o2 ?? 0;
+                      const topO2 = selectedTopGas?.o2 ?? 0;
                       const startO2 = topOff.startO2 / 100;
 
                       const pTotal = fromDisplayPressure(topOff.finalPressure, settings.pressureUnit);
@@ -322,7 +322,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                     onFocus={selectOnFocus}
                     onChange={(e) => {
                       const targetHe = Number(e.target.value) / 100;
-                      const topHe = topOffOptions.find(o => o.id === topOff.topGasId)?.he ?? 0;
+                      const topHe = selectedTopGas?.he ?? 0;
                       const startHe = topOff.startHe / 100;
 
                       const pTotal = fromDisplayPressure(topOff.finalPressure, settings.pressureUnit);
