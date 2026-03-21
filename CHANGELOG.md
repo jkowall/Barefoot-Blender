@@ -2,6 +2,10 @@
 
 ## [0.6.16] - 2026-03-21
 
+### Fixed
+
+- **Security**: Replaced insecure `Math.random()` with `crypto.randomUUID()` for blend history ID generation to ensure cryptographic strength and avoid predictability.
+
 ### Added
 
 - **Testing**: Added comprehensive unit tests for `formatNumber`, `formatPercentage`, and `formatDepth` in `src/utils/format.ts` to increase reliability and coverage.
