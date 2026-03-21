@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.16] - 2026-03-21
+
+### Changed
+
+- **Code Health**: Removed unused `ChangeEvent` import from `NumberInput.tsx` by inlining the `onChange` handler to allow TypeScript type inference.
+
 ## [0.6.15] - 2026-03-14
 
 ### Changed
