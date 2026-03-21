@@ -1344,7 +1344,6 @@ export type BlendAlternative = {
 export type NGasBlendResult = {
   success: boolean;
   alternatives: BlendAlternative[];
-  selectedIndex: number;
   error?: string;
   warnings: string[];
 };
@@ -1849,8 +1848,7 @@ export const solveNGasBlend = (
   startO2: number,
   startHe: number,
   availableGases: OptimizerGasSource[],
-  costSettings: CostSettings,
-  selectedIndex: number = 0
+  costSettings: CostSettings
 ): NGasBlendResult => {
   const targetPressurePsi = fromDisplayPressure(targetPressure ?? 0, settings.pressureUnit);
   const startPressurePsi = fromDisplayPressure(startPressure ?? 0, settings.pressureUnit);
@@ -1859,15 +1857,15 @@ export const solveNGasBlend = (
 
   // Basic validation
   if (targetPressurePsi <= tolerance) {
-    return { success: false, alternatives: [], selectedIndex: 0, error: "Target pressure must be greater than zero.", warnings };
+    return { success: false, alternatives: [], error: "Target pressure must be greater than zero.", warnings };
   }
 
   if (targetO2 + targetHe > 100 + tolerance) {
-    return { success: false, alternatives: [], selectedIndex: 0, error: "O2 + He must be 100% or less.", warnings };
+    return { success: false, alternatives: [], error: "O2 + He must be 100% or less.", warnings };
   }
 
   if (availableGases.length === 0) {
-    return { success: false, alternatives: [], selectedIndex: 0, error: "No gas sources available.", warnings };
+    return { success: false, alternatives: [], error: "No gas sources available.", warnings };
   }
 
   // Add warnings
@@ -1941,7 +1939,6 @@ export const solveNGasBlend = (
     return {
       success: false,
       alternatives: [],
-      selectedIndex: 0,
       error: availableGases.some((gas) => gas.maxPressurePsi !== undefined)
         ? "No valid blend found with the selected gases and bank pressure limits. Increase availability or adjust the target."
         : "No valid blend found with available gases. Try adding more gas sources or adjusting target.",
@@ -1949,12 +1946,9 @@ export const solveNGasBlend = (
     };
   }
 
-  const validIndex = Math.min(selectedIndex, alternatives.length - 1);
-
   return {
     success: true,
     alternatives,
-    selectedIndex: validIndex,
     warnings
   };
 };

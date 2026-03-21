@@ -589,7 +589,6 @@ describe("calculateMOD", () => {
     expect(result.contingency).toBe(0);
   });
 });
-
 describe("calculateTopOffBlend", () => {
   const settingsPsi = { pressureUnit: "psi" as const };
   const settingsBar = { pressureUnit: "bar" as const };
@@ -862,6 +861,42 @@ describe("solveNGasBlend bank limits", () => {
     const oxygenStep = result.alternatives[0].steps.find((step) => step.gas.id === "oxygen");
     expect(oxygenStep).toBeDefined();
     expect(oxygenStep?.amount).toBeLessThanOrEqual(800.01);
+  });
+
+  test("returns a viable simple air-fill alternative", () => {
+    const result = solveNGasBlend(
+      settings,
+      3000,
+      21,
+      0,
+      0,
+      21,
+      0,
+      [{ id: "air", name: "Air", o2: 21, he: 0 }],
+      costSettings
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.alternatives.length).toBeGreaterThan(0);
+    expect(result.alternatives[0].finalO2).toBeCloseTo(21, 1);
+    expect(result.alternatives[0].finalHe).toBeCloseTo(0, 1);
+  });
+
+  test("rejects invalid target compositions", () => {
+    const result = solveNGasBlend(
+      settings,
+      3000,
+      60,
+      60,
+      0,
+      21,
+      0,
+      [{ id: "air", name: "Air", o2: 21, he: 0 }],
+      costSettings
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("100% or less");
   });
 });
 

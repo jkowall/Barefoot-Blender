@@ -171,25 +171,28 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         multiGas.startO2 ?? 21,
         multiGas.startHe ?? 0,
         enabledGases,
-        costSettings,
-        multiGas.selectedAlternativeIndex
+        costSettings
       );
     } catch (err) {
       console.error("MultiGas calculation error:", err);
       return {
         success: false,
         alternatives: [],
-        selectedIndex: 0,
         error: `Calculation error: ${err instanceof Error ? err.message : String(err)}`,
         warnings: []
       };
     }
   }, [multiGas, settings.pressureUnit, costSettings, hasHeliumAvailable, gasOptions]);
 
+  const selectedIndex = useMemo(() => {
+    if (!blendResult?.success || blendResult.alternatives.length === 0) return 0;
+    return Math.min(multiGas.selectedAlternativeIndex ?? 0, blendResult.alternatives.length - 1);
+  }, [blendResult, multiGas.selectedAlternativeIndex]);
+
   const selectedAlternative: BlendAlternative | null = useMemo(() => {
     if (!blendResult?.success || blendResult.alternatives.length === 0) return null;
-    return blendResult.alternatives[blendResult.selectedIndex] ?? null;
-  }, [blendResult]);
+    return blendResult.alternatives[selectedIndex] ?? null;
+  }, [blendResult, selectedIndex]);
 
   const selectAlternative = (index: number): void => {
     updateField({ selectedAlternativeIndex: index });
@@ -297,14 +300,14 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                 {blendResult.alternatives.map((alt, index) => (
                   <div
                     key={index}
-                    className={`alternative-option ${index === blendResult.selectedIndex ? 'selected' : ''}`}
+                    className={`alternative-option ${index === selectedIndex ? 'selected' : ''}`}
                     onClick={() => selectAlternative(index)}
                   >
                     <div className="alternative-header">
                       <input
                         type="radio"
                         name="blend-alternative"
-                        checked={index === blendResult.selectedIndex}
+                        checked={index === selectedIndex}
                         onChange={() => selectAlternative(index)}
                       />
                       <span className="alternative-title">Option {index + 1}</span>
