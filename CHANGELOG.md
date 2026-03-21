@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.15] - 2026-03-15
+
+### Added
+
+- **Testing**: Added comprehensive unit tests for `formatNumber`, `formatPercentage`, and `formatDepth` in `src/utils/format.ts` to increase reliability and coverage.
+
 ## [0.6.14] - 2026-03-14
 
 ### Added

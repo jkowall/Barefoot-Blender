@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatPressure, formatSignedPressure } from "./format";
+import { formatDepth, formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "./format";
 
 describe("formatPressure", () => {
   test("formats psi correctly", () => {
@@ -41,5 +41,49 @@ describe("formatSignedPressure", () => {
   test("formats small negative psi", () => {
     // -0.0001 psi -> -0 PSI with 0 decimals
     expect(formatSignedPressure(-0.0001, "psi")).toBe("-0 PSI");
+  });
+});
+
+describe("formatPercentage", () => {
+  test("formats percentage correctly", () => {
+    expect(formatPercentage(32)).toBe("32%");
+    expect(formatPercentage(32.1)).toBe("32.1%");
+  });
+
+  test("respects decimals", () => {
+    expect(formatPercentage(32.123, 2)).toBe("32.12%");
+    expect(formatPercentage(32, 0)).toBe("32%");
+  });
+});
+
+describe("formatDepth", () => {
+  test("formats feet correctly", () => {
+    expect(formatDepth(100, "ft")).toBe("100 ft");
+  });
+
+  test("formats meters correctly", () => {
+    // 1 meter = 3.2808399 feet
+    const tenMetersFeet = 32.808399;
+    expect(formatDepth(tenMetersFeet, "m")).toBe("10 m");
+  });
+
+  test("respects decimals", () => {
+    expect(formatDepth(100.123, "ft", 1)).toBe("100.1 ft");
+  });
+});
+
+describe("formatNumber", () => {
+  test("formats number correctly", () => {
+    expect(formatNumber(123.456)).toBe("123.5"); // default 1 decimal
+  });
+
+  test("respects decimals", () => {
+    expect(formatNumber(123.456, 2)).toBe("123.46");
+    expect(formatNumber(123.456, 0)).toBe("123");
+  });
+
+  test("handles non-finite values", () => {
+    expect(formatNumber(NaN)).toBe("0");
+    expect(formatNumber(Infinity)).toBe("0");
   });
 });
