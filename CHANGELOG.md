@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.15] - 2026-03-14
+
+### Changed
+
+- **Performance Optimization**: Replaced O(N) `Array.find()` lookups with a direct reference to the memoized `selectedTopGas` object in the `TopOffTab` component's `onChange` handlers, reducing execution time by ~98% for those lookups.
+
 ## [0.6.14] - 2026-03-14
 
 ### Added
