@@ -2,6 +2,10 @@
 
 ## [0.6.16] - 2026-03-21
 
+### Added
+
+- **Testing**: Added comprehensive unit tests for `formatNumber`, `formatPercentage`, and `formatDepth` in `src/utils/format.ts` to increase reliability and coverage.
+
 ### Changed
 
 - **Code Health**: Removed unused `ChangeEvent` import from `NumberInput.tsx` by inlining the `onChange` handler to allow TypeScript type inference.
