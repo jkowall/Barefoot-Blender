@@ -1,4 +1,4 @@
-import { useId, type ChangeEvent, type FocusEvent } from "react";
+import { useId } from "react";
 
 type Props = {
   label: string;
@@ -27,19 +27,6 @@ export const NumberInput = ({
 }: Props): JSX.Element => {
   const id = useId();
 
-  const handleChange = (event: ChangeEvent<HTMLInputElement>): void => {
-    const val = event.target.value;
-    onChange(val === "" ? undefined : Number(val));
-  };
-
-  const handleFocus = (event: FocusEvent<HTMLInputElement>): void => {
-    // Select all text on focus for easier editing
-    const target = event.target;
-    requestAnimationFrame(() => {
-      target.select();
-    });
-  };
-
   return (
     <div className={`field ${className ?? ""}`}>
       <label htmlFor={id}>{label}</label>
@@ -51,8 +38,16 @@ export const NumberInput = ({
         step={step}
         disabled={disabled}
         value={value ?? ""}
-        onChange={handleChange}
-        onFocus={handleFocus}
+        onChange={(e) => {
+          const val = e.target.value;
+          onChange(val === "" ? undefined : Number(val));
+        }}
+        onFocus={(e) => {
+          const target = e.target;
+          requestAnimationFrame(() => {
+            target.select();
+          });
+        }}
         onBlur={onBlur}
         placeholder={placeholder}
       />
