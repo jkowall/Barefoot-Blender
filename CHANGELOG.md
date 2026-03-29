@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.17] - 2026-03-21
+
+### Added
+
+- **Testing**: Added comprehensive unit tests for the `calculateEAD` (Equivalent Air Depth) function to ensure accuracy across metric/imperial units and proper handling of edge cases (100% O2, 0% O2, surface, and negative depth).
+
 ## [0.6.16] - 2026-03-21
 
 ### Fixed
