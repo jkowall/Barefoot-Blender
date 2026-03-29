@@ -10,6 +10,7 @@ import {
   calculateEND,
   calculateDensity,
   calculateMOD,
+  calculateEAD,
   clampPressure,
   clampDepth,
   clampPercent
@@ -986,5 +987,59 @@ describe("calculateDensity", () => {
     // 0.800267 * 7 = 5.601869
     const result = calculateDensity(18, 45, 60, "m");
     expect(result).toBeCloseTo(5.602, 3);
+  });
+});
+
+describe("calculateEAD", () => {
+  test("Air at 30m (Expected: 30m)", () => {
+    // 30m = 4 ATA. Air is 79% N2.
+    // EAD = (4 * 0.79 / 0.79 - 1) * 10 = 30m
+    const result = calculateEAD(21, 30, "m");
+    expect(result).toBeCloseTo(30, 1);
+  });
+
+  test("Nitrox 32% at 30m (Expected: ~24.43m)", () => {
+    // 30m = 4 ATA. N2 = 68%.
+    // EAD = (4 * 0.68 / 0.79 - 1) * 10 = 24.43m
+    const result = calculateEAD(32, 30, "m");
+    expect(result).toBeCloseTo(24.43, 2);
+  });
+
+  test("Nitrox 36% at 30m (Expected: ~22.41m)", () => {
+    // 30m = 4 ATA. N2 = 64%.
+    // EAD = (4 * 0.64 / 0.79 - 1) * 10 = 22.41m
+    const result = calculateEAD(36, 30, "m");
+    expect(result).toBeCloseTo(22.41, 2);
+  });
+
+  test("Imperial: Nitrox 32% at 100ft (Expected: ~81.48ft)", () => {
+    // 100ft = 4.03 ATA. N2 = 68%.
+    // EAD = (4.03 * 0.68 / 0.79 - 1) * 33 = 81.48ft
+    const result = calculateEAD(32, 100, "ft");
+    expect(result).toBeCloseTo(81.48, 2);
+  });
+
+  test("100% Oxygen at 10m (Expected: 0m)", () => {
+    // 10m = 2 ATA. N2 = 0%.
+    // EAD = (2 * 0 / 0.79 - 1) * 10 = -10 => 0 (clamped)
+    const result = calculateEAD(100, 10, "m");
+    expect(result).toBe(0);
+  });
+
+  test("0% Oxygen (Pure N2/He) at 30m (Expected: ~40.63m)", () => {
+    // 30m = 4 ATA. N2 = 100%.
+    // EAD = (4 * 1.0 / 0.79 - 1) * 10 = 40.63m
+    const result = calculateEAD(0, 30, "m");
+    expect(result).toBeCloseTo(40.63, 2);
+  });
+
+  test("Surface air (0m) (Expected: 0m)", () => {
+    const result = calculateEAD(21, 0, "m");
+    expect(result).toBe(0);
+  });
+
+  test("Negative depth returns 0", () => {
+    const result = calculateEAD(21, -10, "m");
+    expect(result).toBe(0);
   });
 });
