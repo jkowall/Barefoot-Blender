@@ -32,7 +32,7 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
   };
 
   const addGas = (): void => {
-    const id = `custom-${Date.now()}`;
+    const id = `custom-${crypto.randomUUID()}`;
     upsertCustomGas({ id, name: "New Bank", o2: 32, he: 0 });
   };
 

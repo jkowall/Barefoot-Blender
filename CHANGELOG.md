@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.18] - 2026-03-28
+
+### Fixed
+
+- **Security**: Replaced insecure `Date.now()` with `crypto.randomUUID()` for custom gas ID generation in Settings to ensure unique, cryptographically strong identifiers.
+
 ## [0.6.17] - 2026-03-21
 
 ### Added
