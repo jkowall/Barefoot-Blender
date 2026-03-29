@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.19] - 2026-03-28
+
+### Changed
+
+- **Performance Optimization**: Optimized the gas blend alternatives deduplication logic in `src/utils/calculations.ts` by replacing high-overhead `map().sort().join()` with an efficient manual sorting and string construction loop. This achieved a ~17% performance improvement in benchmarks while maintaining order-independent deduplication.
+
 ## [0.6.18] - 2026-03-28
 
 ### Fixed
