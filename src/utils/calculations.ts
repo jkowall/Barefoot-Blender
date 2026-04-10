@@ -1716,7 +1716,11 @@ export const generateBlendAlternatives = (
   if (neededO2Percent + neededHePercent > 100.5) return [];
 
   const alternatives: BlendAlternative[] = [];
-  const enabledGases = availableGases.filter(g => g);
+  // Sort enabled gases by ID once to ensure consistent ordering in step combinations
+  const enabledGases = availableGases
+    .filter(g => g)
+    .sort((a, b) => a.id.localeCompare(b.id));
+
   const canUseAmount = (gas: OptimizerGasSource, amount: number): boolean => {
     if (gas.maxPressurePsi === undefined) {
       return true;
