@@ -1413,6 +1413,49 @@ export const rankGasesByCost = (
   });
 };
 
+const getBlendStepDedupKey = (step: { gas: OptimizerGasSource; amount: number }): string =>
+  step.gas.id + ":" + Math.round(step.amount);
+
+const buildBlendAlternativeDedupKey = (
+  steps: { gas: OptimizerGasSource; amount: number }[]
+): string => {
+  const stepCount = steps.length;
+  if (stepCount === 0) return "";
+  if (stepCount === 1) return getBlendStepDedupKey(steps[0]);
+
+  if (stepCount === 2) {
+    let first = getBlendStepDedupKey(steps[0]);
+    let second = getBlendStepDedupKey(steps[1]);
+    if (first > second) {
+      [first, second] = [second, first];
+    }
+    return first + "|" + second;
+  }
+
+  if (stepCount === 3) {
+    let first = getBlendStepDedupKey(steps[0]);
+    let second = getBlendStepDedupKey(steps[1]);
+    let third = getBlendStepDedupKey(steps[2]);
+
+    if (first > second) {
+      [first, second] = [second, first];
+    }
+    if (second > third) {
+      [second, third] = [third, second];
+    }
+    if (first > second) {
+      [first, second] = [second, first];
+    }
+
+    return first + "|" + second + "|" + third;
+  }
+
+  return steps
+    .map(getBlendStepDedupKey)
+    .sort()
+    .join("|");
+};
+
 /**
  * Solve a blend using exactly 2 gases.
  * Uses linear algebra to find amounts that satisfy both O2 and He targets.
@@ -1819,20 +1862,7 @@ export const generateBlendAlternatives = (
   const seen = new Set<string>();
   const uniqueAlternatives: BlendAlternative[] = [];
   for (const alt of alternatives) {
-    const n = alt.steps.length;
-    let key = "";
-    if (n === 1) {
-      const s = alt.steps[0];
-      key = s.gas.id + ":" + Math.round(s.amount);
-    } else if (n > 1) {
-      const keys = new Array(n);
-      for (let i = 0; i < n; i++) {
-        const s = alt.steps[i];
-        keys[i] = s.gas.id + ":" + Math.round(s.amount);
-      }
-      key = keys.sort().join("|");
-    }
-
+    const key = buildBlendAlternativeDedupKey(alt.steps);
     if (!seen.has(key)) {
       seen.add(key);
       uniqueAlternatives.push(alt);
