@@ -1,7 +1,6 @@
 import { useState, type ChangeEvent } from "react";
 import { useSettingsStore, type GasDefinition, type DepthUnit, type PressureUnit } from "../state/settings";
-import { formatPercentage } from "../utils/format";
-import { GAS_NAME_MAX_LENGTH, sanitizeGasName } from "../utils/gasNames";
+import { formatPercentage, sanitizeGasName, GAS_NAME_MAX_LENGTH } from "../utils/format";
 import { NumberInput } from "./NumberInput";
 import { SelectInput } from "./SelectInput";
 
@@ -28,7 +27,7 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
   } = settings;
 
   const handleGasChange = (gas: GasDefinition, patch: Partial<GasDefinition>): void => {
-    const next = { ...gas, ...patch, name: sanitizeGasName(patch.name ?? gas.name) };
+    const next = { ...gas, ...patch };
     upsertCustomGas(next);
   };
 
@@ -135,8 +134,8 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                     <input
                       type="text"
                       maxLength={GAS_NAME_MAX_LENGTH}
-                      value={sanitizeGasName(gas.name)}
-                      onChange={(event: ChangeEvent<HTMLInputElement>) => handleGasChange(gas, { name: event.target.value })}
+                      value={gas.name}
+                      onChange={(event: ChangeEvent<HTMLInputElement>) => handleGasChange(gas, { name: sanitizeGasName(event.target.value) })}
                     />
                   </div>
                   <div className="grid two">
