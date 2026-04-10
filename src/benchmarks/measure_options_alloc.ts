@@ -53,8 +53,6 @@ const getOptionsOptimized = (source: GasSourceInput): GasSelection[] => {
 
 const ITERATIONS = 100_000;
 
-console.log(`Running benchmark with ${ITERATIONS} iterations...`);
-
 const startBase = performance.now();
 for (let i = 0; i < ITERATIONS; i++) {
   getOptionsBaseline(source);
