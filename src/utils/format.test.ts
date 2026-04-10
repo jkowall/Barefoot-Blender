@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatDepth, formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "./format";
+import { formatDepth, formatNumber, formatPercentage, formatPressure, formatSignedPressure, sanitizeGasName } from "./format";
 
 describe("formatPressure", () => {
   test("formats psi correctly", () => {
@@ -85,5 +85,21 @@ describe("formatNumber", () => {
   test("handles non-finite values", () => {
     expect(formatNumber(NaN)).toBe("0");
     expect(formatNumber(Infinity)).toBe("0");
+  });
+});
+
+describe("sanitizeGasName", () => {
+  test("truncates long strings to 32 characters", () => {
+    const longName = "A".repeat(50);
+    expect(sanitizeGasName(longName)).toBe("A".repeat(32));
+    expect(sanitizeGasName(longName).length).toBe(32);
+  });
+
+  test("keeps short strings as is", () => {
+    expect(sanitizeGasName("Nitrox 32")).toBe("Nitrox 32");
+  });
+
+  test("handles empty strings", () => {
+    expect(sanitizeGasName("")).toBe("");
   });
 });
