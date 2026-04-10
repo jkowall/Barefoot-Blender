@@ -1024,6 +1024,37 @@ describe("calculateDensity", () => {
   });
 });
 
+describe("generateBlendAlternatives deduplication", () => {
+  const air = { id: "air", name: "Air", o2: 21, he: 0 };
+  const oxygen = { id: "oxygen", name: "Oxygen", o2: 100, he: 0 };
+  const helium = { id: "helium", name: "Helium", o2: 0, he: 100 };
+  const costSettings = {
+    tankSizeCuFt: 80,
+    tankRatedPressure: 3000,
+    pricePerCuFtO2: 1,
+    pricePerCuFtHe: 3.5,
+    pricePerCuFtTopOff: 0.1
+  };
+
+  test("removes duplicate air/oxygen alternatives produced by the three-gas path", () => {
+    const alternatives = generateBlendAlternatives(
+      3000,
+      32,
+      0,
+      0,
+      21,
+      0,
+      [oxygen, helium, air],
+      costSettings,
+      10
+    );
+
+    expect(alternatives).toHaveLength(1);
+    expect(alternatives[0].steps).toHaveLength(2);
+    expect(alternatives[0].steps.map((step) => step.gas.id).sort()).toEqual(["air", "oxygen"]);
+  });
+});
+
 describe("calculateEAD", () => {
   test("Air at 30m (Expected: 30m)", () => {
     // 30m = 4 ATA. Air is 79% N2.
