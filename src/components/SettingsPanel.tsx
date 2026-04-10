@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent } from "react";
 import { useSettingsStore, type GasDefinition, type DepthUnit, type PressureUnit } from "../state/settings";
-import { formatPercentage } from "../utils/format";
+import { formatPercentage, sanitizeGasName } from "../utils/format";
 import { NumberInput } from "./NumberInput";
 import { SelectInput } from "./SelectInput";
 
@@ -133,8 +133,9 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                     <label>Name</label>
                     <input
                       type="text"
+                      maxLength={32}
                       value={gas.name}
-                      onChange={(event: ChangeEvent<HTMLInputElement>) => handleGasChange(gas, { name: event.target.value })}
+                      onChange={(event: ChangeEvent<HTMLInputElement>) => handleGasChange(gas, { name: sanitizeGasName(event.target.value) })}
                     />
                   </div>
                   <div className="grid two">

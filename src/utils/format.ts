@@ -25,3 +25,5 @@ export const formatDepth = (valueFeet: number, unit: DepthUnit, decimals = 0): s
   `${clampPrecision(toDisplayDepth(valueFeet, unit), decimals)} ${unit}`;
 
 export const formatNumber = (value: number, decimals = 1): string => `${clampPrecision(value, decimals)}`;
+
+export const sanitizeGasName = (name: string): string => name.slice(0, 32);
