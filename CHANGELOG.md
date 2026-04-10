@@ -1,11 +1,5 @@
 # Changelog
 
-## [0.6.20] - 2026-03-28
-
-### Fixed
-
-- **Security**: Added input validation and sanitization for custom gas names in Settings. Names are now limited to 32 characters to prevent UI breakage and ensure data integrity.
-
 ## [0.6.19] - 2026-03-28
 
 ### Changed

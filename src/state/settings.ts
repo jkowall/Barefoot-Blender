@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { sanitizeGasName } from "../utils/gasNames";
 
 export type PressureUnit = "psi" | "bar";
 export type DepthUnit = "ft" | "m";
@@ -37,7 +38,7 @@ type SettingsState = {
   setTankRatedPressure: (value: number | undefined) => void;
 };
 
-type PersistedSettingsState = Partial<SettingsState> & {
+export type PersistedSettingsState = Partial<SettingsState> & {
   // Legacy field name kept for migration from v0.6.12
   pricePerCuFtAir?: number;
 };
@@ -55,6 +56,33 @@ const defaultGas: GasDefinition = {
   name: "Bank 36",
   o2: 36,
   he: 0
+};
+
+export const sanitizeCustomGas = (gas: GasDefinition): GasDefinition => ({
+  ...gas,
+  name: sanitizeGasName(gas.name)
+});
+
+const sanitizePersistedCustomGases = (state: PersistedSettingsState): PersistedSettingsState =>
+  state.customGases === undefined
+    ? state
+    : {
+        ...state,
+        customGases: state.customGases.map(sanitizeCustomGas)
+      };
+
+export const migrateSettingsState = (persisted: PersistedSettingsState): PersistedSettingsState => {
+  const sanitized = sanitizePersistedCustomGases(persisted);
+  if (sanitized.pricePerCuFtTopOff !== undefined) {
+    return sanitized;
+  }
+  if (sanitized.pricePerCuFtAir !== undefined) {
+    return {
+      ...sanitized,
+      pricePerCuFtTopOff: sanitized.pricePerCuFtAir
+    };
+  }
+  return sanitized;
 };
 
 const settingsCreator = (set: SettingsSetter, get: () => SettingsState): SettingsState => ({
@@ -75,14 +103,15 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
   setDefaultContingencyPPO2: (value: number | undefined) => set({ defaultContingencyPPO2: value }),
   setOxygenIsNarcotic: (value: boolean) => set({ oxygenIsNarcotic: value }),
   upsertCustomGas: (gas: GasDefinition) => {
+    const sanitizedGas = sanitizeCustomGas(gas);
     const gases = get().customGases;
-    const existingIndex = gases.findIndex((item: GasDefinition) => item.id === gas.id);
+    const existingIndex = gases.findIndex((item: GasDefinition) => item.id === sanitizedGas.id);
     if (existingIndex >= 0) {
       const next = gases.slice();
-      next[existingIndex] = gas;
+      next[existingIndex] = sanitizedGas;
       set({ customGases: next });
     } else {
-      set({ customGases: [...gases, gas] });
+      set({ customGases: [...gases, sanitizedGas] });
     }
   },
   removeCustomGas: (id: string) => {
@@ -98,20 +127,8 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
 export const useSettingsStore = create<SettingsState>()(
   persist(settingsCreator, {
     name: "barefoot-blender-settings",
-    version: 2,
-    migrate: (persisted): PersistedSettingsState => {
-      const legacy = (persisted ?? {}) as PersistedSettingsState;
-      if (legacy.pricePerCuFtTopOff !== undefined) {
-        return legacy;
-      }
-      if (legacy.pricePerCuFtAir !== undefined) {
-        return {
-          ...legacy,
-          pricePerCuFtTopOff: legacy.pricePerCuFtAir
-        };
-      }
-      return legacy;
-    }
+    version: 3,
+    migrate: (persisted): PersistedSettingsState => migrateSettingsState((persisted ?? {}) as PersistedSettingsState)
   })
 );
 
