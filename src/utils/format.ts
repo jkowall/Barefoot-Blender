@@ -1,5 +1,6 @@
 import type { DepthUnit, PressureUnit } from "../state/settings";
 import { toDisplayDepth, toDisplayPressure } from "./units";
+export { GAS_NAME_MAX_LENGTH, sanitizeGasName } from "./gasNames";
 
 const clampPrecision = (value: number, decimals = 1): number => {
   return Number.isFinite(value) ? Number(Math.round(value * 10 ** decimals) / 10 ** decimals) : 0;
@@ -25,5 +26,3 @@ export const formatDepth = (valueFeet: number, unit: DepthUnit, decimals = 0): s
   `${clampPrecision(toDisplayDepth(valueFeet, unit), decimals)} ${unit}`;
 
 export const formatNumber = (value: number, decimals = 1): string => `${clampPrecision(value, decimals)}`;
-
-export const sanitizeGasName = (name: string): string => name.slice(0, 32);
