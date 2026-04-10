@@ -17,11 +17,7 @@ import {
   clampPercent,
   summarizeBlendVolumes
 } from "./calculations";
-<<<<<<< HEAD
 import type { GasSelection, BlendResult } from "./calculations";
-=======
-import type { GasSelection, BlendResult } from "./calculations";
->>>>>>> c447328e (Address PR review feedback)
 import type { MultiGasInput, StandardBlendInput } from "../state/session";
 
 const air: GasSelection = { id: "air", name: "Air", o2: 21, he: 0 };
