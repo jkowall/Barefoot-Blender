@@ -13,9 +13,10 @@ import {
   calculateEAD,
   clampPressure,
   clampDepth,
-  clampPercent
+  clampPercent,
+  summarizeBlendVolumes
 } from "./calculations";
-import type { GasSelection } from "./calculations";
+import type { GasSelection, BlendResult, BlendStep } from "./calculations";
 import type { MultiGasInput, StandardBlendInput } from "../state/session";
 
 const air: GasSelection = { id: "air", name: "Air", o2: 21, he: 0 };
@@ -1041,5 +1042,101 @@ describe("calculateEAD", () => {
   test("Negative depth returns 0", () => {
     const result = calculateEAD(21, -10, "m");
     expect(result).toBe(0);
+  });
+});
+
+describe("summarizeBlendVolumes", () => {
+  test("returns zeroed summary if result is unsuccessful", () => {
+    const result: BlendResult = {
+      success: false,
+      steps: [
+        { kind: "helium", amount: 100, gasName: "Helium" },
+        { kind: "oxygen", amount: 50, gasName: "Oxygen" },
+        { kind: "topoff", amount: 200, gasName: "Air" }
+      ],
+      warnings: [],
+      errors: ["Something went wrong"]
+    };
+
+    const summary = summarizeBlendVolumes(result);
+
+    expect(summary.helium).toBe(0);
+    expect(summary.oxygen).toBe(0);
+    expect(summary.topoff).toBe(0);
+  });
+
+  test("returns zeroed summary if result has no steps", () => {
+    const result: BlendResult = {
+      success: true,
+      steps: [],
+      warnings: [],
+      errors: []
+    };
+
+    const summary = summarizeBlendVolumes(result);
+
+    expect(summary.helium).toBe(0);
+    expect(summary.oxygen).toBe(0);
+    expect(summary.topoff).toBe(0);
+  });
+
+  test("correctly sums volumes for helium, oxygen, and topoff steps", () => {
+    const result: BlendResult = {
+      success: true,
+      steps: [
+        { kind: "helium", amount: 100, gasName: "Helium" },
+        { kind: "oxygen", amount: 50, gasName: "Oxygen" },
+        { kind: "topoff", amount: 200, gasName: "Air" }
+      ],
+      warnings: [],
+      errors: []
+    };
+
+    const summary = summarizeBlendVolumes(result);
+
+    expect(summary.helium).toBe(100);
+    expect(summary.oxygen).toBe(50);
+    expect(summary.topoff).toBe(200);
+  });
+
+  test("ignores bleed steps", () => {
+    const result: BlendResult = {
+      success: true,
+      steps: [
+        { kind: "bleed", amount: 500, gasName: "Bleed" },
+        { kind: "helium", amount: 100, gasName: "Helium" },
+        { kind: "topoff", amount: 200, gasName: "Air" }
+      ],
+      warnings: [],
+      errors: []
+    };
+
+    const summary = summarizeBlendVolumes(result);
+
+    expect(summary.helium).toBe(100);
+    expect(summary.oxygen).toBe(0);
+    expect(summary.topoff).toBe(200);
+  });
+
+  test("handles multiple steps of the same kind by summing them", () => {
+    const result: BlendResult = {
+      success: true,
+      steps: [
+        { kind: "helium", amount: 100, gasName: "Helium" },
+        { kind: "helium", amount: 50, gasName: "Helium" },
+        { kind: "oxygen", amount: 30, gasName: "Oxygen" },
+        { kind: "oxygen", amount: 20, gasName: "Oxygen" },
+        { kind: "topoff", amount: 100, gasName: "Air" },
+        { kind: "topoff", amount: 150, gasName: "EAN32" }
+      ],
+      warnings: [],
+      errors: []
+    };
+
+    const summary = summarizeBlendVolumes(result);
+
+    expect(summary.helium).toBe(150);
+    expect(summary.oxygen).toBe(50);
+    expect(summary.topoff).toBe(250);
   });
 });
