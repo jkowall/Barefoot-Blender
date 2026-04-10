@@ -6,6 +6,7 @@ import {
   calculateStandardBlend,
   calculateGasCost,
   calculateFillCostEstimate,
+  generateBlendAlternatives,
   solveNGasBlend,
   calculateEND,
   calculateDensity,
@@ -16,7 +17,11 @@ import {
   clampPercent,
   summarizeBlendVolumes
 } from "./calculations";
-import type { GasSelection, BlendResult, BlendStep } from "./calculations";
+<<<<<<< HEAD
+import type { GasSelection, BlendResult } from "./calculations";
+=======
+import type { GasSelection, BlendResult } from "./calculations";
+>>>>>>> c447328e (Address PR review feedback)
 import type { MultiGasInput, StandardBlendInput } from "../state/session";
 
 const air: GasSelection = { id: "air", name: "Air", o2: 21, he: 0 };
@@ -899,6 +904,38 @@ describe("solveNGasBlend bank limits", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("100% or less");
+  });
+});
+
+describe("generateBlendAlternatives deduplication", () => {
+  const costSettings = {
+    tankSizeCuFt: 80,
+    tankRatedPressure: 3000,
+    pricePerCuFtO2: 1,
+    pricePerCuFtHe: 3.5,
+    pricePerCuFtTopOff: 0.1
+  };
+
+  test("removes duplicate air/oxygen alternatives produced by the three-gas path", () => {
+    const alternatives = generateBlendAlternatives(
+      3000,
+      32,
+      0,
+      0,
+      21,
+      0,
+      [
+        { id: "air", name: "Air", o2: 21, he: 0 },
+        { id: "oxygen", name: "Oxygen", o2: 100, he: 0 },
+        { id: "helium", name: "Helium", o2: 0, he: 100 }
+      ],
+      costSettings,
+      10
+    );
+
+    expect(alternatives).toHaveLength(1);
+    expect(alternatives[0].steps).toHaveLength(2);
+    expect(alternatives[0].steps.map((step) => step.gas.id).sort()).toEqual(["air", "oxygen"]);
   });
 });
 
