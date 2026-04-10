@@ -1819,18 +1819,18 @@ export const generateBlendAlternatives = (
   const seen = new Set<string>();
   const uniqueAlternatives: BlendAlternative[] = [];
   for (const alt of alternatives) {
-    // Generate deduplication key by sorting gas components first.
-    // Since there are at most 3 components, a simple manual sort is fastest.
-    const steps = [...alt.steps];
-    if (steps.length > 1) {
-      steps.sort((a, b) => (a.gas.id < b.gas.id ? -1 : 1));
-    }
-
+    const n = alt.steps.length;
     let key = "";
-    for (let i = 0; i < steps.length; i++) {
-      const s = steps[i];
-      if (i > 0) key += "|";
-      key += s.gas.id + ":" + Math.round(s.amount);
+    if (n === 1) {
+      const s = alt.steps[0];
+      key = s.gas.id + ":" + Math.round(s.amount);
+    } else if (n > 1) {
+      const keys = new Array(n);
+      for (let i = 0; i < n; i++) {
+        const s = alt.steps[i];
+        keys[i] = s.gas.id + ":" + Math.round(s.amount);
+      }
+      key = keys.sort().join("|");
     }
 
     if (!seen.has(key)) {
