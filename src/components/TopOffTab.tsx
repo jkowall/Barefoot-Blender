@@ -45,20 +45,9 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     }
   }, [selectedTopGas, topOff, setTopOff]);
 
-  useEffect(() => {
-    if (!result?.success) {
-      setBleedPsi(0);
-    }
-  }, [result?.success]);
-
-  useEffect(() => {
-    setBleedPsi((previous) => {
-      if (startPressurePsi <= 0) {
-        return 0;
-      }
-      return Math.min(previous, startPressurePsi);
-    });
-  }, [startPressurePsi]);
+  const effectiveBleedPsi = result?.success
+    ? clampPressure(Math.min(bleedPsi, startPressurePsi))
+    : 0;
 
   function updateField<K extends keyof TopOffInput>(key: K, value: TopOffInput[K]): void {
     setTopOff({ ...topOff, [key]: value });
@@ -105,12 +94,13 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       setChart(projectTopOffChart({ pressureUnit: settings.pressureUnit }, baseline, selectedTopGas));
     } else {
       setChart(null);
+      setBleedPsi(0);
     }
   };
 
   const adjustedStartPsi = useMemo(
-    () => clampPressure(startPressurePsi - bleedPsi),
-    [bleedPsi, startPressurePsi]
+    () => clampPressure(startPressurePsi - effectiveBleedPsi),
+    [effectiveBleedPsi, startPressurePsi]
   );
 
   const bleedSliderMaxDisplay = useMemo(
@@ -119,8 +109,8 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   );
 
   const bleedSliderValueDisplay = useMemo(
-    () => toDisplayPressure(Math.min(bleedPsi, startPressurePsi), settings.pressureUnit),
-    [bleedPsi, settings.pressureUnit, startPressurePsi]
+    () => toDisplayPressure(effectiveBleedPsi, settings.pressureUnit),
+    [effectiveBleedPsi, settings.pressureUnit]
   );
 
   const bleedSliderStepDisplay = settings.pressureUnit === "psi" ? 10 : 0.1;
@@ -265,7 +255,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             />
           </div>
           <div className="sensitivity-summary">
-            <span>Bleed {formatPressure(bleedPsi, settings.pressureUnit)}</span>
+            <span>Bleed {formatPressure(effectiveBleedPsi, settings.pressureUnit)}</span>
             <span>Adjusted Start {formatPressure(adjustedStartPsi, settings.pressureUnit)}</span>
           </div>
           {bleedPreview.success ? (
