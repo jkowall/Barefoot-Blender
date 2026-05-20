@@ -66,13 +66,10 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     [startPressurePsi]
   );
 
-  useEffect(() => {
-    if (sensitivityDeltaPsi < -negativeSensitivityLimitPsi) {
-      setSensitivityDeltaPsi(-negativeSensitivityLimitPsi);
-    } else if (sensitivityDeltaPsi > SENSITIVITY_RANGE_PSI) {
-      setSensitivityDeltaPsi(SENSITIVITY_RANGE_PSI);
-    }
-  }, [negativeSensitivityLimitPsi, sensitivityDeltaPsi]);
+  const clampedSensitivityDeltaPsi = Math.max(
+    -negativeSensitivityLimitPsi,
+    Math.min(SENSITIVITY_RANGE_PSI, sensitivityDeltaPsi)
+  );
 
   const baseVolumes = useMemo(() => {
     if (!result || !result.success) {
@@ -242,14 +239,14 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       return calculateStandardBlend({ pressureUnit: settings.pressureUnit }, candidate, selectedTopGas);
     };
 
-    const currentBlend = computeBlend(sensitivityDeltaPsi);
-    const adjustedStartPsi = clampPressure(startPressurePsi + sensitivityDeltaPsi);
+    const currentBlend = computeBlend(clampedSensitivityDeltaPsi);
+    const adjustedStartPsi = clampPressure(startPressurePsi + clampedSensitivityDeltaPsi);
     const adjustedStartDisplay = toDisplayPressure(adjustedStartPsi, settings.pressureUnit);
 
     if (!currentBlend || !currentBlend.success) {
       return {
         available: false as const,
-        deltaPsi: sensitivityDeltaPsi,
+        deltaPsi: clampedSensitivityDeltaPsi,
         adjustedStartPsi,
         adjustedStartDisplay,
         error: currentBlend?.errors[0] ?? "Unable to evaluate sensitivity."
@@ -259,7 +256,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     if (currentBlend.steps.some((step) => step.kind === "bleed")) {
       return {
         available: false as const,
-        deltaPsi: sensitivityDeltaPsi,
+        deltaPsi: clampedSensitivityDeltaPsi,
         adjustedStartPsi,
         adjustedStartDisplay,
         error: "Blend requires bleed at this starting pressure."
@@ -275,7 +272,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     };
 
     const computePerStep = (direction: 1 | -1) => {
-      const targetDeltaPsi = sensitivityDeltaPsi + direction * SENSITIVITY_METRIC_STEP_PSI;
+      const targetDeltaPsi = clampedSensitivityDeltaPsi + direction * SENSITIVITY_METRIC_STEP_PSI;
       if (
         targetDeltaPsi < -negativeSensitivityLimitPsi ||
         targetDeltaPsi > SENSITIVITY_RANGE_PSI
@@ -300,7 +297,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
     return {
       available: true as const,
-      deltaPsi: sensitivityDeltaPsi,
+      deltaPsi: clampedSensitivityDeltaPsi,
       adjustedStartPsi,
       adjustedStartDisplay,
       differenceFromBase,
@@ -311,10 +308,10 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     };
   }, [
     baseVolumes,
+    clampedSensitivityDeltaPsi,
     negativeSensitivityLimitPsi,
     result,
     selectedTopGas,
-    sensitivityDeltaPsi,
     settings.pressureUnit,
     standardBlend,
     startPressurePsi
@@ -360,7 +357,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
   const sliderMinDisplay = toDisplayPressure(-negativeSensitivityLimitPsi, settings.pressureUnit);
   const sliderMaxDisplay = toDisplayPressure(SENSITIVITY_RANGE_PSI, settings.pressureUnit);
-  const sliderValueDisplay = toDisplayPressure(sensitivityDeltaPsi, settings.pressureUnit);
+  const sliderValueDisplay = toDisplayPressure(clampedSensitivityDeltaPsi, settings.pressureUnit);
   const sliderStepDisplay = Math.max(
     Math.abs(toDisplayPressure(SENSITIVITY_STEP_PSI, settings.pressureUnit)),
     settings.pressureUnit === "psi" ? 5 : 0.25
