@@ -25,6 +25,7 @@ Barefoot Blender is an offline-first Progressive Web App (PWA) for scuba gas ble
 - **State Management**: Zustand (persisted to localStorage)
 - **Styling**: Vanilla CSS (`src/index.css`)
 - **Linting**: ESLint with TypeScript and React plugins
+- **Testing**: Vitest for unit and calculation regression tests
 
 ## Project Structure
 
@@ -56,6 +57,10 @@ npm run dev       # Start dev server (http://localhost:5173)
 npm run build     # Production build to dist/
 npm run preview   # Preview production build locally
 npm run lint      # Run ESLint checks
+npm run test      # Run Vitest regression tests once
+npm run test:watch # Run Vitest in watch mode
+npm run verify:calc # Run calculation regression vectors
+npm run check     # Run lint, tests, and build
 ```
 
 ## Definition of Done
@@ -141,12 +146,14 @@ Run these commands based on the type of change:
 
 1. **UI, state, styling, or app wiring changes**:
    - `npm run lint`
+   - `npm run test`
    - `npm run build`
 2. **Calculation logic changes** (`src/utils/calculations.ts` and related math):
    - `npm run lint`
-   - `npm run build`
+   - `npm run verify:calc`
    - Run the known-value calculation vectors listed below
    - Add/update lightweight regression coverage as described in "Calculation Regression Harness"
+   - `npm run build`
 3. **Documentation-only changes**:
    - No build required unless docs reference commands/config changed by the same task
 
@@ -177,6 +184,7 @@ Maintain a lightweight, repeatable regression harness for known-value calculatio
 - Preferred: executable script/test target (for example `npm run verify:calc`)
 - Minimum acceptable: committed test file or script that validates the four vectors above
 - Requirement: when changing calculation logic, add or update regression cases in the harness
+- Standard runner: Vitest. Do not add Bun, Jest, Cypress, or Playwright for calculation/unit coverage unless the task explicitly requires that layer.
 
 ### Browser Testing
 

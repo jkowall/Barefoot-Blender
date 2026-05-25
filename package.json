@@ -2,12 +2,17 @@
   "name": "barefoot-blender",
   "version": "0.7.0",
   "private": true,
+  "packageManager": "npm@11.12.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify:calc": "vitest run src/utils/calculations.test.ts",
+    "check": "npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "react": "19.2.5",
@@ -30,6 +35,7 @@
     "typescript-eslint": "^8.59.4",
     "vite": "^7.3.2",
     "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^4.1.7",
     "workbox-build": "^7.4.1"
   }
 }

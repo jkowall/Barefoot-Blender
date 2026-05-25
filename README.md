@@ -39,6 +39,10 @@ npm run dev
 - `npm run build` – Produce a production bundle in `dist/` with pre-cached assets.
 - `npm run preview` – Preview the production build locally.
 - `npm run lint` – Run ESLint against the TypeScript source.
+- `npm run test` – Run the Vitest regression suite once.
+- `npm run test:watch` – Run Vitest in watch mode for local development.
+- `npm run verify:calc` – Run the calculation regression vectors only.
+- `npm run check` – Run lint, tests, and production build in sequence.
 
 ## Project Structure
 
@@ -76,7 +80,7 @@ Ensure you are authenticated with Cloudflare (`npx wrangler login`) and that `wr
 
 ## Extending the App
 
-1. **Add new calculators** – Implement reusable math helpers in `src/utils`, store state in `session.ts`, and surface UI in a dedicated component.
+1. **Add new calculators** – Implement reusable math helpers in `src/utils`, cover calculation changes with Vitest regression tests, store state in `session.ts`, and surface UI in a dedicated component.
 2. **Enhance settings** – Extend `SettingsStore` with new toggles and expose them in `SettingsPanel`.
 3. **Polish styling** – Update `index.css` or introduce a component-level styling solution (e.g., CSS Modules) to refine the UI.
 
