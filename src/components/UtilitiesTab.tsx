@@ -7,9 +7,14 @@ import {
   calculateEAD,
   calculateEND,
   calculateMOD,
+  calculatePsiPerCuFt,
   clampPercent,
   clampDepth,
-  clampPressure
+  clampPressure,
+  cuFtToLiters,
+  cuFtToPressure,
+  litersToCuFt,
+  pressureToCuFt
 } from "../utils/calculations";
 import { formatNumber } from "../utils/format";
 import { AccordionItem } from "./Accordion";
@@ -69,10 +74,51 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
     [utilities.densityO2, utilities.densityHe, utilities.densityDepth, settings.depthUnit]
   );
 
-
+  const tankSizeCuFt = utilities.tankSizeCuFt ?? settings.defaultTankSizeCuFt ?? 80;
+  const tankRatedPressurePsi = utilities.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000;
+  const tankConvertPressurePsi = utilities.tankConvertPressurePsi ?? 500;
+  const tankConvertCuFt = utilities.tankConvertCuFt ?? pressureToCuFt(tankConvertPressurePsi, tankSizeCuFt, tankRatedPressurePsi);
+  const tankConvertLiters = utilities.tankConvertLiters ?? cuFtToLiters(tankConvertCuFt);
+  const tankPsiPerCuFt = calculatePsiPerCuFt(tankSizeCuFt, tankRatedPressurePsi);
+  const tankFreeGasLiters = cuFtToLiters(tankSizeCuFt);
 
   const update = (patch: Parameters<typeof setUtilities>[0]): void => {
     setUtilities(patch);
+  };
+
+  const updateTankPressureConversion = (pressurePsi: number | undefined): void => {
+    const nextPressurePsi = pressurePsi === undefined ? undefined : clampPressure(pressurePsi);
+    const nextCuFt = nextPressurePsi === undefined
+      ? undefined
+      : pressureToCuFt(nextPressurePsi, tankSizeCuFt, tankRatedPressurePsi);
+    update({
+      tankConvertPressurePsi: nextPressurePsi,
+      tankConvertCuFt: nextCuFt,
+      tankConvertLiters: nextCuFt === undefined ? undefined : cuFtToLiters(nextCuFt)
+    });
+  };
+
+  const updateTankCuFtConversion = (cuFt: number | undefined): void => {
+    const nextCuFt = cuFt === undefined ? undefined : Math.max(0, cuFt);
+    update({
+      tankConvertCuFt: nextCuFt,
+      tankConvertLiters: nextCuFt === undefined ? undefined : cuFtToLiters(nextCuFt),
+      tankConvertPressurePsi: nextCuFt === undefined
+        ? undefined
+        : cuFtToPressure(nextCuFt, tankSizeCuFt, tankRatedPressurePsi)
+    });
+  };
+
+  const updateTankLitersConversion = (liters: number | undefined): void => {
+    const nextLiters = liters === undefined ? undefined : Math.max(0, liters);
+    const nextCuFt = nextLiters === undefined ? undefined : litersToCuFt(nextLiters);
+    update({
+      tankConvertLiters: nextLiters,
+      tankConvertCuFt: nextCuFt,
+      tankConvertPressurePsi: nextCuFt === undefined
+        ? undefined
+        : cuFtToPressure(nextCuFt, tankSizeCuFt, tankRatedPressurePsi)
+    });
   };
 
   return (
@@ -214,6 +260,87 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
         <div style={{ marginTop: "12px" }}>
           <div>Density: {formatNumber(densityResult, 2)} g/L</div>
         </div>
+      </AccordionItem>
+
+      <AccordionItem title="Tank Conversion">
+        <div className="grid two">
+          <NumberInput
+            label="Tank Volume (cu ft)"
+            min={1}
+            step={1}
+            value={tankSizeCuFt}
+            onChange={(val) => {
+              const nextTankSize = val === undefined ? undefined : Math.max(1, val);
+              const resolvedTankSize = nextTankSize ?? settings.defaultTankSizeCuFt ?? 80;
+              update({
+                tankSizeCuFt: nextTankSize,
+                tankConvertPressurePsi: cuFtToPressure(tankConvertCuFt, resolvedTankSize, tankRatedPressurePsi)
+              });
+            }}
+          />
+          <NumberInput
+            label="Tank Volume (free gas L)"
+            min={0}
+            step={1}
+            value={tankFreeGasLiters}
+            onChange={(val) => {
+              const nextCuFt = val === undefined ? undefined : Math.max(1, litersToCuFt(val));
+              const resolvedTankSize = nextCuFt ?? settings.defaultTankSizeCuFt ?? 80;
+              update({
+                tankSizeCuFt: nextCuFt,
+                tankConvertPressurePsi: cuFtToPressure(tankConvertCuFt, resolvedTankSize, tankRatedPressurePsi)
+              });
+            }}
+          />
+          <NumberInput
+            label="Rated Pressure (PSI)"
+            min={1}
+            step={100}
+            value={tankRatedPressurePsi}
+            onChange={(val) => {
+              const nextRatedPressure = val === undefined ? undefined : Math.max(1, val);
+              const resolvedRatedPressure = nextRatedPressure ?? settings.tankRatedPressure ?? 3000;
+              update({
+                tankRatedPressurePsi: nextRatedPressure,
+                tankConvertPressurePsi: cuFtToPressure(tankConvertCuFt, tankSizeCuFt, resolvedRatedPressure)
+              });
+            }}
+          />
+          <div className="stat">
+            <div className="stat-label">PSI per cu ft</div>
+            <div className="stat-value">{formatNumber(tankPsiPerCuFt, 2)}</div>
+          </div>
+        </div>
+
+        <div className="section-title" style={{ marginTop: "16px" }}>Fill Volume</div>
+        <div className="grid three">
+          <NumberInput
+            label="Pressure (PSI)"
+            min={0}
+            step={10}
+            value={tankConvertPressurePsi}
+            onChange={updateTankPressureConversion}
+          />
+          <NumberInput
+            label="Volume (cu ft)"
+            min={0}
+            step={0.1}
+            value={tankConvertCuFt}
+            onChange={updateTankCuFtConversion}
+          />
+          <NumberInput
+            label="Volume (free gas L)"
+            min={0}
+            step={1}
+            value={tankConvertLiters}
+            onChange={updateTankLitersConversion}
+          />
+        </div>
+        <div className="result-note">
+          {formatNumber(tankSizeCuFt, 2)} cu ft = {formatNumber(tankFreeGasLiters, 2)} free gas L.{" "}
+          {formatNumber(tankConvertPressurePsi, 0)} PSI = {formatNumber(tankConvertCuFt, 2)} cu ft = {formatNumber(tankConvertLiters, 2)} free gas L.
+        </div>
+        <div className="table-note">Free gas liters are surface-equivalent gas volume, not metric cylinder water capacity.</div>
       </AccordionItem>
 
       <UnitConverter />

@@ -2,6 +2,18 @@
 
 This document provides guidance for AI/LLM assistants working on the Barefoot Blender codebase.
 
+## Mandatory First Step
+
+Before planning or editing, read this file from disk, not only from pasted context.
+Every implementation plan must explicitly cover:
+
+- Code changes
+- Tests or regression coverage
+- Documentation impact
+- Version and CHANGELOG decision
+- Validation commands
+- Commit and deployment policy
+
 ## Project Overview
 
 Barefoot Blender is an offline-first Progressive Web App (PWA) for scuba gas blending and dive planning. It calculates Nitrox/Trimix blends using partial pressure methods and provides dive planning utilities (MOD, EAD, END, density).

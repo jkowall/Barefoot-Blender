@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0] - 2026-05-25
+
+### Added
+
+- **Tank Context**: Added per-fill tank volume and rated pressure controls for Standard Blend, Top-Off What-If, and Multi-Gas Blend.
+- **Tank Conversion**: Added a Utilities converter for PSI, cubic feet, and free gas liters, with explicit free gas liter labeling.
+- **Fill Cost Detail**: Added PSI, cubic feet, free gas liters, unit price, and total cost details to fill cost outputs.
+
+### Changed
+
+- **Cost Model**: Refactored fill cost calculations to use shared tank conversion helpers for PSI per cubic foot, pressure to cubic feet, cubic feet to pressure, and cubic feet to liters.
+
 ## [0.6.19] - 2026-03-28
 
 ### Changed

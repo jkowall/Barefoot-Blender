@@ -8,6 +8,8 @@ export type StandardBlendInput = {
   targetO2?: number;
   targetHe?: number;
   targetPressure?: number;
+  tankSizeCuFt?: number;
+  tankRatedPressurePsi?: number;
   topGasId: string;
 };
 
@@ -27,6 +29,8 @@ export type MultiGasInput = {
   startO2?: number;
   startHe?: number;
   startPressure?: number;
+  tankSizeCuFt?: number;
+  tankRatedPressurePsi?: number;
   selectedAlternativeIndex: number;
 };
 
@@ -44,6 +48,11 @@ export type UtilityInputs = {
   densityO2?: number;
   densityHe?: number;
   densityDepth?: number;
+  tankSizeCuFt?: number;
+  tankRatedPressurePsi?: number;
+  tankConvertPressurePsi?: number;
+  tankConvertCuFt?: number;
+  tankConvertLiters?: number;
 };
 
 export type TopOffInput = {
@@ -51,6 +60,8 @@ export type TopOffInput = {
   startHe?: number;
   startPressure?: number;
   finalPressure?: number;
+  tankSizeCuFt?: number;
+  tankRatedPressurePsi?: number;
   topGasId: string;
 };
 
@@ -65,6 +76,8 @@ export type StandardBlendHistoryEntry = {
   targetHe: number;
   topGasId: string;
   topGasName: string;
+  tankSizeCuFt?: number;
+  tankRatedPressurePsi?: number;
   estimatedCost?: number;
   steps: {
     kind: "bleed" | "helium" | "oxygen" | "topoff";
@@ -132,7 +145,10 @@ const defaultValues = {
     endDepth: 150,
     densityO2: 21,
     densityHe: 35,
-    densityDepth: 150
+    densityDepth: 150,
+    tankConvertPressurePsi: 500,
+    tankConvertCuFt: 13.33,
+    tankConvertLiters: 377.56
   },
   topOff: {
     startO2: 32,

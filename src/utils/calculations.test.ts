@@ -15,6 +15,11 @@ import {
   clampPressure,
   clampDepth,
   clampPercent,
+  calculatePsiPerCuFt,
+  cuFtToLiters,
+  cuFtToPressure,
+  litersToCuFt,
+  pressureToCuFt,
   summarizeBlendVolumes
 } from "./calculations";
 import type { GasSelection, BlendResult } from "./calculations";
@@ -42,6 +47,34 @@ describe("Clamping Utilities", () => {
     expect(clampPercent(-10)).toBe(0);
     expect(clampPercent(100)).toBe(100);
     expect(clampPercent(110)).toBe(100);
+  });
+});
+
+describe("Tank volume conversions", () => {
+  test("calculates PSI per cubic foot", () => {
+    expect(calculatePsiPerCuFt(80, 3000)).toBeCloseTo(37.5, 3);
+  });
+
+  test("converts pressure to cubic feet", () => {
+    expect(pressureToCuFt(500, 80, 3000)).toBeCloseTo(13.333, 3);
+  });
+
+  test("converts cubic feet to pressure", () => {
+    expect(cuFtToPressure(10, 80, 3000)).toBeCloseTo(375, 3);
+  });
+
+  test("converts cubic feet to free gas liters", () => {
+    expect(cuFtToLiters(80)).toBeCloseTo(2265.35, 2);
+    expect(litersToCuFt(2265.34772736)).toBeCloseTo(80, 3);
+  });
+
+  test("returns safe zero values for invalid tanks", () => {
+    expect(calculatePsiPerCuFt(0, 3000)).toBe(0);
+    expect(calculatePsiPerCuFt(80, 0)).toBe(0);
+    expect(pressureToCuFt(500, 0, 3000)).toBe(0);
+    expect(pressureToCuFt(500, 80, 0)).toBe(0);
+    expect(cuFtToPressure(10, 0, 3000)).toBe(0);
+    expect(cuFtToPressure(10, 80, 0)).toBe(0);
   });
 });
 
@@ -808,8 +841,49 @@ describe("calculateFillCostEstimate", () => {
     // Air top-off: (2700/3000)*80 = 72 cuft @ $0.289
     expect(result.lines).toHaveLength(2);
     expect(result.lines[0].cost).toBeCloseTo(8, 3);
+    expect(result.lines[0].volumeCuFt).toBeCloseTo(8, 3);
+    expect(result.lines[0].volumeLiters).toBeCloseTo(226.535, 3);
     expect(result.lines[1].unitPrice).toBeCloseTo(0.289, 3);
     expect(result.totalCost).toBeCloseTo(28.808, 3);
+  });
+
+  test("uses Top-Off result pressure for a one-line fill estimate", () => {
+    const topOff = calculateTopOffBlend(
+      { pressureUnit: "psi" },
+      {
+        startO2: 32,
+        startHe: 0,
+        startPressure: 500,
+        finalPressure: 3000,
+        topGasId: "air"
+      },
+      air
+    );
+
+    expect(topOff.success).toBe(true);
+    expect(topOff.addedPressure).toBeCloseTo(2500, 3);
+
+    const estimate = calculateFillCostEstimate(
+      [
+        {
+          label: "Air Top-Off",
+          gas: air,
+          pressurePsi: topOff.addedPressure
+        }
+      ],
+      {
+        tankSizeCuFt: 80,
+        tankRatedPressure: 3000,
+        pricePerCuFtO2: 1.0,
+        pricePerCuFtHe: 3.5,
+        pricePerCuFtTopOff: 0.1
+      }
+    );
+
+    expect(estimate.lines).toHaveLength(1);
+    expect(estimate.lines[0].volumeCuFt).toBeCloseTo(66.667, 3);
+    expect(estimate.lines[0].volumeLiters).toBeCloseTo(1887.79, 2);
+    expect(estimate.totalCost).toBeCloseTo(19.267, 3);
   });
 });
 

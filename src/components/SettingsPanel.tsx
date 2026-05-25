@@ -207,7 +207,7 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                 />
               </div>
 
-              <div className="section-title" style={{ marginTop: 16 }}>Default Tank</div>
+              <div className="section-title" style={{ marginTop: 16 }}>Tank Defaults</div>
               <div className="grid two">
                 <NumberInput
                   label="Tank Size (cu ft)"

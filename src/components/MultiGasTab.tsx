@@ -7,14 +7,17 @@ import {
   type BlendAlternative,
   type CostSettings,
   type OptimizerGasSource,
-  clampPercent
+  clampPercent,
+  cuFtToLiters,
+  pressureToCuFt
 } from "../utils/calculations";
-import { formatPressure, formatSignedPressure } from "../utils/format";
+import { formatNumber, formatPressure, formatSignedPressure } from "../utils/format";
 import { fromDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import ErrorBoundary from "./ErrorBoundary";
 import { NumberInput } from "./NumberInput";
 import { GasSourceRow } from "./GasSourceRow";
+import TankContextFields from "./TankContextFields";
 
 
 const MAX_GAS_SOURCES = 4;
@@ -33,6 +36,9 @@ type Props = {
 const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const multiGas = useSessionStore((state: SessionState) => state.multiGas);
   const setMultiGas = useSessionStore((state: SessionState) => state.setMultiGas);
+  const tankSizeCuFt = multiGas.tankSizeCuFt ?? settings.defaultTankSizeCuFt ?? 80;
+  const tankRatedPressurePsi = multiGas.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000;
+  const startPressurePsi = fromDisplayPressure(multiGas.startPressure ?? 0, settings.pressureUnit);
 
   // Build available gas options from presets and custom banks
   const gasOptions = useMemo(() => {
@@ -112,14 +118,14 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
     pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
     pricePerCuFtTopOff: settings.pricePerCuFtTopOff ?? 0.1,
-    tankSizeCuFt: settings.defaultTankSizeCuFt ?? 80,
-    tankRatedPressure: settings.tankRatedPressure ?? 3000
+    tankSizeCuFt,
+    tankRatedPressure: tankRatedPressurePsi
   }), [
-    settings.defaultTankSizeCuFt,
     settings.pricePerCuFtTopOff,
     settings.pricePerCuFtHe,
     settings.pricePerCuFtO2,
-    settings.tankRatedPressure
+    tankRatedPressurePsi,
+    tankSizeCuFt
   ]);
 
   // Compute blend result
@@ -202,6 +208,12 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     return `$${cost.toFixed(2)}`;
   };
 
+  const formatGasVolume = (pressurePsi: number): string => {
+    const volumeCuFt = pressureToCuFt(pressurePsi, tankSizeCuFt, tankRatedPressurePsi);
+    const volumeLiters = cuFtToLiters(volumeCuFt);
+    return `${formatNumber(volumeCuFt, 2)} cu ft, ${formatNumber(volumeLiters, 2)} L`;
+  };
+
   return (
     <ErrorBoundary fallback={<div className="error">MultiGasTab crashed. Please check the console for details.</div>}>
       <AccordionItem title="Start Tank" defaultOpen={true}>
@@ -230,6 +242,16 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             onChange={(val) => updateField({ startPressure: val })}
           />
         </div>
+      </AccordionItem>
+
+      <AccordionItem title="Tank Context" defaultOpen={false}>
+        <TankContextFields
+          tankSizeCuFt={multiGas.tankSizeCuFt}
+          tankRatedPressurePsi={multiGas.tankRatedPressurePsi}
+          defaultTankSizeCuFt={settings.defaultTankSizeCuFt}
+          defaultTankRatedPressurePsi={settings.tankRatedPressure}
+          onChange={(patch) => setMultiGas({ ...multiGas, ...patch })}
+        />
       </AccordionItem>
 
       <AccordionItem title="Source Gases" defaultOpen={true}>
@@ -316,7 +338,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                     <div className="alternative-gases">
                       {alt.costBreakdown.map((item, i) => (
                         <span key={i} className="alternative-gas">
-                          {item.gas}: {formatPressure(item.amount, settings.pressureUnit)}
+                          {item.gas}: {formatPressure(item.amount, settings.pressureUnit)}, {formatGasVolume(item.amount)}
                         </span>
                       ))}
                     </div>
@@ -329,7 +351,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                   <h4>Fill Order</h4>
                   <ol className="result-list">
                     {selectedAlternative.fillOrder.map((step, index) => {
-                      let runningTotal = multiGas.startPressure ?? 0;
+                      let runningTotal = startPressurePsi;
                       for (let i = 0; i <= index; i++) {
                         runningTotal += selectedAlternative.fillOrder[i].amount;
                       }
@@ -340,7 +362,8 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                         <li key={index} className={isBleed ? "bleed-step" : ""}>
                           {index + 1}. {action} {step.gas}: {formatPressure(runningTotal, settings.pressureUnit)}
                           <span className="result-step-total">
-                            ({formatSignedPressure(step.amount, settings.pressureUnit)})
+                            ({formatSignedPressure(step.amount, settings.pressureUnit)}
+                            {!isBleed ? `, ${formatGasVolume(step.amount)}` : ""})
                           </span>
                         </li>
                       );
@@ -351,6 +374,20 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                   </div>
                   <div className="cost-summary">
                     Estimated cost: {formatCost(selectedAlternative.estimatedCost)}
+                  </div>
+                  <div className="cost-breakdown">
+                    <div className="section-title">Cost Basis</div>
+                    <div className="grid two">
+                      {selectedAlternative.costBreakdown.map((line, index) => (
+                        <div key={`${line.gas}-${index}`} className="cost-line">
+                          <span>{line.gas}:</span>
+                          <span>
+                            {formatPressure(line.amount, settings.pressureUnit)}, {formatGasVolume(line.amount)} = ${line.cost.toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
                   </div>
                 </div>
               )}

@@ -17,11 +17,12 @@ import {
   clampPercent,
   clampPressure
 } from "../utils/calculations";
-import { formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
+import { formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
 import { SelectInput } from "./SelectInput";
+import TankContextFields from "./TankContextFields";
 
 
 
@@ -44,6 +45,8 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const [result, setResult] = useState<BlendResult | null>(null);
   const [sensitivityDeltaPsi, setSensitivityDeltaPsi] = useState(0);
   const [planOpen, setPlanOpen] = useState(false);
+  const tankSizeCuFt = standardBlend.tankSizeCuFt ?? settings.defaultTankSizeCuFt ?? 80;
+  const tankRatedPressurePsi = standardBlend.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000;
 
   const selectedTopGas = useMemo(() => {
     const match = topOffOptions.find((option) => option.id === standardBlend.topGasId);
@@ -105,18 +108,18 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
         pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
         pricePerCuFtTopOff: settings.pricePerCuFtTopOff ?? 0.1,
-        tankSizeCuFt: settings.defaultTankSizeCuFt ?? 80,
-        tankRatedPressure: settings.tankRatedPressure ?? 3000
+        tankSizeCuFt,
+        tankRatedPressure: tankRatedPressurePsi
       }
     );
   }, [
     baseVolumes,
     selectedTopGas,
-    settings.defaultTankSizeCuFt,
     settings.pricePerCuFtTopOff,
     settings.pricePerCuFtHe,
     settings.pricePerCuFtO2,
-    settings.tankRatedPressure
+    tankRatedPressurePsi,
+    tankSizeCuFt
   ]);
 
   const updateField = <K extends keyof StandardBlendInput>(key: K, value: StandardBlendInput[K]): void => {
@@ -170,8 +173,8 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
           pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
           pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
           pricePerCuFtTopOff: settings.pricePerCuFtTopOff ?? 0.1,
-          tankSizeCuFt: settings.defaultTankSizeCuFt ?? 80,
-          tankRatedPressure: settings.tankRatedPressure ?? 3000
+          tankSizeCuFt,
+          tankRatedPressure: tankRatedPressurePsi
         }
       );
 
@@ -186,6 +189,8 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         targetHe: resolvedInput.targetHe ?? 0,
         topGasId: selectedTopGas.id,
         topGasName: selectedTopGas.name,
+        tankSizeCuFt,
+        tankRatedPressurePsi,
         estimatedCost: estimate.totalCost,
         steps: blendResult.steps.map((step) => ({
           kind: step.kind,
@@ -209,6 +214,8 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       targetO2: entry.targetO2,
       targetHe: entry.targetHe,
       targetPressure: toDisplayPressure(entry.targetPressurePsi, settings.pressureUnit),
+      tankSizeCuFt: entry.tankSizeCuFt,
+      tankRatedPressurePsi: entry.tankRatedPressurePsi,
       topGasId: entry.topGasId
     });
     setResult(null);
@@ -396,6 +403,16 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         </div>
       </AccordionItem>
 
+      <AccordionItem title="Tank Context" defaultOpen={false}>
+        <TankContextFields
+          tankSizeCuFt={standardBlend.tankSizeCuFt}
+          tankRatedPressurePsi={standardBlend.tankRatedPressurePsi}
+          defaultTankSizeCuFt={settings.defaultTankSizeCuFt}
+          defaultTankRatedPressurePsi={settings.tankRatedPressure}
+          onChange={(patch) => setStandardBlend({ ...standardBlend, ...patch })}
+        />
+      </AccordionItem>
+
       <AccordionItem title="Target Blend" defaultOpen={true}>
         <div className="grid two">
           <NumberInput
@@ -496,10 +513,13 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                 {fillCost.lines.map((line) => (
                   <div key={line.label} className="cost-line">
                     <span>{line.label}:</span>
-                    <span>{line.volumeCuFt.toFixed(2)} cu ft × ${line.unitPrice.toFixed(2)} = ${line.cost.toFixed(2)}</span>
+                    <span>
+                      {formatPressure(line.pressurePsi, settings.pressureUnit)}, {formatNumber(line.volumeCuFt, 2)} cu ft, {formatNumber(line.volumeLiters, 2)} L × ${line.unitPrice.toFixed(2)} = ${line.cost.toFixed(2)}
+                    </span>
                   </div>
                 ))}
               </div>
+              <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
               <div className="cost-total">
                 <strong>Total: ${fillCost.totalCost.toFixed(2)}</strong>
               </div>

@@ -1243,6 +1243,7 @@ export type FillCostLine = {
   label: string;
   pressurePsi: number;
   volumeCuFt: number;
+  volumeLiters: number;
   unitPrice: number;
   cost: number;
 };
@@ -1256,6 +1257,53 @@ export type FillCostEstimate = {
  * Calculate the cost of gas additions based on PSI values and tank specifications.
  * Formula: cuFt = (psi / tankRatedPressure) * tankSizeCuFt
  */
+export const calculatePsiPerCuFt = (tankSizeCuFt: number, ratedPressurePsi: number): number => {
+  if (tankSizeCuFt <= 0 || ratedPressurePsi <= 0) {
+    return 0;
+  }
+  return ratedPressurePsi / tankSizeCuFt;
+};
+
+export const pressureToCuFt = (
+  pressurePsi: number,
+  tankSizeCuFt: number,
+  ratedPressurePsi: number
+): number => {
+  const psiPerCuFt = calculatePsiPerCuFt(tankSizeCuFt, ratedPressurePsi);
+  if (pressurePsi <= 0 || psiPerCuFt <= 0) {
+    return 0;
+  }
+  return pressurePsi / psiPerCuFt;
+};
+
+export const cuFtToPressure = (
+  volumeCuFt: number,
+  tankSizeCuFt: number,
+  ratedPressurePsi: number
+): number => {
+  const psiPerCuFt = calculatePsiPerCuFt(tankSizeCuFt, ratedPressurePsi);
+  if (volumeCuFt <= 0 || psiPerCuFt <= 0) {
+    return 0;
+  }
+  return volumeCuFt * psiPerCuFt;
+};
+
+const LITERS_PER_CU_FT = 28.316846592;
+
+export const cuFtToLiters = (cuFt: number): number => {
+  if (cuFt <= 0) {
+    return 0;
+  }
+  return cuFt * LITERS_PER_CU_FT;
+};
+
+export const litersToCuFt = (liters: number): number => {
+  if (liters <= 0) {
+    return 0;
+  }
+  return liters / LITERS_PER_CU_FT;
+};
+
 export const calculateGasCost = (
   oxygenPsi: number,
   heliumPsi: number,
@@ -1264,13 +1312,8 @@ export const calculateGasCost = (
   pricePerCuFtO2: number,
   pricePerCuFtHe: number
 ): GasCostResult => {
-  const psiToCuFt = (psi: number): number => {
-    if (tankRatedPressure <= 0) return 0;
-    return (psi / tankRatedPressure) * tankSizeCuFt;
-  };
-
-  const oxygenCuFt = psiToCuFt(oxygenPsi);
-  const heliumCuFt = psiToCuFt(heliumPsi);
+  const oxygenCuFt = pressureToCuFt(oxygenPsi, tankSizeCuFt, tankRatedPressure);
+  const heliumCuFt = pressureToCuFt(heliumPsi, tankSizeCuFt, tankRatedPressure);
   const oxygenCost = oxygenCuFt * pricePerCuFtO2;
   const heliumCost = heliumCuFt * pricePerCuFtHe;
   const totalCost = oxygenCost + heliumCost;
@@ -1310,13 +1353,15 @@ export const calculateFillCostEstimate = (
   const lines: FillCostLine[] = additions
     .filter((entry) => entry.pressurePsi > tolerance)
     .map((entry) => {
-      const volumeCuFt = (entry.pressurePsi / tankRatedPressure) * tankSizeCuFt;
+      const volumeCuFt = pressureToCuFt(entry.pressurePsi, tankSizeCuFt, tankRatedPressure);
+      const volumeLiters = cuFtToLiters(volumeCuFt);
       const unitPrice = calculateGasUnitPrice(entry.gas, costSettings);
       const cost = volumeCuFt * unitPrice;
       return {
         label: entry.label,
         pressurePsi: entry.pressurePsi,
         volumeCuFt,
+        volumeLiters,
         unitPrice,
         cost
       };
@@ -1381,7 +1426,7 @@ const estimateGasPressureCost = (
 
   if (tankRatedPressure <= 0 || tankSizeCuFt <= 0 || pressurePsi <= 0) return 0;
 
-  const cuFt = (pressurePsi / tankRatedPressure) * tankSizeCuFt;
+  const cuFt = pressureToCuFt(pressurePsi, tankSizeCuFt, tankRatedPressure);
   const o2Fraction = fraction(gas.o2);
   const heFraction = fraction(gas.he);
   const n2Fraction = Math.max(0, 1 - o2Fraction - heFraction);

@@ -96,10 +96,32 @@ Density_depth = Density_surface · Ambient
 - Depth: conversions between feet and meters use 1 m = 3.2808399 ft.
 - All calculations run in base units and only convert for display.
 
+### Tank Volume and Cost
+
+Tank volume calculations use the rated free gas volume and rated pressure:
+
+```
+PSI_per_cu_ft = rated_pressure_PSI / rated_volume_cu_ft
+added_cu_ft = added_pressure_PSI / PSI_per_cu_ft
+added_pressure_PSI = added_cu_ft * PSI_per_cu_ft
+free_gas_liters = cu_ft * 28.316846592
+cu_ft = free_gas_liters / 28.316846592
+```
+
+Fill cost uses the same tank conversion path:
+
+```
+unit_price = O2_fraction * O2_price + He_fraction * He_price + N2_fraction * top_off_price
+line_cost = added_cu_ft * unit_price
+total_cost = sum(line_cost)
+```
+
+Liters are free gas liters at surface pressure. They are not metric cylinder water capacity liters.
+
 ## 5. Persistence
 
 - Global settings persist via Zustand + `localStorage` (`SettingsStore`).
-- Per-tab inputs persist in `SessionStore`, allowing quick recalculations after reloads or offline usage.
+- Per-tab inputs persist in `SessionStore`, including per-fill tank context, allowing quick recalculations after reloads or offline usage.
 
 ## 6. Validation & Error Handling
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ChangeEvent, type FocusEvent } from 
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type TopOffInput, type StandardBlendInput } from "../state/session";
 import {
+  calculateFillCostEstimate,
   calculateTopOffBlend,
   projectTopOffChart,
   type GasSelection,
@@ -14,6 +15,7 @@ import { formatNumber, formatPercentage, formatPressure, formatSignedPressure } 
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
+import TankContextFields from "./TankContextFields";
 
 
 
@@ -28,6 +30,8 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const [result, setResult] = useState<TopOffResult | null>(null);
   const [chart, setChart] = useState<TopOffProjectionRow[] | null>(null);
   const [bleedPsi, setBleedPsi] = useState(0);
+  const tankSizeCuFt = topOff.tankSizeCuFt ?? settings.defaultTankSizeCuFt ?? 80;
+  const tankRatedPressurePsi = topOff.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000;
 
   const selectedTopGas = useMemo(() => {
     const match = topOffOptions.find((option) => option.id === topOff.topGasId);
@@ -117,6 +121,37 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
   const showBleedPreview = Boolean(result?.success && startPressurePsi > 0);
 
+  const fillCost = useMemo(() => {
+    if (!result?.success || !selectedTopGas) {
+      return null;
+    }
+
+    return calculateFillCostEstimate(
+      [
+        {
+          label: `${selectedTopGas.name} Top-Off`,
+          gas: selectedTopGas,
+          pressurePsi: result.addedPressure
+        }
+      ],
+      {
+        pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
+        pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
+        pricePerCuFtTopOff: settings.pricePerCuFtTopOff ?? 0.1,
+        tankSizeCuFt,
+        tankRatedPressure: tankRatedPressurePsi
+      }
+    );
+  }, [
+    result,
+    selectedTopGas,
+    settings.pricePerCuFtHe,
+    settings.pricePerCuFtO2,
+    settings.pricePerCuFtTopOff,
+    tankRatedPressurePsi,
+    tankSizeCuFt
+  ]);
+
   const bleedPreview = useMemo(() => {
     if (!showBleedPreview || !selectedTopGas) {
       return null;
@@ -168,6 +203,16 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             onBlur={() => updateField("startPressure", clampPressure(topOff.startPressure ?? 0))}
           />
         </div>
+      </AccordionItem>
+
+      <AccordionItem title="Tank Context" defaultOpen={false}>
+        <TankContextFields
+          tankSizeCuFt={topOff.tankSizeCuFt}
+          tankRatedPressurePsi={topOff.tankRatedPressurePsi}
+          defaultTankSizeCuFt={settings.defaultTankSizeCuFt}
+          defaultTankRatedPressurePsi={settings.tankRatedPressure}
+          onChange={(patch) => setTopOff({ ...topOff, ...patch })}
+        />
       </AccordionItem>
 
       <AccordionItem title="Top-Off Goal" defaultOpen={true}>
@@ -227,6 +272,25 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             <div className="result-note">
               Add {selectedTopGas?.name ?? "chosen gas"}: {formatPressure(result.finalPressure, settings.pressureUnit)}
               <span className="result-step-total"> ({formatSignedPressure(result.addedPressure, settings.pressureUnit)})</span>
+            </div>
+          )}
+          {fillCost && fillCost.lines.length > 0 && (
+            <div className="cost-breakdown">
+              <div className="section-title">Fill Cost</div>
+              <div className="grid two">
+                {fillCost.lines.map((line) => (
+                  <div key={line.label} className="cost-line">
+                    <span>{line.label}:</span>
+                    <span>
+                      {formatPressure(line.pressurePsi, settings.pressureUnit)}, {formatNumber(line.volumeCuFt, 2)} cu ft, {formatNumber(line.volumeLiters, 2)} L × ${line.unitPrice.toFixed(2)} = ${line.cost.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
+              <div className="cost-total">
+                <strong>Total: ${fillCost.totalCost.toFixed(2)}</strong>
+              </div>
             </div>
           )}
           {result.warnings.map((warning) => (
