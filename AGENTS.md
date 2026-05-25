@@ -214,12 +214,23 @@ Avoid changing these unless the task explicitly requires it:
 
 **All commits must be signed** (`git commit -S`). Ensure GPG is configured for your git user.
 
+Production deploys automatically when `main` is pushed to GitHub. For normal release work, the expected flow is:
+
 ```bash
 npm run build
-npx wrangler deploy   # Deploys to Cloudflare Pages
+git push origin main
 ```
 
-Ensure authenticated via `npx wrangler login` first.
+After pushing, verify production is serving the new build by checking `https://trimix-blender.com` or the current hashed asset in `dist/`.
+
+Wrangler is only a manual fallback path and requires an authenticated Cloudflare session or `CLOUDFLARE_API_TOKEN` in non-interactive shells:
+
+```bash
+npm run build
+npx wrangler deploy
+```
+
+Ensure authenticated via `npx wrangler login` first when using Wrangler interactively.
 
 ## Commit & Push Expectations
 
