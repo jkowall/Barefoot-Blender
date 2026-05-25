@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { GAS_NAME_MAX_LENGTH } from "../utils/gasNames";
 import { migrateSettingsState, sanitizeCustomGas } from "./settings";
 
