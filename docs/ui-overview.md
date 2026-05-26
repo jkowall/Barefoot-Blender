@@ -4,10 +4,19 @@ This quick-reference outlines the visual flow and interaction model for Barefoot
 
 ## Layout
 
+- **First-Run Safety Acknowledgement** – Blocks first use until the user acknowledges the app is for trained divers/fill operators and final gas must be analyzed.
 - **Header** – Displays application title and a primary "Settings" button.
 - **Tab Bar** – Four main tabs: `Standard Blend`, `Top-Off What-If`, `Multi-Gas Blend`, `Utilities`. The active tab is highlighted.
 - **Content Area** – Stacked cards for inputs and results. Each tab renders its own component under `src/components/`.
 - **Settings Panel** – Modal-like overlay triggered from the header. Contains global configuration grouped by sections.
+- **Footer** – Shows version, release notes, GitHub, privacy, terms, and support links.
+
+## Native Mobile Access
+
+- Browser/PWA usage opens after the first-run safety acknowledgement.
+- Native iOS and Android builds check the RevenueCat `pro` entitlement before showing calculator tabs.
+- Local debug native builds created with `npm run build:mobile:debug` bypass the subscription gate for simulator/device testing.
+- The native paywall shows the annual price, auto-renewal language, restore purchases, and manage subscription actions.
 
 ## Tab Details
 
@@ -56,6 +65,7 @@ Sections:
 3. **Equivalent Narcotic Gas** – Toggle for oxygen narcotic behavior.
 4. **Custom Banked Gases** – Editable list with name, O₂ %, He %, and delete/add controls.
 5. **Pricing** – Gas prices and tank defaults used to initialize per-fill tank context.
+6. **About** – Safety warning and native subscription summary.
 
 Actions are persisted immediately through the Zustand store; closing the panel hides the overlay without resetting values.
 

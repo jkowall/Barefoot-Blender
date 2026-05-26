@@ -16,12 +16,14 @@ Every implementation plan must explicitly cover:
 
 ## Project Overview
 
-Barefoot Blender is an offline-first Progressive Web App (PWA) for scuba gas blending and dive planning. It calculates Nitrox/Trimix blends using partial pressure methods and provides dive planning utilities (MOD, EAD, END, density).
+Barefoot Blender is an offline-first Progressive Web App (PWA) and Capacitor-based native mobile app for scuba gas blending and dive planning. It calculates Nitrox/Trimix blends using partial pressure methods and provides dive planning utilities (MOD, EAD, END, density).
 
 ## Tech Stack
 
-- **Framework**: React 18 with TypeScript
+- **Framework**: React 19 with TypeScript
 - **Build Tool**: Vite 7.x with `vite-plugin-pwa`
+- **Native Mobile**: Capacitor iOS/Android projects under `ios/` and `android/`
+- **Subscriptions**: RevenueCat for native iOS/Android entitlement checks
 - **State Management**: Zustand (persisted to localStorage)
 - **Styling**: Vanilla CSS (`src/index.css`)
 - **Linting**: ESLint with TypeScript and React plugins
@@ -36,7 +38,9 @@ src/
 │   ├── MultiGasTab.tsx         # Two-gas Nitrox solver
 │   ├── TopOffTab.tsx           # Top-off projections
 │   ├── UtilitiesTab.tsx        # MOD/EAD/Best Mix/END/Density
-│   └── SettingsPanel.tsx       # User preferences
+│   ├── SettingsPanel.tsx       # User preferences
+│   ├── SafetyAcknowledgement.tsx # First-run safety gate
+│   └── SubscriptionPaywall.tsx # Native mobile subscription gate
 ├── state/               # Zustand stores
 │   ├── settings.ts      # Global settings (units, PPO2, banks)
 │   └── session.ts       # Per-tab input persistence
@@ -44,9 +48,16 @@ src/
 │   ├── calculations.ts  # Core blending/dive math
 │   ├── format.ts        # Number formatting helpers
 │   └── units.ts         # Unit conversion utilities
+├── services/
+│   └── subscription.ts  # RevenueCat integration boundary
 ├── App.tsx              # Tab navigation layout
 ├── main.tsx             # Entry point + PWA registration
 └── index.css            # Global styles
+ios/                     # Capacitor iOS project
+android/                 # Capacitor Android project
+public/privacy/          # Store privacy page
+public/terms/            # Store terms page
+public/support/          # Store support page
 ```
 
 ## Development Commands
@@ -61,6 +72,10 @@ npm run test      # Run Vitest regression tests once
 npm run test:watch # Run Vitest in watch mode
 npm run verify:calc # Run calculation regression vectors
 npm run check     # Run lint, tests, and build
+npm run build:mobile # Build web assets and sync Capacitor iOS/Android
+npm run build:mobile:debug # Build native debug bundle with subscription bypass
+npm run mobile:ios # Build, sync, and open Xcode project
+npm run mobile:android # Build, sync, and open Android Studio project
 ```
 
 ## Definition of Done
@@ -131,6 +146,15 @@ If blocked by missing requirements, state the blocker and propose the safest def
 2. Provide sensible default in the store initializer
 3. Add UI control in `SettingsPanel.tsx`
 
+### Native Mobile / Subscription Changes
+
+1. Keep browser/PWA usage ungated unless explicitly asked otherwise
+2. Keep native subscription logic behind `src/services/subscription.ts`
+3. Use `VITE_REVENUECAT_IOS_API_KEY` and `VITE_REVENUECAT_ANDROID_API_KEY` for real native subscription builds
+4. Use `npm run build:mobile:debug` only for local simulator/device debugging before RevenueCat products are configured
+5. Do not upload builds produced with `VITE_DEBUG_SUBSCRIPTION_BYPASS=true` to TestFlight, Google Play, or production
+6. Preserve the first-run safety acknowledgement and store/legal links unless the task explicitly changes compliance UX
+
 ### Extending Calculations
 
 - Follow existing patterns in `calculations.ts`
@@ -148,6 +172,7 @@ Run these commands based on the type of change:
    - `npm run lint`
    - `npm run test`
    - `npm run build`
+   - For native app wiring, also run `npm run build:mobile`
 2. **Calculation logic changes** (`src/utils/calculations.ts` and related math):
    - `npm run lint`
    - `npm run verify:calc`
@@ -156,6 +181,12 @@ Run these commands based on the type of change:
    - `npm run build`
 3. **Documentation-only changes**:
    - No build required unless docs reference commands/config changed by the same task
+4. **Native mobile release/signing changes**:
+   - `npm run check`
+   - `npm run build:mobile`
+   - `npx cap doctor`
+   - `cd android && ./gradlew bundleRelease`
+   - `xcodebuild -project ios/App/App.xcodeproj -scheme App -destination 'platform=iOS Simulator,name=iPhone 17' -configuration Debug CODE_SIGNING_ALLOWED=NO build`
 
 ### Manual Testing Checklist
 
@@ -167,6 +198,7 @@ Before submitting changes, verify:
 4. **PWA works offline**: After first load, app functions without network
 5. **Settings persist**: Reload preserves user preferences
 6. **Units work**: Toggle PSI/bar and ft/m; calculations update correctly
+7. **Native debug build works**: `npm run build:mobile:debug`, then Xcode/Android Studio simulator run should open without requiring RevenueCat keys
 
 ### Calculation Verification
 
@@ -192,11 +224,20 @@ Maintain a lightweight, repeatable regression harness for known-value calculatio
 - Verify mobile responsiveness (iOS Safari, Android Chrome)
 - Test PWA install flow ("Add to Home Screen")
 
+### Native Testing
+
+- Open iOS project at `ios/App/App.xcodeproj`.
+- Use Xcode simulator first; select the `App` scheme and an iPhone simulator.
+- Open Android project from `android/` in Android Studio.
+- For Android command-line release bundles, ensure `JAVA_HOME`, `ANDROID_HOME`, and `ANDROID_SDK_ROOT` point to Android Studio JBR and the user SDK.
+- Real subscription testing requires RevenueCat project setup plus App Store Connect and Google Play subscription products.
+
 ## Documentation Reference
 
 - [`docs/calculation-model.md`](docs/calculation-model.md) - Formula details
 - [`docs/ui-overview.md`](docs/ui-overview.md) - UI intent and patterns
 - [`docs/offline-behavior.md`](docs/offline-behavior.md) - PWA/caching strategy
+- [`docs/mobile-release.md`](docs/mobile-release.md) - native app store release workflow
 - [`design.md`](design.md) - Original functional specification
 
 ## Common Pitfalls
@@ -206,6 +247,9 @@ Maintain a lightweight, repeatable regression harness for known-value calculatio
 3. **Fraction vs percent**: Functions expect 0-1 fractions; UI shows 0-100%
 4. **Helium constraints**: Start He% > target He% requires bleed-down logic
 5. **PWA cache**: After changes, may need to close all tabs and reopen to see updates
+6. **Debug vs production mobile builds**: `build:mobile:debug` intentionally bypasses native subscription gating and must not be submitted to stores
+7. **Native generated assets**: Capacitor copies web bundles into native projects; ESLint must ignore generated native asset/build output
+8. **iOS splash warnings**: Generated splash assets can trigger Xcode "unassigned children" warnings; clean asset catalog before App Store submission if warnings remain
 
 ## Protected Areas (Do Not Touch Unless Asked)
 
@@ -215,6 +259,7 @@ Avoid changing these unless the task explicitly requires it:
 - Deployment configuration (`wrangler.jsonc`, Cloudflare deployment settings)
 - Core gas bank defaults and blending assumptions in settings
 - Domain formulas or constants outside the requested scope
+- Native subscription gating and debug bypass behavior outside requested mobile/subscription work
 
 ## Deployment
 
@@ -239,6 +284,19 @@ npx wrangler deploy
 ```
 
 Ensure authenticated via `npx wrangler login` first when using Wrangler interactively.
+
+## Native Mobile Release
+
+Native release details live in `docs/mobile-release.md`. Current defaults:
+
+- App/package ID: `com.trimixblender.barefootblender`
+- RevenueCat entitlement: `pro`
+- Apple annual product: `barefoot_blender_pro_annual`
+- Google subscription: `barefoot_blender_pro`
+- Google annual base plan: `annual-499`
+- Price target: `$4.99/year`
+
+App Store and Play Store submissions are manual/account-owner-gated. Do not treat a local native build as deployed.
 
 ## Commit & Push Expectations
 
@@ -267,7 +325,12 @@ Apply this checklist to release PRs, tagged releases, or merges to `main` intend
    - Project structure or dependencies
    - Configuration options
 
-4. **Commit all updates together** with a signed commit:
+4. **Update mobile release docs** if the change affects:
+   - Capacitor commands or native project layout
+   - RevenueCat product IDs, entitlement IDs, or subscription behavior
+   - Store listing, privacy, terms, support, signing, or validation workflow
+
+5. **Commit all updates together** with a signed commit:
    ```bash
    git add -A
    git commit -S -m "Release vX.Y.Z: Brief description"
