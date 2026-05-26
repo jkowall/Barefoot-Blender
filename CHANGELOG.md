@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.0] - 2026-05-25
+
+### Added
+
+- **Native Mobile Shells**: Added Capacitor configuration for iOS and Android using app ID `com.trimixblender.barefootblender`.
+- **Subscription Access**: Added RevenueCat-backed native subscription gating for the `pro` entitlement with annual product support.
+- **Debug Mobile Builds**: Added a local-only subscription bypass build script for simulator and device debugging before store products are configured.
+- **Safety Acknowledgement**: Added first-run safety acknowledgement and Settings/About safety messaging for trained diver and fill station use.
+- **Legal Pages**: Added privacy, terms, and support pages for app store listings.
+- **Mobile Release Docs**: Added account setup, signing, store listing, subscription, validation, and rollback guidance.
+
 ## [0.7.0] - 2026-05-25
 
 ### Added

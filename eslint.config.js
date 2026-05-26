@@ -6,7 +6,16 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/", "node_modules/", "eslint.config.js", "benchmark.js"],
+    ignores: [
+      "dist/",
+      "node_modules/",
+      "eslint.config.js",
+      "benchmark.js",
+      "android/**/build/",
+      "android/app/src/main/assets/public/",
+      "ios/**/build/",
+      "ios/App/App/public/",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

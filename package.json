@@ -1,6 +1,6 @@
 {
   "name": "barefoot-blender",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "packageManager": "npm@11.12.1",
   "type": "module",
@@ -12,15 +12,27 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "verify:calc": "vitest run src/utils/calculations.test.ts",
-    "check": "npm run lint && npm run test && npm run build"
+    "check": "npm run lint && npm run test && npm run build",
+    "mobile:sync": "npm run build && cap sync ios && cap sync android",
+    "mobile:ios": "npm run mobile:sync && cap open ios",
+    "mobile:android": "npm run mobile:sync && cap open android",
+    "build:mobile": "npm run build && cap sync ios && cap sync android",
+    "build:mobile:debug": "VITE_DEBUG_SUBSCRIPTION_BYPASS=true npm run build && cap sync ios && cap sync android",
+    "mobile:ios:debug": "npm run build:mobile:debug && cap open ios",
+    "mobile:android:debug": "npm run build:mobile:debug && cap open android"
   },
   "dependencies": {
+    "@capacitor/core": "^8.3.4",
+    "@revenuecat/purchases-capacitor": "^13.1.2",
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "workbox-window": "^7.4.1",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/ios": "^8.3.4",
     "@eslint/js": "^9.39.4",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",

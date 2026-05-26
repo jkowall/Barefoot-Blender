@@ -15,6 +15,7 @@ Source code: [github.com/jkowall/Barefoot-Blender](https://github.com/jkowall/Ba
 - **Dive Utilities** – MOD, EAD, Best Mix, END, and density calculators that honor global PPO₂ and narcotic settings.
 - **Persistent Settings** – Local storage of preferred units, PPO₂ defaults, narcotic rules, and custom banked gases.
 - **Installable PWA** – Works fully offline after first load via Vite PWA service worker integration.
+- **Native Mobile Release Path** – Capacitor projects for iOS and Android with RevenueCat-backed annual subscription access.
 
 ## Tech Stack
 
@@ -43,6 +44,39 @@ npm run dev
 - `npm run test:watch` – Run Vitest in watch mode for local development.
 - `npm run verify:calc` – Run the calculation regression vectors only.
 - `npm run check` – Run lint, tests, and production build in sequence.
+- `npm run build:mobile` – Build the web app and sync Capacitor iOS/Android projects.
+- `npm run build:mobile:debug` – Build a simulator/device debug bundle that bypasses native subscription gating.
+- `npm run mobile:ios` – Build, sync, and open the iOS project in Xcode.
+- `npm run mobile:ios:debug` – Build the debug subscription-bypass bundle and open the iOS project.
+- `npm run mobile:android` – Build, sync, and open the Android project in Android Studio.
+- `npm run mobile:android:debug` – Build the debug subscription-bypass bundle and open the Android project.
+
+### Native Mobile Subscriptions
+
+The iOS and Android apps use Capacitor with RevenueCat. Browser/PWA usage remains ungated; native app access is gated by the `pro` entitlement.
+
+- Entitlement: `pro`
+- Apple annual product: `barefoot_blender_pro_annual`
+- Google subscription: `barefoot_blender_pro`
+- Google annual base plan: `annual-499`
+- Price target: `$4.99/year`
+
+Set the public RevenueCat SDK keys in the build environment before native subscription testing:
+
+```bash
+VITE_REVENUECAT_IOS_API_KEY=appl_...
+VITE_REVENUECAT_ANDROID_API_KEY=goog_...
+```
+
+For local simulator debugging without RevenueCat products, build with:
+
+```bash
+npm run build:mobile:debug
+```
+
+This sets `VITE_DEBUG_SUBSCRIPTION_BYPASS=true` at build time and unlocks the native app shell. Do not use the debug build for TestFlight, Play testing, or production submissions.
+
+See [`docs/mobile-release.md`](docs/mobile-release.md) for account setup, signing, upload, store listing, and validation steps.
 
 ## Project Structure
 
@@ -50,6 +84,8 @@ npm run dev
 Barefoot Blender/
 ├─ docs/                          # Supplementary documentation
 ├─ public/                        # Static assets (PWA icons, etc.)
+├─ ios/                           # Capacitor iOS project
+├─ android/                       # Capacitor Android project
 ├─ src/
 │  ├─ components/                 # UI modules for each major feature
 │  ├─ state/                      # Zustand stores for settings & session data
@@ -77,6 +113,7 @@ Ensure you are authenticated with Cloudflare (`npx wrangler login`) and that `wr
 
 - Settings and last-used inputs persist via `localStorage` to enable quick recalculations.
 - The service worker uses the `autoUpdate` strategy so clients fetch fresh assets when available while remaining fully functional offline.
+- Native iOS and Android builds serve bundled app assets through Capacitor and use RevenueCat entitlement caching after a successful online subscription verification.
 
 ## Extending the App
 
@@ -91,6 +128,7 @@ Additional background materials live in the [`docs/`](docs) directory:
 - [`docs/calculation-model.md`](docs/calculation-model.md)
 - [`docs/ui-overview.md`](docs/ui-overview.md)
 - [`docs/offline-behavior.md`](docs/offline-behavior.md)
+- [`docs/mobile-release.md`](docs/mobile-release.md)
 
 Refer to these documents for formula references, UI intent, and caching strategies.
 

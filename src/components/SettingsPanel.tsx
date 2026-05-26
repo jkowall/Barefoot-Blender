@@ -10,7 +10,7 @@ const depthUnits: DepthUnit[] = ["ft", "m"];
 
 const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
   const settings = useSettingsStore();
-  const [activeTab, setActiveTab] = useState<"general" | "gases" | "pricing">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "gases" | "pricing" | "about">("general");
 
   const {
     setPressureUnit,
@@ -60,6 +60,12 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
               onClick={() => setActiveTab("pricing")}
             >
               Pricing
+            </button>
+            <button
+              className={`settings-tab-button ${activeTab === "about" ? "active" : ""}`}
+              onClick={() => setActiveTab("about")}
+            >
+              About
             </button>
           </div>
         </div>
@@ -225,6 +231,23 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                 />
               </div>
               <div className="table-note">Common tanks: AL80 (80 cu ft @ 3000 PSI), HP100 (100 cu ft @ 3442 PSI)</div>
+            </>
+          )}
+
+          {activeTab === "about" && (
+            <>
+              <div className="section-title">Safety</div>
+              <div className="warning">
+                Barefoot Blender is for trained divers and fill station operators. Always analyze the
+                final cylinder with calibrated oxygen and helium analyzers before diving. Incorrect gas
+                blending can cause serious injury or death.
+              </div>
+
+              <div className="section-title" style={{ marginTop: 16 }}>Subscription</div>
+              <div className="table-note">
+                Native iOS and Android access is planned as Barefoot Blender Pro at $4.99/year. Purchase,
+                restore, cancellation, refund, and subscription management are handled by Apple or Google.
+              </div>
             </>
           )}
         </div>
