@@ -19,6 +19,7 @@
     "build:mobile": "npm run build && cap sync ios && cap sync android",
     "build:mobile:debug": "VITE_DEBUG_SUBSCRIPTION_BYPASS=true npm run build && cap sync ios && cap sync android",
     "debug:ios": "scripts/run-ios-debug.sh",
+    "debug:android": "scripts/run-android-debug.sh",
     "mobile:ios:debug": "npm run build:mobile:debug && cap open ios",
     "mobile:android:debug": "npm run build:mobile:debug && cap open android"
   },

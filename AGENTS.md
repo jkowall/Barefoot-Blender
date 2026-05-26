@@ -75,6 +75,7 @@ npm run check     # Run lint, tests, and build
 npm run build:mobile # Build web assets and sync Capacitor iOS/Android
 npm run build:mobile:debug # Build native debug bundle with subscription bypass
 npm run debug:ios # Build native debug bundle and open Xcode project
+npm run debug:android # Start Android emulator, build debug bundle, install, and run
 npm run mobile:ios # Build, sync, and open Xcode project
 npm run mobile:android # Build, sync, and open Android Studio project
 ```
@@ -200,6 +201,7 @@ Before submitting changes, verify:
 5. **Settings persist**: Reload preserves user preferences
 6. **Units work**: Toggle PSI/bar and ft/m; calculations update correctly
 7. **Native debug build works**: `npm run build:mobile:debug`, then Xcode/Android Studio simulator run should open without requiring RevenueCat keys
+8. **Android debug runner works**: `npm run debug:android` should start or reuse an emulator, install the debug bundle, and launch the app
 
 ### Calculation Verification
 
@@ -230,6 +232,7 @@ Maintain a lightweight, repeatable regression harness for known-value calculatio
 - Open iOS project at `ios/App/App.xcodeproj`.
 - Use Xcode simulator first; select the `App` scheme and an iPhone simulator.
 - Open Android project from `android/` in Android Studio.
+- Use `npm run debug:android` for the one-command local emulator debug path. Set `ANDROID_AVD=<device-name>` when multiple Android virtual devices exist.
 - For Android command-line release bundles, ensure `JAVA_HOME`, `ANDROID_HOME`, and `ANDROID_SDK_ROOT` point to Android Studio JBR and the user SDK.
 - Real subscription testing requires RevenueCat project setup plus App Store Connect and Google Play subscription products.
 

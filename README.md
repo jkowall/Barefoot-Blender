@@ -47,6 +47,7 @@ npm run dev
 - `npm run build:mobile` – Build the web app and sync Capacitor iOS/Android projects.
 - `npm run build:mobile:debug` – Build a simulator/device debug bundle that bypasses native subscription gating.
 - `npm run debug:ios` – Build the debug mobile bundle and open the iOS project in Xcode.
+- `npm run debug:android` – Start an Android emulator, build the debug mobile bundle, install it, and run it.
 - `npm run mobile:ios` – Build, sync, and open the iOS project in Xcode.
 - `npm run mobile:ios:debug` – Build the debug subscription-bypass bundle and open the iOS project.
 - `npm run mobile:android` – Build, sync, and open the Android project in Android Studio.
@@ -73,9 +74,10 @@ For local simulator debugging without RevenueCat products, build with:
 
 ```bash
 npm run debug:ios
+npm run debug:android
 ```
 
-This runs `npm run build:mobile:debug`, opens `ios/App/App.xcodeproj`, and unlocks the native app shell by setting `VITE_DEBUG_SUBSCRIPTION_BYPASS=true` at build time. Do not use the debug build for TestFlight, Play testing, or production submissions.
+These commands run `npm run build:mobile:debug` and unlock the native app shell by setting `VITE_DEBUG_SUBSCRIPTION_BYPASS=true` at build time. The iOS command opens `ios/App/App.xcodeproj`; the Android command starts the first available emulator, then installs and runs the app. To choose a specific Android virtual device, run `ANDROID_AVD=Pixel_10_Pro_Fold_-_EMU npm run debug:android`. Do not use the debug build for TestFlight, Play testing, or production submissions.
 
 See [`docs/mobile-release.md`](docs/mobile-release.md) for account setup, signing, upload, store listing, and validation steps.
 

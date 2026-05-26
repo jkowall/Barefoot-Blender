@@ -41,9 +41,10 @@ For simulator or local device debugging before RevenueCat products are configure
 
 ```bash
 npm run debug:ios
+npm run debug:android
 ```
 
-This runs `npm run build:mobile:debug`, opens `ios/App/App.xcodeproj`, and unlocks the native app shell without contacting RevenueCat. It is only for local debugging. Do not upload this build to TestFlight, Google Play, or production.
+These commands run `npm run build:mobile:debug` and unlock the native app shell without contacting RevenueCat. The Android command starts the first available emulator, waits for boot completion, installs the app, and launches it through Capacitor. Set `ANDROID_AVD=<device-name>` to choose a specific emulator. These commands are only for local debugging. Do not upload this build to TestFlight, Google Play, or production.
 
 Open native projects when needed:
 
@@ -70,17 +71,26 @@ Review notes should state that the app is a calculator for trained divers and fi
 1. Open `android/` in Android Studio.
 2. Confirm namespace and application ID `com.trimixblender.barefootblender`.
 3. Confirm version name `0.8.0` and version code `1`.
-4. Create a secure local upload keystore for Play App Signing.
-5. Build a release Android App Bundle:
+4. Create a secure local upload keystore for Play App Signing. The Gradle release build reads local signing credentials from ignored `android/keystore.properties`.
+5. Back up `android/upload-keystore.jks` and `android/keystore.properties` somewhere secure. Losing the upload key blocks future updates until Google resets the upload key.
+6. Build a release Android App Bundle:
 
 ```bash
 cd android
 ./gradlew bundleRelease
 ```
 
-6. Upload the `.aab` to Google Play internal testing first.
-7. Move to closed testing after internal subscription validation.
-8. If the Play account is newly created and personal, run the required closed testing window before production access.
+7. Verify the release variant is signed:
+
+```bash
+cd android
+./gradlew signingReport
+jarsigner -verify -verbose -certs app/build/outputs/bundle/release/app-release.aab
+```
+
+8. Upload `android/app/build/outputs/bundle/release/app-release.aab` to Google Play internal testing first.
+9. Move to closed testing after internal subscription validation.
+10. If the Play account is newly created and personal, run the required closed testing window before production access.
 
 ## Store Listing Checklist
 
@@ -103,7 +113,7 @@ cd android
   - `npm run build:mobile`
   - `npx cap doctor`
   - iOS simulator smoke test.
-  - Android emulator smoke test.
+  - Android emulator smoke test with `npm run debug:android`.
   - Subscription purchase in Apple sandbox/TestFlight.
   - Subscription purchase in Google internal testing.
   - Restore purchases after reinstall.
