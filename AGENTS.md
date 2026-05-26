@@ -74,6 +74,7 @@ npm run verify:calc # Run calculation regression vectors
 npm run check     # Run lint, tests, and build
 npm run build:mobile # Build web assets and sync Capacitor iOS/Android
 npm run build:mobile:debug # Build native debug bundle with subscription bypass
+npm run debug:ios # Build native debug bundle and open Xcode project
 npm run mobile:ios # Build, sync, and open Xcode project
 npm run mobile:android # Build, sync, and open Android Studio project
 ```

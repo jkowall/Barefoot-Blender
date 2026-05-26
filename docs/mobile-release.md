@@ -40,10 +40,10 @@ npm run build:mobile
 For simulator or local device debugging before RevenueCat products are configured:
 
 ```bash
-npm run build:mobile:debug
+npm run debug:ios
 ```
 
-This build sets `VITE_DEBUG_SUBSCRIPTION_BYPASS=true` and unlocks the native app shell without contacting RevenueCat. It is only for local debugging. Do not upload this build to TestFlight, Google Play, or production.
+This runs `npm run build:mobile:debug`, opens `ios/App/App.xcodeproj`, and unlocks the native app shell without contacting RevenueCat. It is only for local debugging. Do not upload this build to TestFlight, Google Play, or production.
 
 Open native projects when needed:
 

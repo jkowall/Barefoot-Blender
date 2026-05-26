@@ -46,6 +46,7 @@ npm run dev
 - `npm run check` – Run lint, tests, and production build in sequence.
 - `npm run build:mobile` – Build the web app and sync Capacitor iOS/Android projects.
 - `npm run build:mobile:debug` – Build a simulator/device debug bundle that bypasses native subscription gating.
+- `npm run debug:ios` – Build the debug mobile bundle and open the iOS project in Xcode.
 - `npm run mobile:ios` – Build, sync, and open the iOS project in Xcode.
 - `npm run mobile:ios:debug` – Build the debug subscription-bypass bundle and open the iOS project.
 - `npm run mobile:android` – Build, sync, and open the Android project in Android Studio.
@@ -71,10 +72,10 @@ VITE_REVENUECAT_ANDROID_API_KEY=goog_...
 For local simulator debugging without RevenueCat products, build with:
 
 ```bash
-npm run build:mobile:debug
+npm run debug:ios
 ```
 
-This sets `VITE_DEBUG_SUBSCRIPTION_BYPASS=true` at build time and unlocks the native app shell. Do not use the debug build for TestFlight, Play testing, or production submissions.
+This runs `npm run build:mobile:debug`, opens `ios/App/App.xcodeproj`, and unlocks the native app shell by setting `VITE_DEBUG_SUBSCRIPTION_BYPASS=true` at build time. Do not use the debug build for TestFlight, Play testing, or production submissions.
 
 See [`docs/mobile-release.md`](docs/mobile-release.md) for account setup, signing, upload, store listing, and validation steps.
 
