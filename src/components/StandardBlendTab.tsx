@@ -122,6 +122,37 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     tankSizeCuFt
   ]);
 
+  const blendPlanItems = useMemo(() => {
+    if (!result?.success || result.steps.length === 0) {
+      return null;
+    }
+
+    let runningPsi = fromDisplayPressure(standardBlend.startPressure, settings.pressureUnit);
+
+    return result.steps.map((step, index) => {
+      if (step.kind === "bleed") {
+        const bleedTargetPsi = result.bleedPressure ?? clampPressure(runningPsi - step.amount);
+        runningPsi = bleedTargetPsi;
+        return (
+          <li key={step.kind}>
+            {index + 1}. BLEED tank down to {formatPressure(bleedTargetPsi, settings.pressureUnit)}
+            <span className="result-step-total">{"->"} Tank @ {formatPressure(runningPsi, settings.pressureUnit)}</span>
+          </li>
+        );
+      }
+
+      const descriptor = step.kind === "topoff" ? "Top-off with" : "Add";
+      const gasLabel = step.kind === "topoff" ? selectedTopGas?.name ?? step.gasName : step.gasName;
+      runningPsi += step.amount;
+      return (
+        <li key={`${step.kind}-${index}`}>
+          {index + 1}. {descriptor} {gasLabel}: {formatPressure(runningPsi, settings.pressureUnit)}
+          <span className="result-step-total"> ({formatSignedPressure(step.amount, settings.pressureUnit)})</span>
+        </li>
+      );
+    });
+  }, [result, selectedTopGas?.name, settings.pressureUnit, standardBlend.startPressure]);
+
   const updateField = <K extends keyof StandardBlendInput>(key: K, value: StandardBlendInput[K]): void => {
     setStandardBlend({ ...standardBlend, [key]: value });
   };
@@ -472,35 +503,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
           {result.success && result.steps.length === 0 && (
             <div className="error">No gas additions required.</div>
           )}
-          {result.success && result.steps.length > 0 && (() => {
-            let runningPsi = fromDisplayPressure(standardBlend.startPressure, settings.pressureUnit);
-            return (
-              <ol className="result-list">
-                {result.steps.map((step, index) => {
-                  if (step.kind === "bleed") {
-                    const bleedTargetPsi = result.bleedPressure ?? clampPressure(runningPsi - step.amount);
-                    runningPsi = bleedTargetPsi;
-                    return (
-                      <li key={step.kind}>
-                        {index + 1}. BLEED tank down to {formatPressure(bleedTargetPsi, settings.pressureUnit)}
-                        <span className="result-step-total">{"->"} Tank @ {formatPressure(runningPsi, settings.pressureUnit)}</span>
-                      </li>
-                    );
-                  }
-
-                  const descriptor = step.kind === "topoff" ? "Top-off with" : "Add";
-                  const gasLabel = step.kind === "topoff" ? selectedTopGas?.name ?? step.gasName : step.gasName;
-                  runningPsi += step.amount;
-                  return (
-                    <li key={`${step.kind}-${index}`}>
-                      {index + 1}. {descriptor} {gasLabel}: {formatPressure(runningPsi, settings.pressureUnit)}
-                      <span className="result-step-total"> ({formatSignedPressure(step.amount, settings.pressureUnit)})</span>
-                    </li>
-                  );
-                })}
-              </ol>
-            );
-          })()}
+          {blendPlanItems && <ol className="result-list">{blendPlanItems}</ol>}
           {result.warnings.map((warning) => (
             <div key={warning} className="warning">
               {warning}
