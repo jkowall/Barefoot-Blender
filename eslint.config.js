@@ -1,6 +1,6 @@
 import js from "@eslint/js";
+import reactLint from "@eslint-react/eslint-plugin";
 import globals from "globals";
-import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
@@ -40,18 +40,15 @@ export default tseslint.config(
       },
     },
     plugins: {
-      react,
+      ...reactLint.configs["recommended-typescript"].plugins,
       "react-hooks": reactHooks,
     },
     settings: {
-      react: {
-        version: "detect",
-      },
+      ...reactLint.configs["recommended-typescript"].settings,
     },
     rules: {
-      ...react.configs.recommended.rules,
+      ...reactLint.configs["recommended-typescript"].rules,
       ...reactHooks.configs.recommended.rules,
-      "react/react-in-jsx-scope": "off",
       "@typescript-eslint/explicit-function-return-type": "off",
       "@typescript-eslint/no-floating-promises": "off",
       "@typescript-eslint/require-await": "off",

@@ -138,9 +138,9 @@ const solveBlendInternal = (
     return { success: false, requiresBleed: false, message: "Target pressure matches start pressure." };
   }
 
-  let topoff = 0;
-  let helium = 0;
-  let oxygen = 0;
+  let topoff: number;
+  let helium: number;
+  let oxygen: number;
 
   if (topN2Fraction > tolerance) {
     topoff = (dTotal - dHe - dO2) / topN2Fraction;
