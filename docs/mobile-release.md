@@ -70,7 +70,7 @@ Review notes should state that the app is a calculator for trained divers and fi
 
 1. Open `android/` in Android Studio.
 2. Confirm namespace and application ID `com.trimixblender.barefootblender`.
-3. Confirm version name `0.8.0` and version code `1`.
+3. Confirm version name `0.8.0` and version code `2`.
 4. Create a secure local upload keystore for Play App Signing. The Gradle release build reads local signing credentials from ignored `android/keystore.properties`.
 5. Back up `android/upload-keystore.jks` and `android/keystore.properties` somewhere secure. Losing the upload key blocks future updates until Google resets the upload key.
 6. Build a release Android App Bundle:
