@@ -27,6 +27,9 @@ dist/
 .env.local
 .env.*.local
 
+# Private local files and credentials
+private/
+
 # Android release signing secrets
 android/keystore.properties
 android/*.jks
