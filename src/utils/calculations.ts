@@ -582,7 +582,7 @@ export const solveRequiredStartPressure = (
     }
   }
 
-  const evaluate = (startPsi: number): BlendResult => {
+  const computeCandidateBlend = (startPsi: number): BlendResult => {
     const candidate: StandardBlendInput = {
       ...inputs,
       startPressure: toDisplayPressure(startPsi, settings.pressureUnit)
@@ -590,7 +590,7 @@ export const solveRequiredStartPressure = (
     return calculateStandardBlend(settings, candidate, topGas);
   };
 
-  const bestResult = evaluate(bestStartPsi);
+  const bestResult = computeCandidateBlend(bestStartPsi);
   if (!bestResult.success) {
     return {
       success: false,
