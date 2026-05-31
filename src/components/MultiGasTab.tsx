@@ -328,23 +328,23 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                 <div className="fill-plan">
                   <h4>Fill Order</h4>
                   <ol className="result-list">
-                    {selectedAlternative.fillOrder.map((step, index) => {
+                    {(() => {
                       let runningTotal = multiGas.startPressure ?? 0;
-                      for (let i = 0; i <= index; i++) {
-                        runningTotal += selectedAlternative.fillOrder[i].amount;
-                      }
-                      runningTotal = Math.max(0, runningTotal);
-                      const isBleed = step.amount < 0;
-                      const action = isBleed ? "Drain" : "Add";
-                      return (
-                        <li key={index} className={isBleed ? "bleed-step" : ""}>
-                          {index + 1}. {action} {step.gas}: {formatPressure(runningTotal, settings.pressureUnit)}
-                          <span className="result-step-total">
-                            ({formatSignedPressure(step.amount, settings.pressureUnit)})
-                          </span>
-                        </li>
-                      );
-                    })}
+                      return selectedAlternative.fillOrder.map((step, index) => {
+                        runningTotal += step.amount;
+                        const currentDisplayTotal = Math.max(0, runningTotal);
+                        const isBleed = step.amount < 0;
+                        const action = isBleed ? "Drain" : "Add";
+                        return (
+                          <li key={index} className={isBleed ? "bleed-step" : ""}>
+                            {index + 1}. {action} {step.gas}: {formatPressure(currentDisplayTotal, settings.pressureUnit)}
+                            <span className="result-step-total">
+                              ({formatSignedPressure(step.amount, settings.pressureUnit)})
+                            </span>
+                          </li>
+                        );
+                      });
+                    })()}
                   </ol>
                   <div className="table-note">
                     Resulting mix ≈ {selectedAlternative.finalO2.toFixed(1)}% O2 / {selectedAlternative.finalHe.toFixed(1)}% He
