@@ -15,7 +15,8 @@ import {
   clampPressure,
   clampDepth,
   clampPercent,
-  summarizeBlendVolumes
+  summarizeBlendVolumes,
+  projectTopOffChart
 } from "./calculations";
 import type { GasSelection, BlendResult } from "./calculations";
 import type { MultiGasInput, StandardBlendInput } from "../state/session";
@@ -1202,5 +1203,107 @@ describe("summarizeBlendVolumes", () => {
     expect(summary.helium).toBe(150);
     expect(summary.oxygen).toBe(50);
     expect(summary.topoff).toBe(250);
+  });
+});
+
+describe("projectTopOffChart", () => {
+  const settingsPsi = { pressureUnit: "psi" as const };
+  const settingsBar = { pressureUnit: "bar" as const };
+  const air: GasSelection = { id: "air", name: "Air", o2: 21, he: 0 };
+
+  test("calculates projections for PSI with standard inputs", () => {
+    const inputs: StandardBlendInput = {
+      startPressure: 500,
+      targetPressure: 3000,
+      targetO2: 32,
+      targetHe: 0,
+      startO2: 21,
+      startHe: 0,
+      topGasId: "air"
+    };
+
+    const results = projectTopOffChart(settingsPsi, inputs, air);
+
+    expect(results).toHaveLength(4);
+    // Deltas: 0, 100, 200, 300
+    expect(results[0].startPressure).toBe(500);
+    expect(results[1].startPressure).toBe(400);
+    expect(results[2].startPressure).toBe(300);
+    expect(results[3].startPressure).toBe(200);
+
+    results.forEach(row => {
+      expect(row.feasible).toBe(true);
+      expect(row.helium).toBe(0);
+      expect(row.oxygen).toBeGreaterThan(0);
+      expect(row.topGas).toBeGreaterThan(0);
+    });
+  });
+
+  test("calculates projections for Bar with standard inputs", () => {
+    const inputs: StandardBlendInput = {
+      startPressure: 50,
+      targetPressure: 200,
+      targetO2: 32,
+      targetHe: 0,
+      startO2: 21,
+      startHe: 0,
+      topGasId: "air"
+    };
+
+    const results = projectTopOffChart(settingsBar, inputs, air);
+
+    expect(results).toHaveLength(4);
+    // Deltas: 0, 10, 20, 30
+    // startPressure is in PSI internally
+    expect(results[0].startPressure).toBeCloseTo(50 * 14.5037738, 1);
+    expect(results[1].startPressure).toBeCloseTo(40 * 14.5037738, 1);
+    expect(results[2].startPressure).toBeCloseTo(30 * 14.5037738, 1);
+    expect(results[3].startPressure).toBeCloseTo(20 * 14.5037738, 1);
+
+    results.forEach(row => {
+      expect(row.feasible).toBe(true);
+    });
+  });
+
+  test("handles unfeasible scenarios (negative pressure)", () => {
+    const inputs: StandardBlendInput = {
+      startPressure: 150, // PSI
+      targetPressure: 3000,
+      targetO2: 32,
+      targetHe: 0,
+      startO2: 21,
+      startHe: 0,
+      topGasId: "air"
+    };
+
+    const results = projectTopOffChart(settingsPsi, inputs, air);
+
+    expect(results[0].feasible).toBe(true);
+    expect(results[1].feasible).toBe(true);
+    expect(results[2].feasible).toBe(false); // 150 - 200 = -50
+    expect(results[3].feasible).toBe(false); // 150 - 300 = -150
+
+    expect(results[2].startPressure).toBe(0);
+  });
+
+  test("handles unfeasible scenarios (bleed required)", () => {
+    const inputs: StandardBlendInput = {
+      startPressure: 2000,
+      targetPressure: 3000,
+      targetO2: 21, // Target air
+      targetHe: 0,
+      startO2: 50, // Start EAN50
+      startHe: 0,
+      topGasId: "air"
+    };
+
+    // To reach 21% from 50% O2 start with 2000 PSI, we must bleed.
+    // Even at 2000-300=1700 PSI, we still need to bleed to reach 21% air top-off.
+
+    const results = projectTopOffChart(settingsPsi, inputs, air);
+
+    results.forEach(row => {
+      expect(row.feasible).toBe(false);
+    });
   });
 });
