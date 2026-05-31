@@ -19,12 +19,6 @@ import { GasSourceRow } from "./GasSourceRow";
 
 const MAX_GAS_SOURCES = 4;
 
-const trimixPresets: GasSelection[] = [
-  { id: "trimix-2135", name: "Trimix 21/35", o2: 21, he: 35 },
-  { id: "trimix-1845", name: "Trimix 18/45", o2: 18, he: 45 },
-  { id: "trimix-1555", name: "Trimix 15/55", o2: 15, he: 55 }
-];
-
 type Props = {
   settings: SettingsSnapshot;
   topOffOptions: GasSelection[];
@@ -34,11 +28,10 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const multiGas = useSessionStore((state: SessionState) => state.multiGas);
   const setMultiGas = useSessionStore((state: SessionState) => state.setMultiGas);
 
-  // Build available gas options from presets and custom banks
+  // Build available gas options from custom banks
   const gasOptions = useMemo(() => {
     return [
-      ...topOffOptions,
-      ...trimixPresets
+      ...topOffOptions
     ];
   }, [topOffOptions]);
 
