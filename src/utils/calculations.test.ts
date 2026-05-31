@@ -1,4 +1,4 @@
-import { expect, test, describe } from "bun:test";
+import { expect, test, describe } from "vitest";
 import {
   calculateTopOffBlend,
   calculateBestMix,
@@ -1298,7 +1298,7 @@ describe("projectTopOffChart", () => {
     };
 
     // To reach 21% from 50% O2 start with 2000 PSI, we must bleed.
-    // Even at 2000-300=1700 PSI, we still need to bleed to reach 21% air top-off.
+    // projectTopOffChart marks it as unfeasible if bleed is required.
 
     const results = projectTopOffChart(settingsPsi, inputs, air);
 
