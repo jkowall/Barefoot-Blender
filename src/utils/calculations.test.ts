@@ -12,6 +12,7 @@ import {
   calculateDensity,
   calculateMOD,
   calculateEAD,
+  getRecommendedFillOrder,
   clampPressure,
   clampDepth,
   clampPercent,
@@ -1180,6 +1181,96 @@ describe("calculateEAD", () => {
   test("Negative depth returns 0", () => {
     const result = calculateEAD(21, -10, "m");
     expect(result).toBe(0);
+  });
+});
+
+describe("getRecommendedFillOrder", () => {
+  const pureHe = { id: "he", name: "Helium", o2: 0, he: 100 };
+  const pureO2 = { id: "o2", name: "Oxygen", o2: 100, he: 0 };
+  const ean32 = { id: "ean32", name: "EAN32", o2: 32, he: 0 };
+  const trimix21_35 = { id: "tx2135", name: "21/35", o2: 21, he: 35 };
+  const trimix18_45 = { id: "tx1845", name: "18/45", o2: 18, he: 45 };
+  const air = { id: "air", name: "Air", o2: 21, he: 0 };
+
+  test("sorts pure Helium first", () => {
+    const steps = [
+      { gas: pureO2, amount: 100 },
+      { gas: pureHe, amount: 100 },
+      { gas: air, amount: 100 }
+    ];
+    const result = getRecommendedFillOrder(steps);
+    expect(result[0].gas).toBe("Helium");
+  });
+
+  test("sorts pure Oxygen after pure Helium", () => {
+    const steps = [
+      { gas: air, amount: 100 },
+      { gas: pureO2, amount: 100 },
+      { gas: pureHe, amount: 100 }
+    ];
+    const result = getRecommendedFillOrder(steps);
+    expect(result[0].gas).toBe("Helium");
+    expect(result[1].gas).toBe("Oxygen");
+    expect(result[2].gas).toBe("Air");
+  });
+
+  test("sorts by Helium content descending", () => {
+    const steps = [
+      { gas: trimix21_35, amount: 100 },
+      { gas: trimix18_45, amount: 100 },
+      { gas: air, amount: 100 }
+    ];
+    const result = getRecommendedFillOrder(steps);
+    // 18/45 has more He than 21/35
+    expect(result[0].gas).toBe("18/45");
+    expect(result[1].gas).toBe("21/35");
+    expect(result[2].gas).toBe("Air");
+  });
+
+  test("sorts by Oxygen content descending when Helium content is equal", () => {
+    const steps = [
+      { gas: air, amount: 100 },
+      { gas: ean32, amount: 100 }
+    ];
+    const result = getRecommendedFillOrder(steps);
+    // Both have 0 He, but EAN32 has more O2
+    expect(result[0].gas).toBe("EAN32");
+    expect(result[1].gas).toBe("Air");
+  });
+
+  test("filters out steps with negligible amounts", () => {
+    const steps = [
+      { gas: pureHe, amount: 100 },
+      { gas: pureO2, amount: 0.0000001 }, // 1e-7, below tolerance 1e-6
+      { gas: air, amount: 100 }
+    ];
+    const result = getRecommendedFillOrder(steps);
+    expect(result).toHaveLength(2);
+    expect(result.map(r => r.gas)).toEqual(["Helium", "Air"]);
+  });
+
+  test("complex mix: pure He, high He, low He, pure O2, Air", () => {
+    const steps = [
+      { gas: air, amount: 100 },
+      { gas: trimix21_35, amount: 100 },
+      { gas: pureO2, amount: 100 },
+      { gas: trimix18_45, amount: 100 },
+      { gas: pureHe, amount: 100 }
+    ];
+    // Expected: He (100 He), O2 (100 O2), 18/45 (45 He), 21/35 (35 He), Air (21 O2, 0 He)
+    const result = getRecommendedFillOrder(steps);
+    expect(result.map(r => r.gas)).toEqual([
+      "Helium",
+      "Oxygen",
+      "18/45",
+      "21/35",
+      "Air"
+    ]);
+  });
+
+  test("handles empty input", () => {
+    const result = getRecommendedFillOrder([]);
+    expect(result).toEqual([]);
   });
 });
 
