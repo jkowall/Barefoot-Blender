@@ -11,6 +11,7 @@ import {
 } from "../utils/calculations";
 import { formatPressure, formatSignedPressure } from "../utils/format";
 import { fromDisplayPressure } from "../utils/units";
+import { logger } from "../utils/logger";
 import { AccordionItem } from "./Accordion";
 import ErrorBoundary from "./ErrorBoundary";
 import { NumberInput } from "./NumberInput";
@@ -174,7 +175,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         costSettings
       );
     } catch (err) {
-      console.error("MultiGas calculation error:", err);
+      logger.error("MultiGas calculation error", err);
       return {
         success: false,
         alternatives: [],

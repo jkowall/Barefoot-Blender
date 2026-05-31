@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.20] - 2026-04-01
+
+### Fixed
+
+- **🔒 Security**: Implemented a sanitized logging utility to prevent sensitive information leakage (such as stack traces or internal state) in error logs. Refactored `MultiGasTab`, `ErrorBoundary`, and service worker registration to use this secure logging pattern.
+
 ## [0.6.19] - 2026-03-28
 
 ### Changed
