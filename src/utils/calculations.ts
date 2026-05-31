@@ -467,7 +467,7 @@ export const projectTopOffChart = (
     };
 
     const result = calculateStandardBlend(settings, attemptInputs, topGas);
-    if (!result.success || result.steps.some((step) => step.kind === "bleed")) {
+    if (!result.success) {
       return {
         startPressure: adjustedPsi,
         helium: null,
@@ -477,9 +477,34 @@ export const projectTopOffChart = (
       };
     }
 
-    const helium = result.steps.find((step) => step.kind === "helium")?.amount ?? 0;
-    const oxygen = result.steps.find((step) => step.kind === "oxygen")?.amount ?? 0;
-    const topoff = result.steps.find((step) => step.kind === "topoff")?.amount ?? 0;
+    let helium = 0;
+    let oxygen = 0;
+    let topoff = 0;
+    let hasBleed = false;
+
+    for (const step of result.steps) {
+      if (step.kind === "bleed") {
+        hasBleed = true;
+        break;
+      }
+      if (step.kind === "helium") {
+        helium = step.amount;
+      } else if (step.kind === "oxygen") {
+        oxygen = step.amount;
+      } else if (step.kind === "topoff") {
+        topoff = step.amount;
+      }
+    }
+
+    if (hasBleed) {
+      return {
+        startPressure: adjustedPsi,
+        helium: null,
+        oxygen: null,
+        topGas: null,
+        feasible: false
+      };
+    }
 
     return {
       startPressure: adjustedPsi,
