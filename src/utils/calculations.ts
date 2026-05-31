@@ -931,13 +931,15 @@ const buildSearchValues = (
   maxValue: number
 ): number[] => {
   const values: number[] = [];
+  const seen = new Set<number>();
   const append = (value: number) => {
     if (value < minValue - 1e-6 || value > maxValue + 1e-6) {
       return;
     }
     const rounded = Number(value.toFixed(4));
-    if (!values.some((existing) => Math.abs(existing - rounded) < 1e-4)) {
+    if (!seen.has(rounded)) {
       values.push(rounded);
+      seen.add(rounded);
     }
   };
 
