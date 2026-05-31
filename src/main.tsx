@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { Capacitor } from "@capacitor/core";
 import App from "./App";
+import { logger } from "./utils/logger";
 import "./index.css";
 
 const root = document.getElementById("root");
@@ -24,6 +25,6 @@ if ("serviceWorker" in navigator && !Capacitor.isNativePlatform()) {
     })
     .catch((error) => {
       // Surface registration issues for troubleshooting while keeping build targets compatible.
-      console.error("Failed to register service worker", error);
+      logger.error("Failed to register service worker", error);
     });
 }
