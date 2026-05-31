@@ -173,8 +173,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         enabledGases,
         costSettings
       );
-    } catch (err) {
-      console.error("MultiGas calculation error:", err);
+    } catch {
       return {
         success: false,
         alternatives: [],
