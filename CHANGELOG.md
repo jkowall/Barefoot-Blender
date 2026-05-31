@@ -1,11 +1,5 @@
 # Changelog
 
-## [0.6.20] - 2026-03-28
-
-### Fixed
-
-- **Security**: Renamed a local function `evaluate` to `computeCandidateBlend` in `src/utils/calculations.ts` to avoid a false-positive security vulnerability report triggered by the function name containing "eval".
-
 ## [0.6.19] - 2026-03-28
 
 ### Changed
