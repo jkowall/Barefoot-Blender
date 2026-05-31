@@ -93,7 +93,7 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                 </SelectInput>
               </div>
 
-              <div className="section-title" style={{ marginTop: 16 }}>Defaults</div>
+              <div className="section-title mt-16">Defaults</div>
               <div className="grid two">
                 <NumberInput
                   label="Max PPO2"
@@ -127,9 +127,9 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                 <option value="yes">Yes</option>
               </SelectInput>
 
-              <div className="section-title" style={{ marginTop: 16 }}>Custom Banked Gases</div>
+              <div className="section-title mt-16">Custom Banked Gases</div>
               {settings.customGases.map((gas) => (
-                <div key={gas.id} className="card" style={{ marginBottom: 12 }}>
+                <div key={gas.id} className="card mb-12">
                   <div className="field">
                     <label>Name</label>
                     <input
@@ -207,7 +207,7 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                 />
               </div>
 
-              <div className="section-title" style={{ marginTop: 16 }}>Default Tank</div>
+              <div className="section-title mt-16">Default Tank</div>
               <div className="grid two">
                 <NumberInput
                   label="Tank Size (cu ft)"

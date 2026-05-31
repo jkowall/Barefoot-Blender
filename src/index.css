@@ -777,3 +777,69 @@ td {
   color: #fbbf24;
   font-style: italic;
 }
+
+/* Utility classes to replace inline styles for CSP compliance */
+.mt-0 { margin-top: 0; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.mb-12 { margin-bottom: 12px; }
+.flex-column { display: flex; flex-direction: column; }
+.flex-row { display: flex; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.flex-1 { flex: 1; }
+.w-auto { width: auto; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-half { gap: 0.5rem; }
+
+/* Error Boundary Styles */
+.error-boundary-container {
+  padding: 24px;
+  margin: 20px auto;
+  max-width: 800px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background-color: #fef2f2;
+  color: #991b1b;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.error-boundary-title {
+  margin-top: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.error-boundary-message {
+  font-family: monospace;
+  background-color: rgba(255, 255, 255, 0.7);
+  padding: 12px;
+  border-radius: 6px;
+  margin: 16px 0;
+  font-size: 0.875rem;
+  border: 1px solid #fee2e2;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.error-boundary-button {
+  padding: 8px 16px;
+  background-color: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.error-boundary-button:hover {
+  background-color: #b91c1c;
+}
+
+.error-boundary-footer {
+  margin-top: 12px;
+  font-size: 0.75rem;
+  opacity: 0.8;
+}

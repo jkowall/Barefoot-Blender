@@ -76,7 +76,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+    <div className="flex-column gap-12">
       <AccordionItem title="Maximum Operating Depth" defaultOpen={true}>
         <div className="grid two">
           <NumberInput
@@ -95,7 +95,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
             onChange={(val) => update({ modMaxPPO2: val === undefined ? undefined : clampPressure(val) })}
           />
         </div>
-        <div style={{ marginTop: "12px" }}>
+        <div className="mt-12">
           <div>Working MOD: {formatNumber(modResult.mod, 1)} {settings.depthUnit}</div>
           <div>Contingency MOD ({settings.defaultContingencyPPO2}): {formatNumber(modResult.contingency, 1)} {settings.depthUnit}</div>
         </div>
@@ -125,7 +125,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
             onChange={(val) => update({ bestMixMaxEND: val === undefined ? undefined : clampDepth(val) })}
           />
         </div>
-        <div style={{ marginTop: "12px" }}>
+        <div className="mt-12">
           <div>Best Mix: {formatNumber(bestMixResult.o2, 1)}% O2, {formatNumber(bestMixResult.he, 1)}% He</div>
         </div>
       </AccordionItem>
@@ -148,7 +148,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
             onChange={(val) => update({ eadDepth: val === undefined ? undefined : clampDepth(val) })}
           />
         </div>
-        <div style={{ marginTop: "12px" }}>
+        <div className="mt-12">
           <div>EAD: {formatNumber(eadResult, 1)} {settings.depthUnit}</div>
         </div>
       </AccordionItem>
@@ -179,7 +179,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
             onChange={(val) => update({ endDepth: val === undefined ? undefined : clampDepth(val) })}
           />
         </div>
-        <div style={{ marginTop: "12px" }}>
+        <div className="mt-12">
           <div>END: {formatNumber(endResult, 1)} {settings.depthUnit}</div>
           <div className="table-note">Oxygen counted as narcotic: {settings.oxygenIsNarcotic ? "Yes" : "No"}</div>
         </div>
@@ -211,7 +211,7 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
             onChange={(val) => update({ densityDepth: val === undefined ? undefined : clampDepth(val) })}
           />
         </div>
-        <div style={{ marginTop: "12px" }}>
+        <div className="mt-12">
           <div>Density: {formatNumber(densityResult, 2)} g/L</div>
         </div>
       </AccordionItem>
@@ -256,7 +256,7 @@ const UnitConverter = (): JSX.Element => {
       <div className="grid two">
         <div className="field">
           <label htmlFor={depthId}>Depth</label>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div className="flex-row gap-half">
             <input
               id={depthId}
               type="number"
@@ -266,13 +266,13 @@ const UnitConverter = (): JSX.Element => {
                 setDepthValue(val === "" ? undefined : clampDepth(Number(val)));
               }}
               onFocus={handleFocus}
-              style={{ flex: 1 }}
+              className="flex-1"
             />
             <select
               aria-label="Depth unit"
               value={depthUnit}
               onChange={(e) => setDepthUnit(e.target.value as "m" | "ft")}
-              style={{ width: "auto" }}
+              className="w-auto"
             >
               <option value="m">m</option>
               <option value="ft">ft</option>
@@ -282,7 +282,7 @@ const UnitConverter = (): JSX.Element => {
         </div>
         <div className="field">
           <label htmlFor={pressureId}>Pressure</label>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div className="flex-row gap-half">
             <input
               id={pressureId}
               type="number"
@@ -292,13 +292,13 @@ const UnitConverter = (): JSX.Element => {
                 setPressureValue(val === "" ? undefined : clampPressure(Number(val)));
               }}
               onFocus={handleFocus}
-              style={{ flex: 1 }}
+              className="flex-1"
             />
             <select
               aria-label="Pressure unit"
               value={pressureUnit}
               onChange={(e) => setPressureUnit(e.target.value as "bar" | "psi")}
-              style={{ width: "auto" }}
+              className="w-auto"
             >
               <option value="bar">bar</option>
               <option value="psi">psi</option>

@@ -17,7 +17,7 @@ export const SelectInput = ({
 
   return (
     <div className={`field ${className ?? ""}`}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="flex-between">
         <label htmlFor={id}>{label}</label>
         {labelAction}
       </div>

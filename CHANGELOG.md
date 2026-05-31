@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.20] - 2026-04-02
+
+### Fixed
+
+- **Security**: Hardened Content Security Policy (CSP) by removing `'unsafe-inline'` from the `style-src` directive in both production headers and the HTML meta tag. Migrated all remaining inline styles to centralized CSS utility classes and component-specific styles in `src/index.css` to ensure full compliance without breaking UI functionality.
+
 ## [0.6.19] - 2026-03-28
 
 ### Changed
