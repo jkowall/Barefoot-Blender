@@ -302,6 +302,27 @@ Native release details live in `docs/mobile-release.md`. Current defaults:
 
 App Store and Play Store submissions are manual/account-owner-gated. Do not treat a local native build as deployed.
 
+### Current Mobile Rollout Context
+
+Before continuing app-store rollout work, first read the ignored local handoff notes if they exist:
+
+- `private/mobile-rollout-current-state.md`
+- `private/android-play-rollout-state.md`
+- `private/ios-app-store-rollout-state.md`
+- `private/revenuecat-subscription-context.md`
+
+These files are intentionally under `private/`, which is ignored by git. They may contain live store-console state and local credential-file references. Do not commit them, and do not print secret values from `.env.local`, `.p8`, or service-account JSON files.
+
+As of 2026-06-07, non-secret rollout state was:
+
+- iOS `0.8.0` build `0.8.0 (1)` was resubmitted to App Review with `Barefoot Blender Pro Annual` included.
+- Apple subscription product `barefoot_blender_pro_annual` was `Ready to Submit` before resubmission and belongs to subscription group `Barefoot Blender Pro`.
+- Android Alpha closed test release `0.8.0 closed test` used version code `3` and was sent to Google review.
+- Android production access was still locked pending Google closed testing requirements: at least 12 opted-in testers for 14 continuous days.
+- The configured Play tester email list was named `Testers` and had 1 user at last check.
+- The next newly uploaded Android bundle must use version code `4` or higher.
+- The current Android release artifact was `android/app/build/outputs/bundle/release/app-release.aab` with SHA-256 `683673b397557b270506992bb314e1dd16d36905a1d51d8b9fba14a800412196`.
+
 ## Commit & Push Expectations
 
 - Do not commit unless the user asks for a commit/push.
