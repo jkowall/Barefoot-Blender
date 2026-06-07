@@ -177,6 +177,11 @@ button {
   transform: translateY(-1px);
 }
 
+.tab-button.active:hover {
+  background: #38bdf8;
+  color: #0f172a;
+}
+
 .sensitivity-summary {
   display: flex;
   justify-content: space-between;
