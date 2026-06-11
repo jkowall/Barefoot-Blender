@@ -145,7 +145,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       const gasLabel = step.kind === "topoff" ? selectedTopGas?.name ?? step.gasName : step.gasName;
       runningPsi += step.amount;
       return (
-        <li key={`${step.kind}-${index}`}>
+        <li key={`${step.kind}-${step.gasName}-${step.amount.toFixed(6)}-${runningPsi.toFixed(6)}`}>
           {index + 1}. {descriptor} {gasLabel}: {formatPressure(runningPsi, settings.pressureUnit)}
           <span className="result-step-total"> ({formatSignedPressure(step.amount, settings.pressureUnit)})</span>
         </li>
@@ -517,14 +517,14 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                   <div key={line.label} className="cost-line">
                     <span>{line.label}:</span>
                     <span>
-                      {formatPressure(line.pressurePsi, settings.pressureUnit)}, {formatNumber(line.volumeCuFt, 2)} cu ft, {formatNumber(line.volumeLiters, 2)} L × ${line.unitPrice.toFixed(2)} = ${line.cost.toFixed(2)}
+                      {formatPressure(line.pressurePsi, settings.pressureUnit)}, {formatNumber(line.volumeCuFt, 2)} cu ft, {formatNumber(line.volumeLiters, 2)} L × {"$"}{line.unitPrice.toFixed(2)} = {"$"}{line.cost.toFixed(2)}
                     </span>
                   </div>
                 ))}
               </div>
               <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
               <div className="cost-total">
-                <strong>Total: ${fillCost.totalCost.toFixed(2)}</strong>
+                <strong>Total: {"$"}{fillCost.totalCost.toFixed(2)}</strong>
               </div>
             </div>
           )}
@@ -552,7 +552,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                     {formatPressure(entry.startPressurePsi, settings.pressureUnit)}
                   </div>
                   {entry.estimatedCost !== undefined && (
-                    <div className="table-note">Estimated Cost: ${entry.estimatedCost.toFixed(2)}</div>
+                    <div className="table-note">Estimated Cost: {"$"}{entry.estimatedCost.toFixed(2)}</div>
                   )}
                   <div className="table-note">
                     Steps: {entry.steps

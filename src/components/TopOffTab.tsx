@@ -282,14 +282,14 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                   <div key={line.label} className="cost-line">
                     <span>{line.label}:</span>
                     <span>
-                      {formatPressure(line.pressurePsi, settings.pressureUnit)}, {formatNumber(line.volumeCuFt, 2)} cu ft, {formatNumber(line.volumeLiters, 2)} L × ${line.unitPrice.toFixed(2)} = ${line.cost.toFixed(2)}
+                      {formatPressure(line.pressurePsi, settings.pressureUnit)}, {formatNumber(line.volumeCuFt, 2)} cu ft, {formatNumber(line.volumeLiters, 2)} L × {"$"}{line.unitPrice.toFixed(2)} = {"$"}{line.cost.toFixed(2)}
                     </span>
                   </div>
                 ))}
               </div>
               <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
               <div className="cost-total">
-                <strong>Total: ${fillCost.totalCost.toFixed(2)}</strong>
+                <strong>Total: {"$"}{fillCost.totalCost.toFixed(2)}</strong>
               </div>
             </div>
           )}
@@ -427,7 +427,7 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
             </thead>
             <tbody>
               {chart.map((row, index) => (
-                <tr key={`${row.startPressure}-${index}`}>
+                <tr key={`${row.startPressure}-${row.helium ?? "drain"}-${row.oxygen ?? "drain"}-${row.topGas ?? "drain"}-${row.feasible ? "feasible" : "blocked"}`}>
                   <td>
                     {formatPressure(row.startPressure, settings.pressureUnit)}
                     {index === 0 && (

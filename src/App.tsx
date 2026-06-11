@@ -26,15 +26,20 @@ const SAFETY_ACK_KEY = "barefoot-blender-safety-acknowledged";
 const getInitialSafetyAcknowledgement = (): boolean =>
   typeof window === "undefined" ? false : window.localStorage.getItem(SAFETY_ACK_KEY) === "true";
 
+const getInitialSubscriptionStatus = (): SubscriptionStatus => {
+  const nativeApp = isNativeApp();
+  return {
+    loading: true,
+    active: !nativeApp,
+    source: nativeApp ? "unknown" : "web"
+  };
+};
+
 const App = (): JSX.Element => {
   const [activeTab, setActiveTab] = useState<"standard" | "topoff" | "multi" | "utilities">("standard");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [safetyAcknowledged, setSafetyAcknowledged] = useState(getInitialSafetyAcknowledgement);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>({
-    loading: true,
-    active: !isNativeApp(),
-    source: isNativeApp() ? "unknown" : "web"
-  });
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>(getInitialSubscriptionStatus);
   const settings = useSettingsStore();
 
   const topOffOptions = useMemo(() => listTopOffOptions(settings.customGases), [settings.customGases]);
