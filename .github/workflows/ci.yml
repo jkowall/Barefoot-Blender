@@ -103,7 +103,7 @@ jobs:
         run: |
           xcodebuild \
             -project ios/App/App.xcodeproj \
-            -scheme App \
+            -target App \
             -configuration Debug \
             -sdk iphonesimulator \
             CODE_SIGNING_ALLOWED=NO \
