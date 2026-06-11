@@ -274,16 +274,32 @@ Avoid changing these unless the task explicitly requires it:
 Production deploys automatically when `main` is pushed to GitHub. For normal release work, the expected flow is:
 
 ```bash
-npm run build
+npm run check
+npm run build:mobile:debug
+npm run build:mobile
+npx cap doctor
+(cd android && ./gradlew bundleRelease)
+xcodebuild -project ios/App/App.xcodeproj -scheme App -destination 'platform=iOS Simulator,name=iPhone 17' -configuration Debug CODE_SIGNING_ALLOWED=NO build
 git push origin main
 ```
+
+Treat any push to `main` that will update the Cloudflare production site as a web plus native release candidate. Before declaring the Cloudflare build ready, locally build and validate the iOS and Android Capacitor projects, including the debug/test native build created by `npm run build:mobile:debug`. Use `npm run debug:ios` and `npm run debug:android` for simulator/emulator smoke tests when the local machine has the required devices available. Always run `npm run build:mobile` again after any debug build and before Android bundle, Xcode archive, TestFlight, Google Play, or production work so release artifacts contain production subscription behavior.
+
+Native release and test artifacts should be built locally by default, not by GitHub Actions. The native builds depend on local signing identities, provisioning profiles, Android keystore material, RevenueCat environment keys, Xcode, Android Studio, and store-console state. GitHub may validate web checks and Cloudflare deployment readiness, but do not make GitHub the source of truth for signed iOS or Android release artifacts unless the repo has an explicit CI signing plan, protected secrets, and manual approval gates.
+
+Cloudflare deployment is not the same as native distribution. After local native validation, TestFlight and Google Play internal or closed testing still require manual upload/submission through the Apple and Google release surfaces. Do not upload `VITE_DEBUG_SUBSCRIPTION_BYPASS=true` builds to TestFlight, Google Play, or production.
 
 After pushing, verify production is serving the new build by checking `https://trimix-blender.com` or the current hashed asset in `dist/`.
 
 Wrangler is only a manual fallback path and requires an authenticated Cloudflare session or `CLOUDFLARE_API_TOKEN` in non-interactive shells:
 
 ```bash
-npm run build
+npm run check
+npm run build:mobile:debug
+npm run build:mobile
+npx cap doctor
+(cd android && ./gradlew bundleRelease)
+xcodebuild -project ios/App/App.xcodeproj -scheme App -destination 'platform=iOS Simulator,name=iPhone 17' -configuration Debug CODE_SIGNING_ALLOWED=NO build
 npx wrangler deploy
 ```
 
