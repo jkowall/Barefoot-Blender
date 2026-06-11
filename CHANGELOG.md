@@ -13,6 +13,10 @@
 - **Legal Pages**: Added privacy, terms, and support pages for app store listings.
 - **Mobile Release Docs**: Added account setup, signing, store listing, subscription, validation, and rollback guidance.
 
+### Fixed
+
+- **iOS Release Assets**: Removed unassigned splash image files from the iOS asset catalog to clear Xcode release-build warnings.
+
 ## [0.7.0] - 2026-05-25
 
 ### Added

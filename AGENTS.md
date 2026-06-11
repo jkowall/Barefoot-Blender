@@ -274,16 +274,32 @@ Avoid changing these unless the task explicitly requires it:
 Production deploys automatically when `main` is pushed to GitHub. For normal release work, the expected flow is:
 
 ```bash
-npm run build
+npm run check
+npm run build:mobile:debug
+npm run build:mobile
+npx cap doctor
+(cd android && ./gradlew bundleRelease)
+xcodebuild -project ios/App/App.xcodeproj -scheme App -destination 'platform=iOS Simulator,name=iPhone 17' -configuration Debug CODE_SIGNING_ALLOWED=NO build
 git push origin main
 ```
+
+Treat any push to `main` that will update the Cloudflare production site as a web plus native release candidate. Before declaring the Cloudflare build ready, locally build and validate the iOS and Android Capacitor projects, including the debug/test native build created by `npm run build:mobile:debug`. Use `npm run debug:ios` and `npm run debug:android` for simulator/emulator smoke tests when the local machine has the required devices available. Always run `npm run build:mobile` again after any debug build and before Android bundle, Xcode archive, TestFlight, Google Play, or production work so release artifacts contain production subscription behavior.
+
+Native release and test artifacts should be built locally by default, not by GitHub Actions. The native builds depend on local signing identities, provisioning profiles, Android keystore material, RevenueCat environment keys, Xcode, Android Studio, and store-console state. GitHub may validate web checks and Cloudflare deployment readiness, but do not make GitHub the source of truth for signed iOS or Android release artifacts unless the repo has an explicit CI signing plan, protected secrets, and manual approval gates.
+
+Cloudflare deployment is not the same as native distribution. After local native validation, TestFlight and Google Play internal or closed testing still require manual upload/submission through the Apple and Google release surfaces. Do not upload `VITE_DEBUG_SUBSCRIPTION_BYPASS=true` builds to TestFlight, Google Play, or production.
 
 After pushing, verify production is serving the new build by checking `https://trimix-blender.com` or the current hashed asset in `dist/`.
 
 Wrangler is only a manual fallback path and requires an authenticated Cloudflare session or `CLOUDFLARE_API_TOKEN` in non-interactive shells:
 
 ```bash
-npm run build
+npm run check
+npm run build:mobile:debug
+npm run build:mobile
+npx cap doctor
+(cd android && ./gradlew bundleRelease)
+xcodebuild -project ios/App/App.xcodeproj -scheme App -destination 'platform=iOS Simulator,name=iPhone 17' -configuration Debug CODE_SIGNING_ALLOWED=NO build
 npx wrangler deploy
 ```
 
@@ -301,6 +317,27 @@ Native release details live in `docs/mobile-release.md`. Current defaults:
 - Price target: `$4.99/year`
 
 App Store and Play Store submissions are manual/account-owner-gated. Do not treat a local native build as deployed.
+
+### Current Mobile Rollout Context
+
+Before continuing app-store rollout work, first read the ignored local handoff notes if they exist:
+
+- `private/mobile-rollout-current-state.md`
+- `private/android-play-rollout-state.md`
+- `private/ios-app-store-rollout-state.md`
+- `private/revenuecat-subscription-context.md`
+
+These files are intentionally under `private/`, which is ignored by git. They may contain live store-console state and local credential-file references. Do not commit them, and do not print secret values from `.env.local`, `.p8`, or service-account JSON files.
+
+As of 2026-06-07, non-secret rollout state was:
+
+- iOS `0.8.0` build `0.8.0 (1)` was resubmitted to App Review with `Barefoot Blender Pro Annual` included.
+- Apple subscription product `barefoot_blender_pro_annual` was `Ready to Submit` before resubmission and belongs to subscription group `Barefoot Blender Pro`.
+- Android Alpha closed test release `0.8.0 closed test` used version code `3` and was sent to Google review.
+- Android production access was still locked pending Google closed testing requirements: at least 12 opted-in testers for 14 continuous days.
+- The configured Play tester email list was named `Testers` and had 1 user at last check.
+- The next newly uploaded Android bundle must use version code `4` or higher.
+- The current Android release artifact was `android/app/build/outputs/bundle/release/app-release.aab` with SHA-256 `683673b397557b270506992bb314e1dd16d36905a1d51d8b9fba14a800412196`.
 
 ## Commit & Push Expectations
 
