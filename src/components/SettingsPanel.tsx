@@ -8,7 +8,12 @@ import { SelectInput } from "./SelectInput";
 const pressureUnits: PressureUnit[] = ["psi", "bar"];
 const depthUnits: DepthUnit[] = ["ft", "m"];
 
-const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
+type SettingsPanelProps = {
+  onClose: () => void;
+  onReportBug: () => void;
+};
+
+const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Element => {
   const settings = useSettingsStore();
   const [activeTab, setActiveTab] = useState<"general" | "gases" | "pricing" | "about">("general");
 
@@ -248,6 +253,11 @@ const SettingsPanel = ({ onClose }: { onClose: () => void }): JSX.Element => {
                 Native iOS and Android access is planned as Barefoot Blender Pro at $4.99/year. Purchase,
                 restore, cancellation, refund, and subscription management are handled by Apple or Google.
               </div>
+
+              <div className="section-title" style={{ marginTop: 16 }}>Support</div>
+              <button className="settings-close" type="button" onClick={onReportBug}>
+                Report bug
+              </button>
             </>
           )}
         </div>

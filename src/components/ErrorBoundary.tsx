@@ -4,6 +4,7 @@ import { logger } from "../utils/logger";
 interface Props {
     children?: ReactNode;
     fallback?: ReactNode;
+    onReportBug?: (error: Error) => void;
 }
 
 interface State {
@@ -55,22 +56,45 @@ class ErrorBoundary extends Component<Props, State> {
                     }}>
                         {this.state.error?.message}
                     </div>
-                    <button
-                        onClick={() => this.setState({ hasError: false, error: null })}
-                        style={{
-                            padding: '8px 16px',
-                            backgroundColor: '#dc2626',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '0.875rem',
-                            fontWeight: 500,
-                            transition: 'background-color 0.2s'
-                        }}
-                    >
-                        Try again
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                            onClick={() => this.setState({ hasError: false, error: null })}
+                            style={{
+                                padding: '8px 16px',
+                                backgroundColor: '#dc2626',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '0.875rem',
+                                fontWeight: 500,
+                                transition: 'background-color 0.2s'
+                            }}
+                        >
+                            Try again
+                        </button>
+                        {this.state.error !== null && this.props.onReportBug !== undefined && (
+                            <button
+                                onClick={() => {
+                                    if (this.state.error !== null) {
+                                        this.props.onReportBug?.(this.state.error);
+                                    }
+                                }}
+                                style={{
+                                    padding: '8px 16px',
+                                    backgroundColor: '#0f172a',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.875rem',
+                                    fontWeight: 500
+                                }}
+                            >
+                                Report this crash
+                            </button>
+                        )}
+                    </div>
                     <div style={{ marginTop: '12px', fontSize: '0.75rem', opacity: 0.8 }}>
                         If this persists, please try clearing your browser data or resetting settings.
                     </div>

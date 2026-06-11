@@ -15,6 +15,7 @@ Source code: [github.com/jkowall/Barefoot-Blender](https://github.com/jkowall/Ba
 - **Dive Utilities** – MOD, EAD, Best Mix, END, and density calculators that honor global PPO₂ and narcotic settings.
 - **Persistent Settings** – Local storage of preferred units, PPO₂ defaults, narcotic rules, and custom banked gases.
 - **Installable PWA** – Works fully offline after first load via Vite PWA service worker integration.
+- **In-App Bug Reporting** – Opens prefilled support email reports with optional sanitized diagnostics and a copy fallback.
 - **Native Mobile Release Path** – Capacitor projects for iOS and Android with RevenueCat-backed annual subscription access.
 
 ## Tech Stack
