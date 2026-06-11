@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.1] - 2026-06-11
+
+### Fixed
+
+- **Web App Startup**: Aligned React and React DOM package versions to prevent a runtime renderer mismatch that could leave the production page blank.
+
 ## [0.9.0] - 2026-06-11
 
 ### Added
