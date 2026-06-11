@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0] - 2026-06-11
+
+### Added
+
+- **iPad App Store Screenshots**: Added 13-inch iPad screenshot assets for App Store submission.
+- **Mobile Release Parity Checklist**: Documented native validation expectations before treating web production as release-ready.
+
+### Fixed
+
+- **iOS Safe Area Header**: Adjusted native header spacing so iOS safe areas do not crowd the app chrome.
+- **Native Tab Highlight**: Fixed active tab styling in native builds.
+- **iOS Release Assets**: Removed duplicate unassigned splash images from the iOS asset catalog.
+
 ## [0.8.0] - 2026-05-25
 
 ### Added
