@@ -1,0 +1,64 @@
+name: Feature request
+description: Propose a new capability or improvement.
+title: "feature: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing an idea. Help us understand the problem and the value of this feature.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What user problem or workflow pain point does this address?
+      placeholder: I'm always frustrated when ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe your preferred approach.
+      placeholder: It would be great if ...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds or alternative ideas you've considered.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which area does this affect most?
+      options:
+        - Blending calculations
+        - Utilities (MOD/EAD/END/Density)
+        - Settings/preferences
+        - UI/UX
+        - PWA/offline behavior
+        - Native mobile (iOS/Android)
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Expected impact
+      description: How valuable is this for users?
+      options:
+        - Nice to have
+        - Useful improvement
+        - High impact
+        - Critical
+    validations:
+      required: true
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add mockups, examples, or references if available.
