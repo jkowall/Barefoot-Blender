@@ -5,6 +5,12 @@
 ### Added
 
 - **In-App Bug Reporting**: Added email-based bug reports from the footer, Settings/About, and crash UI with optional sanitized diagnostics and a copy fallback.
+- **iOS Store Copy Guard**: Added a build-time iOS asset check that fails native syncs when App Store-visible assets include Android or Google platform references.
+
+### Fixed
+
+- **App Store Review Copy**: Removed third-party platform references from native subscription, support, privacy, and terms copy for App Store review readiness.
+- **Native Release Versioning**: Aligned iOS and Android native release metadata with app version `0.10.0`.
 
 ## [0.9.1] - 2026-06-11
 

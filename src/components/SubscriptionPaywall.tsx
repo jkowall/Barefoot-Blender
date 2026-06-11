@@ -18,14 +18,13 @@ const SubscriptionPaywall = ({
       <img className="blocking-logo" src="/logo-192.png" alt="Barefoot Blender logo" />
       <h1>Barefoot Blender Pro</h1>
       <p>
-        Unlock the native iOS and Android app for trimix and nitrox gas blending, dive utilities,
-        offline app assets, and ongoing platform maintenance.
+        Unlock the native app for trimix and nitrox gas blending, dive utilities, offline app assets,
+        and ongoing platform maintenance.
       </p>
       <div className="subscription-price">$4.99/year</div>
       <p className="table-note">
-        Auto-renews yearly through Apple or Google until canceled. Manage cancellation and refunds
-        through your store account. Purchase, restore, and periodic subscription verification require
-        an internet connection.
+        Auto-renews yearly until canceled. Manage cancellation and refunds through your store account.
+        Purchase, restore, and periodic subscription verification require an internet connection.
       </p>
       {status.error && <div className="warning">{status.error}</div>}
       <div className="blocking-actions">

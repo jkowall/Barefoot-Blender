@@ -34,6 +34,7 @@ The keys are public SDK keys. Keep them centralized in environment config so tes
 ```bash
 npm install
 npm run check
+npm run build:ios
 npm run build:mobile
 ```
 
@@ -45,12 +46,15 @@ Treat every Cloudflare production release as a web plus native release candidate
 npm run check
 npm run build:mobile:debug
 npm run build:mobile
+npm run verify:ios-copy
 npx cap doctor
 (cd android && ./gradlew bundleRelease)
 xcodebuild -project ios/App/App.xcodeproj -scheme App -destination 'platform=iOS Simulator,name=iPhone 17' -configuration Debug CODE_SIGNING_ALLOWED=NO build
 ```
 
 Run `npm run debug:ios` and `npm run debug:android` for local simulator/emulator smoke tests when the required devices are available. The debug/test build validates the local native shell and subscription-bypass path only. Always run `npm run build:mobile` again after any debug build and before Android bundle, Xcode archive, TestFlight, Google Play, or production work so release artifacts contain production subscription behavior. TestFlight and Google Play internal or closed testing must use release-capable native builds, never builds produced with `VITE_DEBUG_SUBSCRIPTION_BYPASS=true`.
+
+The iOS sync path runs `npm run verify:ios-copy` after copying web assets into `ios/App/App/public`. This guard fails the build if App Store-visible iOS assets contain Android or Google platform references, which prevents resubmitting binaries with metadata issues App Review flags under guideline 2.3.10.
 
 Build iOS and Android artifacts locally by default instead of in GitHub Actions. Local builds keep signing identities, provisioning profiles, Android keystore files, RevenueCat environment keys, Xcode, Android Studio, and store-console handoffs under direct control. GitHub Actions can still validate the web build and Cloudflare readiness, but signed native artifacts should move to CI only after an explicit signing, secrets, and manual-approval design exists.
 
@@ -90,6 +94,7 @@ npm run debug:android
 4. Rebuild production native assets after any debug build:
 
 ```bash
+npm run build:ios
 npm run build:mobile
 npx cap doctor
 ```
@@ -138,7 +143,7 @@ npm run mobile:android
 5. Use automatic signing unless the account requires manual profiles.
 6. Archive in Xcode and upload through Organizer to App Store Connect.
 7. Attach the uploaded build to TestFlight internal testing and to the App Store version. App Store Connect build state, TestFlight state, and app-review submission state are separate.
-8. Add screenshots, privacy details, support URL, privacy URL, subscription terms, and review notes.
+8. Add screenshots, privacy details, support URL, privacy URL, subscription terms, and review notes. For subscription apps, include `Terms of Use (EULA): https://trimix-blender.com/terms/` in the App Description or App Store Connect EULA field and repeat the link in App Review Notes.
 9. Submit to TestFlight first, then submit the same build for App Review after sign-off.
 
 Review notes should state that the app is a calculator for trained divers and fill station operators, no login is required, and the subscription is validated through RevenueCat/StoreKit.

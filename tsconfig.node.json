@@ -3,8 +3,10 @@
     "composite": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "allowJs": true,
+    "checkJs": true,
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true
   },
-  "include": ["vite.config.ts", "capacitor.config.ts"]
+  "include": ["vite.config.ts", "capacitor.config.ts", "scripts/**/*.mjs"]
 }
