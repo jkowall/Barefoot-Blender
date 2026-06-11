@@ -7,7 +7,11 @@ import {
 import { getNativePlatform, isNativeApp, type NativePlatform } from "../utils/platform";
 
 const ENTITLEMENT_ID = "pro";
-const ANNUAL_PRODUCT_IDS = new Set(["barefoot_blender_pro_annual", "barefoot_blender_pro"]);
+const ANNUAL_PRODUCT_IDS = new Set([
+  "barefoot_blender_pro_annual",
+  "barefoot_blender_pro",
+  "barefoot_blender_pro:annual-499"
+]);
 
 const apiKeys: Record<NativePlatform, string | undefined> = {
   ios: import.meta.env.VITE_REVENUECAT_IOS_API_KEY,
