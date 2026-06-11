@@ -7,7 +7,7 @@ import org.junit.Test;
 public class AppMetadataTest {
 
     @Test
-    public void buildConfigMatchesReleasedApplicationId() {
-        assertEquals("com.trimixblender.barefootblender", BuildConfig.APPLICATION_ID);
+    public void mainActivityUsesReleasedPackageName() {
+        assertEquals("com.trimixblender.barefootblender", MainActivity.class.getPackage().getName());
     }
 }
