@@ -34,7 +34,7 @@
   "devDependencies": {
     "@capacitor/android": "^8.4.0",
     "@capacitor/cli": "^8.4.0",
-    "@capacitor/ios": "^8.3.4",
+    "@capacitor/ios": "^8.4.0",
     "@eslint-react/eslint-plugin": "^5.8.10",
     "@eslint/js": "^10.0.1",
     "@types/react": "19.2.14",
