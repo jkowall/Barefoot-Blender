@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.0] - 2026-06-11
+
+### Added
+
+- **In-App Bug Reporting**: Added email-based bug reports from the footer, Settings/About, and crash UI with optional sanitized diagnostics and a copy fallback.
+
 ## [0.9.1] - 2026-06-11
 
 ### Fixed
