@@ -101,10 +101,18 @@ jobs:
 
       - name: Build iOS app without signing
         run: |
+          set -euo pipefail
+          SIMULATOR_UDID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && /Shutdown|Booted/ { print $2; exit }')"
+          if [[ -z "${SIMULATOR_UDID}" ]]; then
+            echo "No available iPhone simulator found"
+            xcrun simctl list devices available
+            exit 1
+          fi
+
           xcodebuild \
             -project ios/App/App.xcodeproj \
-            -target App \
+            -scheme App \
             -configuration Debug \
-            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=${SIMULATOR_UDID}" \
             CODE_SIGNING_ALLOWED=NO \
             build
