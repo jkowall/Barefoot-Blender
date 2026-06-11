@@ -250,8 +250,8 @@ const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Elemen
 
               <div className="section-title" style={{ marginTop: 16 }}>Subscription</div>
               <div className="table-note">
-                Native iOS and Android access is planned as Barefoot Blender Pro at $4.99/year. Purchase,
-                restore, cancellation, refund, and subscription management are handled by Apple or Google.
+                Native app access is offered as Barefoot Blender Pro at $4.99/year. Purchase, restore,
+                cancellation, refund, and subscription management are handled by your store account.
               </div>
 
               <div className="section-title" style={{ marginTop: 16 }}>Support</div>

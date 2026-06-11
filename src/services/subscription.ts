@@ -81,7 +81,7 @@ const configurePurchases = async (): Promise<NativePlatform | undefined> => {
 
   const platform = getNativePlatform();
   if (!platform) {
-    throw new Error("Barefoot Blender subscriptions are only configured for iOS and Android.");
+    throw new Error("Barefoot Blender subscriptions are only configured for native app platforms.");
   }
 
   if (configuredPlatform === platform) {
