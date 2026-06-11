@@ -182,6 +182,28 @@ jarsigner -verify -verbose -certs app/build/outputs/bundle/release/app-release.a
 
 ## Validation
 
+### CI Quality Gates
+
+Pull requests and pushes to `main` run the automated quality gates in GitHub Actions:
+
+- Web and shared app checks:
+  - `npm ci`
+  - `npm run lint`
+  - `npm run test`
+  - `npm run build`
+- Android native smoke:
+  - `npm run build`
+  - `npx cap sync android`
+  - `npx cap doctor android`
+  - `cd android && ./gradlew testDebugUnitTest`
+- iOS native smoke:
+  - `npm run build`
+  - `npx cap sync ios`
+  - `npx cap doctor ios`
+  - unsigned simulator SDK build with `xcodebuild`
+
+These gates prove the web app, Capacitor sync, Android project, iOS project, and subscription service unit coverage remain healthy. They do not replace platform sandbox purchase validation because Apple and Google purchase flows require store-managed test accounts and products.
+
 - Web:
   - `npm run check`
   - Browser PWA install smoke test.
