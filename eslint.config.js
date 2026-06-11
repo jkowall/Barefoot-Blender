@@ -9,6 +9,7 @@ export default tseslint.config(
     ignores: [
       "dist/",
       "node_modules/",
+      "private/",
       "eslint.config.js",
       "benchmark.js",
       "android/**/build/",
