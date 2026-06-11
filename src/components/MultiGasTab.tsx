@@ -21,6 +21,8 @@ import TankContextFields from "./TankContextFields";
 
 
 const MAX_GAS_SOURCES = 4;
+const gasSourceKeys = new WeakMap<GasSourceInput, string>();
+let gasSourceKeyCounter = 0;
 
 const trimixPresets: GasSelection[] = [
   { id: "trimix-2135", name: "Trimix 21/35", o2: 21, he: 35 },
@@ -32,6 +34,33 @@ type Props = {
   settings: SettingsSnapshot;
   topOffOptions: GasSelection[];
 };
+
+const getGasSourceKey = (source: GasSourceInput): string => {
+  const existingKey = gasSourceKeys.get(source);
+  if (existingKey) {
+    return existingKey;
+  }
+
+  const key = `gas-source-${gasSourceKeyCounter}`;
+  gasSourceKeyCounter += 1;
+  gasSourceKeys.set(source, key);
+  return key;
+};
+
+const blendAlternativeKey = (alternative: BlendAlternative): string => {
+  const stepKey = alternative.steps
+    .map((step) => `${step.gas.id}:${step.amount.toFixed(6)}`)
+    .join("|");
+  return [
+    alternative.finalO2.toFixed(3),
+    alternative.finalHe.toFixed(3),
+    alternative.estimatedCost.toFixed(2),
+    stepKey
+  ].join(":");
+};
+
+const costLineKey = (line: { gas: string; amount: number; cost: number }): string =>
+  `${line.gas}-${line.amount.toFixed(6)}-${line.cost.toFixed(2)}`;
 
 const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const multiGas = useSessionStore((state: SessionState) => state.multiGas);
@@ -257,7 +286,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       <AccordionItem title="Source Gases" defaultOpen={true}>
         {(multiGas.gasSources ?? []).map((source, index) => (
           <GasSourceRow
-            key={index}
+            key={getGasSourceKey(source)}
             index={index}
             source={source}
             baseOptions={gasOptions}
@@ -321,7 +350,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               <div className="alternatives-list">
                 {blendResult.alternatives.map((alt, index) => (
                   <div
-                    key={index}
+                    key={blendAlternativeKey(alt)}
                     className={`alternative-option ${index === selectedIndex ? 'selected' : ''}`}
                     onClick={() => selectAlternative(index)}
                   >
@@ -336,8 +365,8 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                       <span className="alternative-cost">{formatCost(alt.estimatedCost)}</span>
                     </div>
                     <div className="alternative-gases">
-                      {alt.costBreakdown.map((item, i) => (
-                        <span key={i} className="alternative-gas">
+                      {alt.costBreakdown.map((item) => (
+                        <span key={costLineKey(item)} className="alternative-gas">
                           {item.gas}: {formatPressure(item.amount, settings.pressureUnit)}, {formatGasVolume(item.amount)}
                         </span>
                       ))}
@@ -359,7 +388,7 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                       const isBleed = step.amount < 0;
                       const action = isBleed ? "Drain" : "Add";
                       return (
-                        <li key={index} className={isBleed ? "bleed-step" : ""}>
+                        <li key={`${step.gas}-${step.amount.toFixed(6)}-${runningTotal.toFixed(6)}`} className={isBleed ? "bleed-step" : ""}>
                           {index + 1}. {action} {step.gas}: {formatPressure(runningTotal, settings.pressureUnit)}
                           <span className="result-step-total">
                             ({formatSignedPressure(step.amount, settings.pressureUnit)}
@@ -378,11 +407,11 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                   <div className="cost-breakdown">
                     <div className="section-title">Cost Basis</div>
                     <div className="grid two">
-                      {selectedAlternative.costBreakdown.map((line, index) => (
-                        <div key={`${line.gas}-${index}`} className="cost-line">
+                      {selectedAlternative.costBreakdown.map((line) => (
+                        <div key={costLineKey(line)} className="cost-line">
                           <span>{line.gas}:</span>
                           <span>
-                            {formatPressure(line.amount, settings.pressureUnit)}, {formatGasVolume(line.amount)} = ${line.cost.toFixed(2)}
+                            {formatPressure(line.amount, settings.pressureUnit)}, {formatGasVolume(line.amount)} = {formatCost(line.cost)}
                           </span>
                         </div>
                       ))}
@@ -396,8 +425,8 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
 
           {blendResult.warnings.length > 0 && (
             <div className="warnings">
-              {blendResult.warnings.map((warning, i) => (
-                <div key={i} className="warning">{warning}</div>
+              {blendResult.warnings.map((warning) => (
+                <div key={warning} className="warning">{warning}</div>
               ))}
             </div>
           )}
