@@ -58,6 +58,33 @@ describe("calculateRealGasStandardBlend", () => {
     expect(corrected.targetSettledPressurePsi).toBe(3000);
   });
 
+  test("allows a GERG-only top-off when displayed start and target pressures match", () => {
+    const inputs: StandardBlendInput = {
+      startPressure: 3000,
+      targetPressure: 3000,
+      targetO2: 21,
+      targetHe: 0,
+      startO2: 21,
+      startHe: 0,
+      tankSizeCuFt: 80,
+      tankRatedPressurePsi: 3000,
+      startTemperatureF: 90,
+      fillTemperatureF: 90,
+      settledTemperatureF: 70,
+      topGasId: "air"
+    };
+
+    const ideal = calculateStandardBlend({ pressureUnit: "psi" }, inputs, air);
+    const corrected = calculateRealGasStandardBlend({ pressureUnit: "psi" }, inputs, air);
+
+    expect(ideal.success).toBe(false);
+    expect(ideal.errors[0]).toBe("Target pressure matches start pressure.");
+    expect(corrected.success).toBe(true);
+    expect(corrected.steps).toHaveLength(1);
+    expect(corrected.steps[0]?.kind).toBe("topoff");
+    expect(corrected.finalHotPressurePsi).toBeGreaterThan(3000);
+  });
+
   test("rejects direct real-gas correction when the target needs bleed-down first", () => {
     const inputs: StandardBlendInput = {
       startPressure: 2000,

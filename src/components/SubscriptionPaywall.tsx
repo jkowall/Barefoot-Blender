@@ -33,8 +33,8 @@ const SubscriptionPaywall = ({
         Purchase, restore, and periodic subscription verification require an internet connection.
       </p>
       <div className="paywall-links" aria-label="Subscription legal links">
-        <a href={PRIVACY_URL}>Privacy Policy</a>
-        <a href={TERMS_URL}>Terms of Use (EULA)</a>
+        <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+        <a href={TERMS_URL} target="_blank" rel="noopener noreferrer">Terms of Use (EULA)</a>
       </div>
       {status.error && <div className="warning">{status.error}</div>}
       <div className="blocking-actions">

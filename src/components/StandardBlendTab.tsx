@@ -38,6 +38,19 @@ import TankContextFields from "./TankContextFields";
 const SENSITIVITY_RANGE_PSI = 300;
 const SENSITIVITY_STEP_PSI = 10;
 const SENSITIVITY_METRIC_STEP_PSI = 50;
+const IDEAL_SAME_PRESSURE_ERROR = "Target pressure matches start pressure.";
+const REAL_GAS_ONLY_WARNING = "Ideal partial-pressure plan has no pressure change; showing GERG-2008 corrected stop plan.";
+
+const realGasResultToBlendResult = (realGasResult: RealGasBlendResult): BlendResult => ({
+  success: true,
+  steps: realGasResult.steps.map((step) => ({
+    kind: step.kind,
+    amount: Math.max(0, step.pressureChangePsi),
+    gasName: step.gasName
+  })),
+  warnings: [REAL_GAS_ONLY_WARNING],
+  errors: []
+});
 
 type Props = {
   settings: SettingsSnapshot;
@@ -53,6 +66,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   const clearStandardBlendHistory = useSessionStore((state: SessionState) => state.clearStandardBlendHistory);
   const [result, setResult] = useState<BlendResult | null>(null);
   const [realGasResult, setRealGasResult] = useState<RealGasBlendResult | null>(null);
+  const [resultSource, setResultSource] = useState<"ideal" | "realGas">("ideal");
   const [sensitivityDeltaPsi, setSensitivityDeltaPsi] = useState(0);
   const [planOpen, setPlanOpen] = useState(false);
   const tankSizeCuFt = standardBlend.tankSizeCuFt ?? settings.defaultTankSizeCuFt ?? 80;
@@ -141,7 +155,9 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       return null;
     }
 
-    let runningPsi = fromDisplayPressure(standardBlend.startPressure, settings.pressureUnit);
+    let runningPsi = resultSource === "realGas" && realGasResult
+      ? realGasResult.startHotPressurePsi
+      : fromDisplayPressure(standardBlend.startPressure, settings.pressureUnit);
 
     return result.steps.map((step, index) => {
       if (step.kind === "bleed") {
@@ -165,7 +181,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         </li>
       );
     });
-  }, [result, selectedTopGas?.name, settings.pressureUnit, standardBlend.startPressure]);
+  }, [realGasResult, result, resultSource, selectedTopGas?.name, settings.pressureUnit, standardBlend.startPressure]);
 
   const updateField = <K extends keyof StandardBlendInput>(key: K, value: StandardBlendInput[K]): void => {
     setStandardBlend({ ...standardBlend, [key]: value });
@@ -182,6 +198,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     if (!selectedTopGas) {
       setResult(null);
       setRealGasResult(null);
+      setResultSource("ideal");
       setSensitivityDeltaPsi(0);
       return;
     }
@@ -206,9 +223,20 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       resolvedInput,
       selectedTopGas
     );
+    const correctedResult = settings.gasModel === "gerg2008"
+      ? calculateRealGasStandardBlend({ pressureUnit: settings.pressureUnit }, resolvedInput, selectedTopGas)
+      : null;
+    const useRealGasAsPrimary =
+      correctedResult?.success === true &&
+      correctedResult.steps.length > 0 &&
+      !blendResult.success &&
+      blendResult.errors.includes(IDEAL_SAME_PRESSURE_ERROR);
+    const effectiveResult = useRealGasAsPrimary && correctedResult
+      ? realGasResultToBlendResult(correctedResult)
+      : blendResult;
 
-    if (blendResult.success && blendResult.steps.length > 0) {
-      const volumes = summarizeBlendVolumes(blendResult);
+    if (effectiveResult.success && effectiveResult.steps.length > 0) {
+      const volumes = summarizeBlendVolumes(effectiveResult);
       const estimate = calculateFillCostEstimate(
         [
           {
@@ -249,8 +277,11 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
         topGasName: selectedTopGas.name,
         tankSizeCuFt,
         tankRatedPressurePsi,
+        startTemperatureF,
+        fillTemperatureF,
+        settledTemperatureF,
         estimatedCost: estimate.totalCost,
-        steps: blendResult.steps.map((step) => ({
+        steps: effectiveResult.steps.map((step) => ({
           kind: step.kind,
           amountPsi: step.amount,
           gasName: step.kind === "topoff" ? selectedTopGas.name : step.gasName
@@ -259,12 +290,9 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       addStandardBlendHistory(historyEntry);
     }
 
-    setResult(blendResult);
-    setRealGasResult(
-      settings.gasModel === "gerg2008"
-        ? calculateRealGasStandardBlend({ pressureUnit: settings.pressureUnit }, resolvedInput, selectedTopGas)
-        : null
-    );
+    setResult(effectiveResult);
+    setRealGasResult(correctedResult);
+    setResultSource(useRealGasAsPrimary ? "realGas" : "ideal");
     setSensitivityDeltaPsi(0);
     setPlanOpen(true);
   };
@@ -279,16 +307,20 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       targetPressure: toDisplayPressure(entry.targetPressurePsi, settings.pressureUnit),
       tankSizeCuFt: entry.tankSizeCuFt,
       tankRatedPressurePsi: entry.tankRatedPressurePsi,
+      startTemperatureF: entry.startTemperatureF ?? standardBlend.startTemperatureF,
+      fillTemperatureF: entry.fillTemperatureF ?? standardBlend.fillTemperatureF,
+      settledTemperatureF: entry.settledTemperatureF ?? standardBlend.settledTemperatureF,
       topGasId: entry.topGasId
     });
     setResult(null);
     setRealGasResult(null);
+    setResultSource("ideal");
     setSensitivityDeltaPsi(0);
     setPlanOpen(false);
   };
 
   const sensitivityAnalysis = useMemo(() => {
-    if (!selectedTopGas || !result || !result.success || !baseVolumes) {
+    if (!selectedTopGas || !result || !result.success || resultSource !== "ideal" || !baseVolumes) {
       return null;
     }
 
@@ -382,6 +414,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     clampedSensitivityDeltaPsi,
     negativeSensitivityLimitPsi,
     result,
+    resultSource,
     selectedTopGas,
     settings.pressureUnit,
     standardBlend,
@@ -389,7 +422,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
   ]);
 
   const requiredStart = useMemo(() => {
-    if (!result || !result.success || !selectedTopGas) {
+    if (!result || !result.success || resultSource !== "ideal" || !selectedTopGas) {
       return null;
     }
     return solveRequiredStartPressure(
@@ -405,10 +438,10 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       },
       selectedTopGas
     );
-  }, [result, selectedTopGas, settings.pressureUnit, standardBlend]);
+  }, [result, resultSource, selectedTopGas, settings.pressureUnit, standardBlend]);
 
   const noHeliumTarget = useMemo(() => {
-    if (!result || !result.success || !selectedTopGas) {
+    if (!result || !result.success || resultSource !== "ideal" || !selectedTopGas) {
       return null;
     }
     return solveMaxTargetWithoutHelium(
@@ -424,7 +457,7 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
       },
       selectedTopGas
     );
-  }, [result, selectedTopGas, settings.pressureUnit, standardBlend]);
+  }, [result, resultSource, selectedTopGas, settings.pressureUnit, standardBlend]);
 
   const sliderMinDisplay = toDisplayPressure(-negativeSensitivityLimitPsi, settings.pressureUnit);
   const sliderMaxDisplay = toDisplayPressure(SENSITIVITY_RANGE_PSI, settings.pressureUnit);
