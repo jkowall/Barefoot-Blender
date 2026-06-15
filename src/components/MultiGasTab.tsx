@@ -69,6 +69,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
   const tankSizeCuFt = multiGas.tankSizeCuFt ?? settings.defaultTankSizeCuFt ?? 80;
   const tankRatedPressurePsi = multiGas.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000;
   const startPressurePsi = fromDisplayPressure(multiGas.startPressure ?? 0, settings.pressureUnit);
+  const targetHeRequested = (multiGas.targetHe ?? 0) > 0.000001;
 
   // Build available gas options from presets and custom banks
   const gasOptions = useMemo(() => {
@@ -461,7 +462,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
               disabled={!hasHeliumAvailable}
               onChange={(val) => updateField({ targetHe: val })}
             />
-            {!hasHeliumAvailable && (
+            {!hasHeliumAvailable && targetHeRequested && (
               <div className="table-note">No helium source available. Add a trimix gas or helium to the start tank.</div>
             )}
           </div>
