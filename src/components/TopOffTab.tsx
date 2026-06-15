@@ -16,15 +16,17 @@ import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
 import TankContextFields from "./TankContextFields";
+import TrainingMathPanel from "./TrainingMathPanel";
 
 
 
 type Props = {
   settings: SettingsSnapshot;
   topOffOptions: GasSelection[];
+  trainingModeEnabled: boolean;
 };
 
-const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
+const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
   const topOff = useSessionStore((state: SessionState) => state.topOff);
   const setTopOff = useSessionStore((state: SessionState) => state.setTopOff);
   const [result, setResult] = useState<TopOffResult | null>(null);
@@ -172,6 +174,34 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     );
   }, [adjustedStartPsi, selectedTopGas, settings.pressureUnit, showBleedPreview, topOff]);
 
+  const trainingMath = useMemo(() => {
+    if (!trainingModeEnabled || !result?.success || !selectedTopGas) {
+      return null;
+    }
+
+    const startO2Fraction = (topOff.startO2 ?? 32) / 100;
+    const startHeFraction = (topOff.startHe ?? 0) / 100;
+    const startN2Fraction = Math.max(0, 1 - startO2Fraction - startHeFraction);
+    const topO2Fraction = selectedTopGas.o2 / 100;
+    const topHeFraction = selectedTopGas.he / 100;
+    const topN2Fraction = Math.max(0, 1 - topO2Fraction - topHeFraction);
+
+    return {
+      startO2Fraction,
+      startHeFraction,
+      startN2Fraction,
+      topO2Fraction,
+      topHeFraction,
+      topN2Fraction,
+      startPressurePsi,
+      addedPressurePsi: result.addedPressure,
+      finalPressurePsi: result.finalPressure,
+      totalO2Psi: startPressurePsi * startO2Fraction + result.addedPressure * topO2Fraction,
+      totalHePsi: startPressurePsi * startHeFraction + result.addedPressure * topHeFraction,
+      totalN2Psi: startPressurePsi * startN2Fraction + result.addedPressure * topN2Fraction
+    };
+  }, [result, selectedTopGas, startPressurePsi, topOff.startHe, topOff.startO2, trainingModeEnabled]);
+
   return (
     <>
       <AccordionItem title="Start Tank" defaultOpen={true}>
@@ -298,6 +328,22 @@ const TopOffTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               {warning}
             </div>
           ))}
+          {trainingMath && (
+            <TrainingMathPanel
+              title="Top-Off Math"
+              note="Training Mode shows the weighted-average gas math only. Analyze the actual cylinder after the fill."
+            >
+              <p>
+                Top-off adds {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} of {selectedTopGas?.name ?? "selected gas"} to {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)}, ending at {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)}.
+              </p>
+              <ul>
+                <li>Added pressure = final pressure - start pressure = {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} = {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)}</li>
+                <li>Final O2 = (start pressure x start O2 + added pressure x top-off O2) / final pressure = ({formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startO2Fraction, 3)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.topO2Fraction, 3)}) / {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)} = {formatPercentage(result.finalO2)}</li>
+                <li>Final He = ({formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startHeFraction, 3)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.topHeFraction, 3)}) / {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)} = {formatPercentage(result.finalHe)}</li>
+                <li>Final N2 = ({formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startN2Fraction, 3)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.topN2Fraction, 3)}) / {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)} = {formatPercentage(result.finalN2)}</li>
+              </ul>
+            </TrainingMathPanel>
+          )}
         </AccordionItem>
       )}
 

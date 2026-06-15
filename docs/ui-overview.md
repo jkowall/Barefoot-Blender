@@ -9,7 +9,7 @@ This quick-reference outlines the visual flow and interaction model for Barefoot
 - **Tab Bar** – Four main tabs: `Standard Blend`, `Top-Off What-If`, `Multi-Gas Blend`, `Utilities`. The active tab is highlighted.
 - **Content Area** – Stacked cards for inputs and results. Each tab renders its own component under `src/components/`.
 - **Settings Panel** – Modal-like overlay triggered from the header. Contains global configuration grouped by sections.
-- **Footer** – Shows version, release notes, GitHub, privacy, terms, and support links.
+- **Footer** – Shows version, a persistent `Training Mode` toggle, release notes, GitHub, privacy, terms, and support links.
 
 ## Native Mobile Access
 
@@ -27,7 +27,7 @@ Order of content:
 2. **Tank Context** card – Per-fill tank volume, rated pressure, derived PSI/cu ft, and free gas liters.
 3. **Target Blend** card – Desired mix and pressure inputs.
 4. **Top-Off Gas** card – Selector for Air/O₂/He plus custom banked gases; includes the `Calculate` button.
-5. **Blend Plan** card – Appears after calculation. Shows ordered steps, bleed instructions, warnings, errors, and fill cost by PSI, cu ft, and free gas liters.
+5. **Blend Plan** card – Appears after calculation. Shows ordered steps, bleed instructions, warnings, errors, and fill cost by PSI, cu ft, and free gas liters. When `Training Mode` is on, it also shows partial-pressure formulas, substitutions, and the fill pressure check.
 
 ### Top-Off What-If
 
@@ -35,7 +35,7 @@ Order of content:
 2. **Tank Context** card – Per-fill tank volume and rated pressure for cost and volume conversion.
 3. **Top-Off Goal** card – Final pressure.
 4. **Top-Off Gas** card – Selected top-off source.
-5. **Top-Off Outcome** card – Final mix, added pressure, added volume, and estimated fill cost.
+5. **Top-Off Outcome** card – Final mix, added pressure, added volume, and estimated fill cost. When `Training Mode` is on, it explains the weighted-average O2/He/N2 math.
 6. **Bleed-Down What-If** and **Top-Off Sensitivity** cards – Optional projections for drain scenarios and alternate starts.
 
 ### Multi-Gas Blend
@@ -44,7 +44,7 @@ Order of content:
 2. **Tank Context** card – Per-fill tank volume and rated pressure.
 3. **Source Gases** card – Selectors with optional custom source gases and bank pressure limits.
 4. **Target Blend** card – Oxygen, helium, and final pressure fields.
-5. **Blend Options** card – Ranked alternatives, fill order, added PSI, cu ft, free gas liters, and estimated cost.
+5. **Blend Options** card – Ranked alternatives, fill order, added PSI, cu ft, free gas liters, and estimated cost. When `Training Mode` is on, it shows source-gas contribution totals and the final mix check for the selected option.
 
 ### Utilities
 
@@ -56,6 +56,8 @@ Cards pair input controls with calculated output:
 - Gas Density.
 - Tank Conversion for PSI, cu ft, and free gas liters based on tank volume and rated pressure.
 - Unit Converter for depth and pressure units.
+
+When `Training Mode` is on, the utility cards show the formulas and current substitutions for MOD, EAD, Best Mix, END, gas density, and tank conversion.
 
 ## Settings Panel
 
@@ -74,6 +76,7 @@ Actions are persisted immediately through the Zustand store; closing the panel h
 - Inputs predominantly use native number fields with step sizes tuned for PSI vs. bar and feet vs. meters.
 - Error, warning, and success messages display inline within their respective cards.
 - Charts and lists render only when state is meaningful, keeping the UI compact for mobile.
+- Training Mode is off by default, persists through settings storage, and adds explanatory panels only under existing results.
 
 Designer/developer notes:
 - Global styles live in `src/index.css`. Cards use consistent spacing and a dark theme suitable for a fill station environment.

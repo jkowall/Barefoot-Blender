@@ -172,8 +172,22 @@ Liters are free gas liters at surface pressure. They are not metric cylinder wat
 
 - Global settings persist via Zustand + `localStorage` (`SettingsStore`).
 - Per-tab inputs persist in `SessionStore`, including per-fill tank context, allowing quick recalculations after reloads or offline usage.
+- Training Mode persists as a global setting and controls explanatory UI only. It does not change calculator inputs, solver behavior, safety warnings, or persisted session values.
 
-## 7. Validation & Error Handling
+## 7. Training Mode
+
+Training Mode is an educational display layer for classroom and self-study use.
+
+- Standard Blend shows partial-pressure substitutions for O2, He, and N2, then shows how top-off, oxygen, and helium add pressures are derived.
+- Bleed-down plans explain that the math is solved from the post-bleed starting pressure.
+- Top-Off What-If shows the weighted-average formula for final O2, He, and N2.
+- Multi-Gas Blend shows source-gas contribution totals and validates the selected option against the target pressure.
+- Utilities show formula substitutions for MOD, EAD, Best Mix, END, gas density, and tank pressure/volume conversion.
+- GERG-2008 Training Mode content stays high level: it explains that corrected stops are estimated from absolute pressure, temperature, cylinder volume, component moles, and mixture compressibility, without exposing every intermediate solver value.
+
+Training Mode is suitable as a store-listing educational feature, but it does not certify training or replace final gas analysis.
+
+## 8. Validation & Error Handling
 
 - Impossible mixes raise descriptive errors (e.g., target exceeds top-off capability, negative gas addition).
 - The UI surfaces warnings/non-critical alerts separately from blocking errors.

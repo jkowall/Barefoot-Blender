@@ -358,6 +358,31 @@ button {
   text-decoration: underline;
 }
 
+.training-mode-toggle {
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.12);
+  color: #7dd3fc;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.training-mode-toggle.active {
+  background: #facc15;
+  border-color: #facc15;
+  color: #0f172a;
+}
+
+.training-mode-toggle:hover {
+  background: rgba(56, 189, 248, 0.22);
+}
+
+.training-mode-toggle.active:hover {
+  background: #fde047;
+}
+
 .app-footer-separator {
   color: rgba(148, 163, 184, 0.5);
 }
@@ -523,6 +548,82 @@ button {
 .result-note {
   margin-top: 16px;
   font-size: 0.9rem;
+  color: #cbd5f5;
+}
+
+.training-math-panel {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  background: rgba(24, 31, 43, 0.82);
+}
+
+.training-math-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.training-math-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #f8fafc;
+}
+
+.training-math-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: #facc15;
+  color: #0f172a;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.training-math-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: #dbeafe;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.training-math-content p {
+  margin: 0;
+}
+
+.training-math-content ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.training-math-content li + li {
+  margin-top: 5px;
+}
+
+.training-math-content h4 {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  color: #fef3c7;
+}
+
+.training-math-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.training-math-note {
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.2);
   color: #cbd5f5;
 }
 

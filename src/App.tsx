@@ -154,18 +154,43 @@ const App = (): JSX.Element => {
 
           <main className="content">
             {activeTab === "standard" && (
-              <StandardBlendTab settings={settings} topOffOptions={topOffOptions} />
+              <StandardBlendTab
+                settings={settings}
+                topOffOptions={topOffOptions}
+                trainingModeEnabled={settings.trainingModeEnabled}
+              />
             )}
             {activeTab === "topoff" && (
-              <TopOffTab settings={settings} topOffOptions={topOffOptions} />
+              <TopOffTab
+                settings={settings}
+                topOffOptions={topOffOptions}
+                trainingModeEnabled={settings.trainingModeEnabled}
+              />
             )}
-            {activeTab === "multi" && <MultiGasTab settings={settings} topOffOptions={topOffOptions} />}
-            {activeTab === "utilities" && <UtilitiesTab settings={settings} />}
+            {activeTab === "multi" && (
+              <MultiGasTab
+                settings={settings}
+                topOffOptions={topOffOptions}
+                trainingModeEnabled={settings.trainingModeEnabled}
+              />
+            )}
+            {activeTab === "utilities" && (
+              <UtilitiesTab settings={settings} trainingModeEnabled={settings.trainingModeEnabled} />
+            )}
           </main>
 
           <footer className="app-footer">
             <span className="app-version">Version {APP_VERSION}</span>
             <div className="app-footer-links">
+              <button
+                aria-pressed={settings.trainingModeEnabled}
+                className={`training-mode-toggle ${settings.trainingModeEnabled ? "active" : ""}`}
+                type="button"
+                onClick={() => settings.setTrainingModeEnabled(!settings.trainingModeEnabled)}
+              >
+                Training Mode {settings.trainingModeEnabled ? "On" : "Off"}
+              </button>
+              <span className="app-footer-separator">•</span>
               <a className="app-footer-link" href={CHANGELOG_URL} target="_blank" rel="noopener noreferrer">
                 Release notes
               </a>

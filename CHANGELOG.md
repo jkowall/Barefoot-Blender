@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0] - 2026-06-15
+
+### Added
+
+- **Training Mode**: Added a persistent footer toggle that shows class-friendly formulas, substitutions, and intermediate values for Standard Blend, Top-Off, Multi-Gas, and Utilities results ([#157](https://github.com/jkowall/Barefoot-Blender/issues/157)).
+- **Store Listing Guidance**: Documented Training Mode as an educational feature for App Store and Google Play release copy.
+
 ## [0.11.0] - 2026-06-15
 
 ### Added
