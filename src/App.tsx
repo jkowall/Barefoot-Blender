@@ -51,6 +51,7 @@ const App = (): JSX.Element => {
   const [safetyAcknowledged, setSafetyAcknowledged] = useState(getInitialSafetyAcknowledgement);
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>(getInitialSubscriptionStatus);
   const settings = useSettingsStore();
+  const gasModelLabel = settings.gasModel === "gerg2008" ? "GERG-2008" : "Ideal partial pressure";
 
   const topOffOptions = useMemo(() => listTopOffOptions(settings.customGases), [settings.customGases]);
 
@@ -181,6 +182,7 @@ const App = (): JSX.Element => {
 
           <footer className="app-footer">
             <span className="app-version">Version {APP_VERSION}</span>
+            <span className="app-model-badge">Gas model: {gasModelLabel}</span>
             <div className="app-footer-links">
               <button
                 aria-pressed={settings.trainingModeEnabled}
