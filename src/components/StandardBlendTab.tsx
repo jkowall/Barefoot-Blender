@@ -760,31 +760,40 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                       </div>
                     </div>
                   </div>
-                  <div className="training-math-grid">
+                  <div className="training-math-grid training-math-grid-support">
                     <div>
-                    <h4>Slate setup</h4>
-                    <ul>
-                      <li>Use pressure-percent points: mix percent x pressure.</li>
-                      <li>Start O2 points = {formatNumber((standardBlend.startO2 ?? 21), 1)} x {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} = {formatNumber(trainingMath.startO2PointsDisplay, 0)}</li>
-                      <li>Target O2 points = {formatNumber((standardBlend.targetO2 ?? 32), 1)} x {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(trainingMath.targetO2PointsDisplay, 0)}</li>
-                      <li>Start He points = {formatNumber((standardBlend.startHe ?? 0), 1)} x {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} = {formatNumber(trainingMath.startHePointsDisplay, 0)}</li>
-                      <li>Target He points = {formatNumber((standardBlend.targetHe ?? 0), 1)} x {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(trainingMath.targetHePointsDisplay, 0)}</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h4>Fill worksheet</h4>
-                    <ul>
-                      <li>Helium first = (target He points - start He points) / 100 = ({formatNumber(trainingMath.targetHePointsDisplay, 0)} - {formatNumber(trainingMath.startHePointsDisplay, 0)}) / 100 = {formatPressure(trainingMath.handHeliumAddPsi, settings.pressureUnit)}</li>
-                      <li>Pressure left after He = final - start - He = {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.handHeliumAddPsi, settings.pressureUnit)} = {formatPressure(trainingMath.pressureLeftAfterHeliumPsi, settings.pressureUnit)}</li>
-                      <li>Oxygen add = (target O2 points - start O2 points - top gas O2% x pressure left) / (100 - top gas O2%)</li>
-                      <li>Oxygen add = ({formatNumber(trainingMath.targetO2PointsDisplay, 0)} - {formatNumber(trainingMath.startO2PointsDisplay, 0)} - {formatNumber(selectedTopGas.o2, 1)} x {formatNumber(trainingMath.pressureLeftAfterHeliumDisplay, 1)}) / ({formatNumber(100 - selectedTopGas.o2, 1)}) = {formatPressure(trainingMath.handOxygenAddPsi, settings.pressureUnit)}</li>
-                      <li>Top-off = final - start - He - O2 = {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.handHeliumAddPsi, settings.pressureUnit)} - {formatPressure(trainingMath.handOxygenAddPsi, settings.pressureUnit)} = {formatPressure(trainingMath.handTopoffPsi, settings.pressureUnit)}</li>
-                    </ul>
-                  </div>
+                      <h4>Slate setup</h4>
+                      <ul>
+                        <li>Use pressure-percent points: mix percent x pressure.</li>
+                        <li>Start O2 points = {formatNumber((standardBlend.startO2 ?? 21), 1)} x {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} = {formatNumber(trainingMath.startO2PointsDisplay, 0)}</li>
+                        <li>Target O2 points = {formatNumber((standardBlend.targetO2 ?? 32), 1)} x {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(trainingMath.targetO2PointsDisplay, 0)}</li>
+                        <li>Start He points = {formatNumber((standardBlend.startHe ?? 0), 1)} x {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} = {formatNumber(trainingMath.startHePointsDisplay, 0)}</li>
+                        <li>Target He points = {formatNumber((standardBlend.targetHe ?? 0), 1)} x {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(trainingMath.targetHePointsDisplay, 0)}</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4>Formula reference</h4>
+                      <ul>
+                        <li>Reference shortcut: PO2 = ((FO2 want - FO2 top) / N2 top) x P(fill).</li>
+                        <li>FO2 want = target O2 = {formatNumber((standardBlend.targetO2 ?? 32), 1)}%; FO2 top = top-off O2 = {formatNumber(selectedTopGas.o2, 1)}%.</li>
+                        <li>N2 top = 100 - top-off O2 = 100 - {formatNumber(selectedTopGas.o2, 1)} = {formatNumber(trainingMath.topN2Fraction * 100, 1)}%.</li>
+                        <li>Top-off O2 credit = FO2 top x pressure left = {formatNumber(selectedTopGas.o2, 1)} x {formatNumber(trainingMath.pressureLeftAfterHeliumDisplay, 1)} = {formatNumber(selectedTopGas.o2 * trainingMath.pressureLeftAfterHeliumDisplay, 0)} pressure-percent points.</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4>Fill worksheet</h4>
+                      <ul>
+                        <li>Helium first = (target He points - start He points) / 100 = ({formatNumber(trainingMath.targetHePointsDisplay, 0)} - {formatNumber(trainingMath.startHePointsDisplay, 0)}) / 100 = {formatPressure(trainingMath.handHeliumAddPsi, settings.pressureUnit)}</li>
+                        <li>Pressure left after He = final - start - He = {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.handHeliumAddPsi, settings.pressureUnit)} = {formatPressure(trainingMath.pressureLeftAfterHeliumPsi, settings.pressureUnit)}</li>
+                        <li>Oxygen add = (target O2 points - start O2 points - top gas O2% x pressure left) / (100 - top gas O2%)</li>
+                        <li>Oxygen add = ({formatNumber(trainingMath.targetO2PointsDisplay, 0)} - {formatNumber(trainingMath.startO2PointsDisplay, 0)} - {formatNumber(selectedTopGas.o2, 1)} x {formatNumber(trainingMath.pressureLeftAfterHeliumDisplay, 1)}) / ({formatNumber(100 - selectedTopGas.o2, 1)}) = {formatPressure(trainingMath.handOxygenAddPsi, settings.pressureUnit)}</li>
+                        <li>Top-off = final - start - He - O2 = {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.handHeliumAddPsi, settings.pressureUnit)} - {formatPressure(trainingMath.handOxygenAddPsi, settings.pressureUnit)} = {formatPressure(trainingMath.handTopoffPsi, settings.pressureUnit)}</li>
+                      </ul>
+                    </div>
                   </div>
                 </>
               ) : (
-                <div className="training-math-grid">
+                <div className="training-math-grid training-math-grid-support">
                   <div>
                     <h4>Gas-balance worksheet</h4>
                     <ul>
