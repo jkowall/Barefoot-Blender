@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.2] - 2026-06-15
+
+### Fixed
+
+- **Pearson Square Rendering**: Replaced the Training Mode Pearson-square pseudo-element lines with explicit SVG strokes so the visual guide remains visible in production builds.
+
 ## [0.12.1] - 2026-06-15
 
 ### Changed

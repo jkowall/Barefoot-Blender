@@ -724,25 +724,20 @@ button {
   overflow: hidden;
 }
 
-.pearson-square::before,
-.pearson-square::after {
-  content: "";
+.pearson-square-lines {
   position: absolute;
-  left: 22%;
-  right: 22%;
-  top: 50%;
-  height: 1px;
-  background: rgba(250, 204, 21, 0.55);
-  transform-origin: center;
+  inset: 12px;
+  z-index: 0;
+  width: calc(100% - 24px);
+  height: calc(100% - 24px);
   pointer-events: none;
 }
 
-.pearson-square::before {
-  transform: rotate(20deg);
-}
-
-.pearson-square::after {
-  transform: rotate(-20deg);
+.pearson-square-lines line {
+  stroke: rgba(250, 204, 21, 0.82);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
 }
 
 .pearson-square-node,
