@@ -4,6 +4,8 @@ import { sanitizeGasName } from "../utils/gasNames";
 
 export type PressureUnit = "psi" | "bar";
 export type DepthUnit = "ft" | "m";
+export type TemperatureUnit = "f" | "c";
+export type GasModel = "ideal" | "gerg2008";
 
 export type GasDefinition = {
   id: string;
@@ -15,6 +17,8 @@ export type GasDefinition = {
 type SettingsState = {
   pressureUnit: PressureUnit;
   depthUnit: DepthUnit;
+  temperatureUnit: TemperatureUnit;
+  gasModel: GasModel;
   defaultMaxPPO2?: number;
   defaultContingencyPPO2?: number;
   oxygenIsNarcotic: boolean;
@@ -26,6 +30,8 @@ type SettingsState = {
   tankRatedPressure?: number;
   setPressureUnit: (unit: PressureUnit) => void;
   setDepthUnit: (unit: DepthUnit) => void;
+  setTemperatureUnit: (unit: TemperatureUnit) => void;
+  setGasModel: (model: GasModel) => void;
   setDefaultMaxPPO2: (value: number | undefined) => void;
   setDefaultContingencyPPO2: (value: number | undefined) => void;
   setOxygenIsNarcotic: (value: boolean) => void;
@@ -88,6 +94,8 @@ export const migrateSettingsState = (persisted: PersistedSettingsState): Persist
 const settingsCreator = (set: SettingsSetter, get: () => SettingsState): SettingsState => ({
   pressureUnit: "psi",
   depthUnit: "ft",
+  temperatureUnit: "f",
+  gasModel: "ideal",
   defaultMaxPPO2: 1.4,
   defaultContingencyPPO2: 1.6,
   oxygenIsNarcotic: false,
@@ -99,6 +107,8 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
   tankRatedPressure: 3000,
   setPressureUnit: (unit: PressureUnit) => set({ pressureUnit: unit }),
   setDepthUnit: (unit: DepthUnit) => set({ depthUnit: unit }),
+  setTemperatureUnit: (unit: TemperatureUnit) => set({ temperatureUnit: unit }),
+  setGasModel: (model: GasModel) => set({ gasModel: model }),
   setDefaultMaxPPO2: (value: number | undefined) => set({ defaultMaxPPO2: value }),
   setDefaultContingencyPPO2: (value: number | undefined) => set({ defaultContingencyPPO2: value }),
   setOxygenIsNarcotic: (value: boolean) => set({ oxygenIsNarcotic: value }),
@@ -127,7 +137,7 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
 export const useSettingsStore = create<SettingsState>()(
   persist(settingsCreator, {
     name: "barefoot-blender-settings",
-    version: 3,
+    version: 4,
     migrate: (persisted): PersistedSettingsState => migrateSettingsState((persisted ?? {}) as PersistedSettingsState)
   })
 );

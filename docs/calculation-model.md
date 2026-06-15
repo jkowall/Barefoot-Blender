@@ -1,6 +1,6 @@
 # Calculation Model
 
-This document details the formulas and decision logic that power Barefoot Blender. All calculations assume ideal gas behavior (partial pressure blending) and operate in PSI internally unless otherwise noted.
+This document details the formulas and decision logic that power Barefoot Blender. The default Standard Blend planner uses ideal gas behavior (partial pressure blending) and operates in PSI internally unless otherwise noted. Standard Blend can optionally show GERG-2008 real-gas corrected stop pressures for O2/N2/He fills.
 
 ## 1. Standard Blend Planner
 
@@ -35,7 +35,57 @@ Module: `projectTopOffChart`
 - Marks scenarios as "Drain" when infeasible or negative.
 - Returns PSI values; UI reconverts to the user's unit selection.
 
-## 2. Multi-Gas Nitrox Solver
+## 2. Advanced GERG-2008 Real-Gas Mode
+
+Modules:
+- `src/utils/gerg2008.ts`
+- `src/utils/realGasBlend.ts`
+
+Scope:
+- Applies only to Standard Blend when the user selects the GERG-2008 gas model.
+- Covers scuba-relevant O2, N2, and He mixtures.
+- Uses the O2/N2/He subset of the NIST AGA8 GERG-2008 implementation. It does not include hydrocarbon or contaminant components from the full natural-gas model.
+- Keeps the ideal partial-pressure plan visible as the base workflow, then adds corrected stop pressures.
+
+Inputs added by the UI:
+- Start gas temperature
+- Fill temperature
+- Settled cylinder temperature
+- Tank free-gas size and rated pressure, used to infer cylinder water volume
+
+Pressure and temperature handling:
+1. Convert gauge pressure to absolute pressure:
+   ```
+   P_abs = (P_gauge + 14.6959488) * 6.894757293168
+   ```
+   where pressure is converted from PSI to kPa.
+2. Convert Fahrenheit inputs to Kelvin.
+3. Infer cylinder water volume from rated free gas volume:
+   ```
+   V_water_L = tank_cu_ft * 28.316846592 * 14.6959488 / (rated_pressure_PSI + 14.6959488)
+   ```
+4. Use GERG-2008 density solving to convert start and target states into total moles:
+   ```
+   n_total = D_mol_per_L * V_water_L
+   ```
+5. Convert start and target O2/He/N2 fractions into component mole counts.
+6. Solve the same fill order in mole space:
+   - Helium moles from the He component delta
+   - Oxygen moles from the O2 component delta after top-off gas contribution
+   - Top-off moles from the N2 component delta when the top-off gas contains nitrogen
+7. After each gas addition, recalculate pressure from component moles, cylinder volume, and fill temperature.
+8. Display corrected hot stop pressures. The target pressure remains the settled cylinder pressure at the settled temperature.
+
+Supported envelope:
+- Temperature must be at least 250 K.
+- Pressure must not exceed 400 bar absolute.
+- Direct fills are corrected. If the ideal plan requires bleed-down, complete the bleed step first and recalculate from the post-bleed state.
+
+Reference implementation:
+- GERG constants and equations are based on the NIST public AGA8 GERG-2008 source: <https://github.com/usnistgov/AGA8>.
+- Regression tests compare the TypeScript O2/N2/He implementation against NIST C++ reference values for air, trimix, and heliox states.
+
+## 3. Multi-Gas Nitrox Solver
 
 Module: `calculateMultiGasBlend`
 
@@ -53,7 +103,7 @@ P₁·O₂₁ + P₂·O₂₂ = P_target·O₂_target
 - Requires the source gases to have different O₂% values (denominator non-zero).
 - Returns volumes to add from each source.
 
-## 3. Utility Calculators
+## 4. Utility Calculators
 
 ### Maximum Operating Depth (MOD)
 ```
@@ -90,7 +140,7 @@ Ambient = Depth / depth_per_atm + 1
 Density_depth = Density_surface · Ambient
 ```
 
-## 4. Units & Conversion
+## 5. Units & Conversion
 
 - Pressure: conversions between PSI and bar use 1 bar = 14.5037738 PSI.
 - Depth: conversions between feet and meters use 1 m = 3.2808399 ft.
@@ -118,12 +168,12 @@ total_cost = sum(line_cost)
 
 Liters are free gas liters at surface pressure. They are not metric cylinder water capacity liters.
 
-## 5. Persistence
+## 6. Persistence
 
 - Global settings persist via Zustand + `localStorage` (`SettingsStore`).
 - Per-tab inputs persist in `SessionStore`, including per-fill tank context, allowing quick recalculations after reloads or offline usage.
 
-## 6. Validation & Error Handling
+## 7. Validation & Error Handling
 
 - Impossible mixes raise descriptive errors (e.g., target exceeds top-off capability, negative gas addition).
 - The UI surfaces warnings/non-critical alerts separately from blocking errors.

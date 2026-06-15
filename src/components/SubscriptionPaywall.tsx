@@ -1,5 +1,8 @@
 import type { SubscriptionStatus } from "../services/subscription";
 
+const PRIVACY_URL = "https://trimix-blender.com/privacy/";
+const TERMS_URL = "https://trimix-blender.com/terms/";
+
 type SubscriptionPaywallProps = {
   status: SubscriptionStatus;
   onPurchase: () => void;
@@ -22,10 +25,17 @@ const SubscriptionPaywall = ({
         and ongoing platform maintenance.
       </p>
       <div className="subscription-price">$4.99/year</div>
+      <p className="subscription-detail">
+        Barefoot Blender Pro is an annual auto-renewing subscription.
+      </p>
       <p className="table-note">
         Auto-renews yearly until canceled. Manage cancellation and refunds through your store account.
         Purchase, restore, and periodic subscription verification require an internet connection.
       </p>
+      <div className="paywall-links" aria-label="Subscription legal links">
+        <a href={PRIVACY_URL}>Privacy Policy</a>
+        <a href={TERMS_URL}>Terms of Use (EULA)</a>
+      </div>
       {status.error && <div className="warning">{status.error}</div>}
       <div className="blocking-actions">
         <button className="calculate-button" type="button" disabled={status.loading} onClick={onPurchase}>

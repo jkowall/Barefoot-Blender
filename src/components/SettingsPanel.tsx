@@ -1,5 +1,12 @@
 import { useState, type ChangeEvent } from "react";
-import { useSettingsStore, type GasDefinition, type DepthUnit, type PressureUnit } from "../state/settings";
+import {
+  useSettingsStore,
+  type GasDefinition,
+  type DepthUnit,
+  type GasModel,
+  type PressureUnit,
+  type TemperatureUnit
+} from "../state/settings";
 import { formatPercentage } from "../utils/format";
 import { GAS_NAME_MAX_LENGTH, sanitizeGasName } from "../utils/gasNames";
 import { NumberInput } from "./NumberInput";
@@ -7,6 +14,8 @@ import { SelectInput } from "./SelectInput";
 
 const pressureUnits: PressureUnit[] = ["psi", "bar"];
 const depthUnits: DepthUnit[] = ["ft", "m"];
+const temperatureUnits: TemperatureUnit[] = ["f", "c"];
+const gasModels: GasModel[] = ["ideal", "gerg2008"];
 
 type SettingsPanelProps = {
   onClose: () => void;
@@ -20,6 +29,8 @@ const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Elemen
   const {
     setPressureUnit,
     setDepthUnit,
+    setTemperatureUnit,
+    setGasModel,
     setDefaultMaxPPO2,
     setDefaultContingencyPPO2,
     setOxygenIsNarcotic,
@@ -102,7 +113,32 @@ const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Elemen
                     </option>
                   ))}
                 </SelectInput>
+                <SelectInput
+                  label="Temperature"
+                  value={settings.temperatureUnit}
+                  onChange={(event: ChangeEvent<HTMLSelectElement>) => setTemperatureUnit(event.target.value as TemperatureUnit)}
+                >
+                  {temperatureUnits.map((unit) => (
+                    <option key={unit} value={unit}>
+                      {unit.toUpperCase()}
+                    </option>
+                  ))}
+                </SelectInput>
               </div>
+
+              <div className="section-title" style={{ marginTop: 16 }}>Calculation Model</div>
+              <SelectInput
+                label="Gas model"
+                value={settings.gasModel}
+                onChange={(event: ChangeEvent<HTMLSelectElement>) => setGasModel(event.target.value as GasModel)}
+              >
+                {gasModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model === "ideal" ? "Ideal partial pressure" : "GERG-2008 real gas"}
+                  </option>
+                ))}
+              </SelectInput>
+              <div className="table-note">GERG-2008 applies O2/N2/He molar corrections in Standard Blend.</div>
 
               <div className="section-title" style={{ marginTop: 16 }}>Defaults</div>
               <div className="grid two">
