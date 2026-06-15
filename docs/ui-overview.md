@@ -44,7 +44,7 @@ Order of content:
 2. **Tank Context** card – Per-fill tank volume and rated pressure.
 3. **Source Gases** card – Selectors with optional custom source gases and bank pressure limits.
 4. **Target Blend** card – Oxygen, helium, and final pressure fields.
-5. **Blend Options** card – Ranked alternatives, fill order, added PSI, cu ft, free gas liters, and estimated cost. When `Training Mode` is on, it shows the needed added gas worksheet and a Pearson-square style check for two-source nitrox cases, falling back to pressure-percent source checks for more complex mixes.
+5. **Blend Options** card – Ranked alternatives, fill order, added PSI, cu ft, free gas liters, and estimated cost. When `Training Mode` is on, it shows the needed added gas worksheet and a visual Pearson-square style check for two-source nitrox cases, falling back to pressure-percent source checks for more complex mixes.
 
 ### Utilities
 

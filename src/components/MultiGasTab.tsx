@@ -306,8 +306,8 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
       ? (targetHePoints - startHePoints) / addedPressurePsi
       : 0;
     const nitroxPearsonRows = sourceRows.length === 2 &&
-      Math.abs(startHePercent) <= 0.000001 &&
-      Math.abs(targetHePercent) <= 0.000001 &&
+      Math.abs(startHePsi) <= 0.000001 &&
+      Math.abs(targetHePoints) <= 0.000001 &&
       sourceRows.every((row) => row.hePercent <= 0.000001);
     const pearsonRows = nitroxPearsonRows
       ? [...sourceRows].sort((a, b) => b.o2Percent - a.o2Percent)
@@ -583,6 +583,32 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                           {trainingMath.pearson ? (
                             <>
                               <h4>Pearson square</h4>
+                              <div className="pearson-square" aria-label="Pearson square visual check">
+                                <div className="pearson-square-node pearson-square-source pearson-square-source-high">
+                                  <span className="pearson-square-label">{trainingMath.pearson.highSource.name}</span>
+                                  <strong>{formatNumber(trainingMath.pearson.highSource.o2Percent, 1)}%</strong>
+                                </div>
+                                <div className="pearson-square-node pearson-square-source pearson-square-source-low">
+                                  <span className="pearson-square-label">{trainingMath.pearson.lowSource.name}</span>
+                                  <strong>{formatNumber(trainingMath.pearson.lowSource.o2Percent, 1)}%</strong>
+                                </div>
+                                <div className="pearson-square-target">
+                                  <span>Needed</span>
+                                  <strong>{formatNumber(trainingMath.neededAddedO2Percent, 1)}%</strong>
+                                </div>
+                                <div className="pearson-square-node pearson-square-parts pearson-square-parts-high">
+                                  <span className="pearson-square-label">Parts</span>
+                                  <strong>{formatNumber(trainingMath.pearson.highSourceParts, 1)}</strong>
+                                </div>
+                                <div className="pearson-square-node pearson-square-parts pearson-square-parts-low">
+                                  <span className="pearson-square-label">Parts</span>
+                                  <strong>{formatNumber(trainingMath.pearson.lowSourceParts, 1)}</strong>
+                                </div>
+                              </div>
+                              <div className="pearson-square-adds">
+                                <span>{trainingMath.pearson.highSource.name}: {formatPressure(trainingMath.pearson.highSourcePressurePsi, settings.pressureUnit)}</span>
+                                <span>{trainingMath.pearson.lowSource.name}: {formatPressure(trainingMath.pearson.lowSourcePressurePsi, settings.pressureUnit)}</span>
+                              </div>
                               <ul>
                                 <li>High source: {trainingMath.pearson.highSource.name} at {formatNumber(trainingMath.pearson.highSource.o2Percent, 1)}% O2.</li>
                                 <li>Low source: {trainingMath.pearson.lowSource.name} at {formatNumber(trainingMath.pearson.lowSource.o2Percent, 1)}% O2.</li>

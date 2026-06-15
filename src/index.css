@@ -627,6 +627,114 @@ button {
   color: #cbd5f5;
 }
 
+.pearson-square {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(92px, 1fr) minmax(82px, 0.8fr) minmax(92px, 1fr);
+  grid-template-rows: repeat(2, minmax(64px, auto));
+  gap: 12px 16px;
+  align-items: center;
+  margin: 6px 0 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  background: rgba(15, 23, 42, 0.45);
+  overflow: hidden;
+}
+
+.pearson-square::before,
+.pearson-square::after {
+  content: "";
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  top: 50%;
+  height: 1px;
+  background: rgba(250, 204, 21, 0.55);
+  transform-origin: center;
+  pointer-events: none;
+}
+
+.pearson-square::before {
+  transform: rotate(20deg);
+}
+
+.pearson-square::after {
+  transform: rotate(-20deg);
+}
+
+.pearson-square-node,
+.pearson-square-target {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 58px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(30, 41, 59, 0.92);
+}
+
+.pearson-square-source-high {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.pearson-square-source-low {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.pearson-square-target {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  text-align: center;
+  border-color: rgba(250, 204, 21, 0.48);
+  background: rgba(113, 63, 18, 0.78);
+}
+
+.pearson-square-parts-high {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.pearson-square-parts-low {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.pearson-square-label,
+.pearson-square-target span {
+  color: #bfdbfe;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pearson-square strong {
+  color: #f8fafc;
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.pearson-square-adds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pearson-square-adds span {
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.62);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #dbeafe;
+}
+
 .tank-context-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
