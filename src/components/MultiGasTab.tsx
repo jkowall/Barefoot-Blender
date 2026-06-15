@@ -281,8 +281,8 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     const totalHePsi = sourceRows.reduce((sum, row) => sum + row.hePsi, startHePsi);
     const totalN2Psi = sourceRows.reduce((sum, row) => sum + row.n2Psi, startN2Psi);
     const addedPressurePsi = targetPressurePsi - effectiveStartPressurePsi;
-    const targetO2Percent = multiGas.targetO2 ?? 32;
-    const targetHePercent = hasHeliumAvailable ? (multiGas.targetHe ?? 0) : 0;
+    const targetO2Percent = selectedAlternative.finalO2;
+    const targetHePercent = selectedAlternative.finalHe;
     const startO2Percent = multiGas.startO2 ?? 21;
     const startHePercent = multiGas.startHe ?? 0;
     const startO2Points = effectiveStartPressurePsi * startO2Percent;
@@ -359,6 +359,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
       totalO2PointsDisplay,
       totalHePointsDisplay,
       totalN2PointsDisplay,
+      targetPressureDisplay,
       addedPressureDisplay,
       neededAddedO2Percent,
       neededAddedHePercent,
@@ -371,10 +372,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
   }, [
     multiGas.startHe,
     multiGas.startO2,
-    multiGas.targetHe,
-    multiGas.targetO2,
     multiGas.targetPressure,
-    hasHeliumAvailable,
     selectedAlternative,
     settings.pressureUnit,
     startPressurePsi,
@@ -666,9 +664,9 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                                     {row.name}: {formatPressure(row.amountPsi, settings.pressureUnit)} x {formatNumber(row.o2Percent, 1)}% O2 / {formatNumber(row.hePercent, 1)}% He / {formatNumber(row.n2Percent, 1)}% N2
                                   </li>
                                 ))}
-                                <li>Final O2% = total O2 points / target pressure = {formatNumber(trainingMath.totalO2PointsDisplay, 0)} / {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(selectedAlternative.finalO2, 1)}%</li>
-                                <li>Final He% = total He points / target pressure = {formatNumber(trainingMath.totalHePointsDisplay, 0)} / {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(selectedAlternative.finalHe, 1)}%</li>
-                                <li>Final N2% = total N2 points / target pressure = {formatNumber(trainingMath.totalN2PointsDisplay, 0)} / {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(Math.max(0, 100 - selectedAlternative.finalO2 - selectedAlternative.finalHe), 1)}%</li>
+                                <li>Final O2% = total O2 points / target pressure = {formatNumber(trainingMath.totalO2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(selectedAlternative.finalO2, 1)}%</li>
+                                <li>Final He% = total He points / target pressure = {formatNumber(trainingMath.totalHePointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(selectedAlternative.finalHe, 1)}%</li>
+                                <li>Final N2% = total N2 points / target pressure = {formatNumber(trainingMath.totalN2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(Math.max(0, 100 - selectedAlternative.finalO2 - selectedAlternative.finalHe), 1)}%</li>
                               </ul>
                             </>
                           )}

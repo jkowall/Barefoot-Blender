@@ -501,17 +501,20 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       resultSource === "ideal" &&
       topHeFraction <= 0.000001 &&
       1 - topO2Fraction > 0.000001;
-    const handHeliumAddPsi = commonHandMethod ? deltaHePsi : 0;
-    const pressureLeftAfterHeliumPsi = targetPressurePsi - effectiveStartPressurePsi - handHeliumAddPsi;
-    const handOxygenAddPsi = commonHandMethod
+    const handHeliumAddPsi = commonHandMethod ? clampPressure(deltaHePsi) : 0;
+    const pressureLeftAfterHeliumPsi = commonHandMethod
+      ? clampPressure(targetPressurePsi - effectiveStartPressurePsi - handHeliumAddPsi)
+      : 0;
+    const rawHandOxygenAddPsi = commonHandMethod
       ? (
           targetO2Psi * 100 -
           startO2Psi * 100 -
           selectedTopGas.o2 * pressureLeftAfterHeliumPsi
         ) / (100 - selectedTopGas.o2)
       : 0;
+    const handOxygenAddPsi = clampPressure(rawHandOxygenAddPsi);
     const handTopoffPsi = commonHandMethod
-      ? targetPressurePsi - effectiveStartPressurePsi - handHeliumAddPsi - handOxygenAddPsi
+      ? clampPressure(targetPressurePsi - effectiveStartPressurePsi - handHeliumAddPsi - handOxygenAddPsi)
       : 0;
     const effectiveStartPressureDisplay = toDisplayPressure(effectiveStartPressurePsi, settings.pressureUnit);
     const targetPressureDisplay = toDisplayPressure(targetPressurePsi, settings.pressureUnit);
