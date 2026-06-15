@@ -621,6 +621,10 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                                 </div>
                               </div>
                               <div className="pearson-square" aria-label="Pearson square visual check">
+                                <svg className="pearson-square-lines" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                  <line x1="18" y1="26" x2="82" y2="74" />
+                                  <line x1="18" y1="74" x2="82" y2="26" />
+                                </svg>
                                 <div className="pearson-square-node pearson-square-source pearson-square-source-high">
                                   <span className="pearson-square-label">{trainingMath.pearson.highSource.name}</span>
                                   <strong>{formatNumber(trainingMath.pearson.highSource.o2Percent, 1)}%</strong>
