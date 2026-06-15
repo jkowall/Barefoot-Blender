@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.11.0] - 2026-06-15
+
+### Added
+
+- **GERG-2008 Fill Corrections**: Added an optional Standard Blend gas model that calculates O2/N2/He molar real-gas corrected stop pressures with fill and settled temperature inputs ([#155](https://github.com/jkowall/Barefoot-Blender/issues/155)).
+
 ## [0.10.0] - 2026-06-11
 
 ### Added
@@ -9,6 +15,8 @@
 
 ### Fixed
 
+- **Subscription Legal Links**: Added functional Privacy Policy and Terms of Use links directly inside the native subscription paywall for App Review compliance.
+- **iOS Export Compliance**: Declared the app does not use non-exempt encryption in the iOS Info.plist so future TestFlight uploads can avoid the repeated manual compliance prompt.
 - **App Store Review Copy**: Removed third-party platform references from native subscription, support, privacy, and terms copy for App Store review readiness.
 - **Native Release Versioning**: Aligned iOS and Android native release metadata with app version `0.10.0`.
 

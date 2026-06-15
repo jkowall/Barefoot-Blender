@@ -10,6 +10,9 @@ export type StandardBlendInput = {
   targetPressure?: number;
   tankSizeCuFt?: number;
   tankRatedPressurePsi?: number;
+  startTemperatureF?: number;
+  fillTemperatureF?: number;
+  settledTemperatureF?: number;
   topGasId: string;
 };
 
@@ -117,6 +120,9 @@ const defaultValues = {
     targetO2: 32,
     targetHe: 0,
     targetPressure: 3000,
+    startTemperatureF: 70,
+    fillTemperatureF: 90,
+    settledTemperatureF: 70,
     topGasId: "air"
   },
   multiGas: {

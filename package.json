@@ -1,6 +1,6 @@
 {
   "name": "barefoot-blender",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "packageManager": "npm@11.12.1",
   "type": "module",
@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify:calc": "vitest run src/utils/calculations.test.ts",
+    "verify:calc": "vitest run src/utils/calculations.test.ts src/utils/gerg2008.test.ts src/utils/realGasBlend.test.ts",
     "verify:ios-copy": "node scripts/verify-ios-store-copy.mjs",
     "check": "npm run lint && npm run test && npm run build",
     "mobile:sync": "npm run build && cap sync ios && npm run verify:ios-copy && cap sync android",

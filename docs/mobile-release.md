@@ -142,9 +142,10 @@ npm run mobile:android
 4. Confirm the marketing version and build number match the release plan and the App Store Connect version being submitted.
 5. Use automatic signing unless the account requires manual profiles.
 6. Archive in Xcode and upload through Organizer to App Store Connect.
-7. Attach the uploaded build to TestFlight internal testing and to the App Store version. App Store Connect build state, TestFlight state, and app-review submission state are separate.
-8. Add screenshots, privacy details, support URL, privacy URL, subscription terms, and review notes. For subscription apps, include `Terms of Use (EULA): https://trimix-blender.com/terms/` in the App Description or App Store Connect EULA field and repeat the link in App Review Notes.
-9. Submit to TestFlight first, then submit the same build for App Review after sign-off.
+7. Clear TestFlight build blockers first, including export compliance, before selecting the build on the App Store version page. App Store version build selection can lag or omit a newly uploaded build until TestFlight marks it ready.
+8. Attach the uploaded build to TestFlight internal testing and to the App Store version. App Store Connect build state, TestFlight state, and app-review submission state are separate.
+9. Add screenshots, privacy details, support URL, privacy URL, subscription terms, and review notes. For subscription apps, include `Terms of Use (EULA): https://trimix-blender.com/terms/` in the App Description or App Store Connect EULA field and repeat the link in App Review Notes.
+10. Submit to TestFlight first, then submit the same build for App Review after sign-off.
 
 Review notes should state that the app is a calculator for trained divers and fill station operators, no login is required, and the subscription is validated through RevenueCat/StoreKit.
 

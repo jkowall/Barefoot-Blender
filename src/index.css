@@ -93,6 +93,28 @@ button {
   color: #e2e8f0;
 }
 
+.subscription-detail {
+  margin: 4px 0 0;
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.paywall-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin: 14px 0 18px;
+}
+
+.paywall-links a {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.paywall-links a:hover {
+  text-decoration: none;
+}
+
 .link-button {
   border: none;
   background: transparent;

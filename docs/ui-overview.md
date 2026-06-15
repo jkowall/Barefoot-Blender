@@ -16,7 +16,7 @@ This quick-reference outlines the visual flow and interaction model for Barefoot
 - Browser/PWA usage opens after the first-run safety acknowledgement.
 - Native iOS and Android builds check the RevenueCat `pro` entitlement before showing calculator tabs.
 - Local debug native builds created with `npm run build:mobile:debug` bypass the subscription gate for simulator/device testing.
-- The native paywall shows the annual price, auto-renewal language, restore purchases, and manage subscription actions.
+- The native paywall shows the annual price, auto-renewal language, functional privacy and EULA links, restore purchases, and manage subscription actions.
 
 ## Tab Details
 
