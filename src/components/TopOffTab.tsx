@@ -188,6 +188,8 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
     const startPressureDisplay = toDisplayPressure(startPressurePsi, settings.pressureUnit);
     const addedPressureDisplay = toDisplayPressure(result.addedPressure, settings.pressureUnit);
     const finalPressureDisplay = toDisplayPressure(result.finalPressure, settings.pressureUnit);
+    const startO2PartialPressurePsi = startPressurePsi * startO2Fraction;
+    const topO2PartialPressurePsi = result.addedPressure * topO2Fraction;
 
     return {
       startO2Fraction,
@@ -199,6 +201,8 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       startPressurePsi,
       addedPressurePsi: result.addedPressure,
       finalPressurePsi: result.finalPressure,
+      startO2PartialPressurePsi,
+      topO2PartialPressurePsi,
       totalO2Psi: startPressurePsi * startO2Fraction + result.addedPressure * topO2Fraction,
       totalHePsi: startPressurePsi * startHeFraction + result.addedPressure * topHeFraction,
       totalN2Psi: startPressurePsi * startN2Fraction + result.addedPressure * topN2Fraction,
@@ -208,6 +212,28 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       finalPressureDisplay
     };
   }, [result, selectedTopGas, settings.pressureUnit, startPressurePsi, topOff.startHe, topOff.startO2, trainingModeEnabled]);
+
+  const bleedFormulaMath = useMemo(() => {
+    if (!trainingModeEnabled || !bleedPreview?.success || !selectedTopGas) {
+      return null;
+    }
+
+    const startO2Percent = topOff.startO2 ?? 32;
+    const targetO2Percent = bleedPreview.finalO2;
+    const topO2Percent = selectedTopGas.o2;
+    const denominator = startO2Percent - topO2Percent;
+    if (Math.abs(denominator) <= 0.000001) {
+      return null;
+    }
+
+    const solvedStartPsi = bleedPreview.finalPressure * (targetO2Percent - topO2Percent) / denominator;
+    return {
+      startO2Percent,
+      targetO2Percent,
+      topO2Percent,
+      solvedStartPsi
+    };
+  }, [bleedPreview, selectedTopGas, topOff.startO2, trainingModeEnabled]);
 
   return (
     <>
@@ -358,6 +384,14 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                   <span className="formula-step-label">Step 2</span>
                   <div className="formula-mini-grid">
                     <div className="formula-mini">
+                      <span>PPH O2</span>
+                      <strong>{formatPressure(trainingMath.startO2PartialPressurePsi, settings.pressureUnit, 1)}</strong>
+                    </div>
+                    <div className="formula-mini">
+                      <span>PPTMx O2</span>
+                      <strong>{formatPressure(trainingMath.topO2PartialPressurePsi, settings.pressureUnit, 1)}</strong>
+                    </div>
+                    <div className="formula-mini">
                       <span>O2 Points</span>
                       <strong>{formatNumber(trainingMath.totalO2PointsDisplay, 0)}</strong>
                     </div>
@@ -387,6 +421,10 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
               </div>
               <ul>
                 <li>Added pressure = final pressure - start pressure = {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} = {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)}</li>
+                <li>Formula reference: FO2 = (PPH + PPTMx) / PW, where PPH is partial pressure already in the cylinder, PPTMx is partial pressure from the top-off mix, and PW is wanted pressure.</li>
+                <li>PPH = current pressure x current O2 fraction = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startO2Fraction, 3)} = {formatPressure(trainingMath.startO2PartialPressurePsi, settings.pressureUnit, 1)}</li>
+                <li>PPTMx = added pressure x top-off O2 fraction = {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.topO2Fraction, 3)} = {formatPressure(trainingMath.topO2PartialPressurePsi, settings.pressureUnit, 1)}</li>
+                <li>Final O2% = (PPH + PPTMx) / PW = ({formatPressure(trainingMath.startO2PartialPressurePsi, settings.pressureUnit, 1)} + {formatPressure(trainingMath.topO2PartialPressurePsi, settings.pressureUnit, 1)}) / {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)} = {formatPercentage(result.finalO2)}</li>
                 <li>O2 points = start pressure x start O2% + added pressure x top-off O2% = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber((topOff.startO2 ?? 32), 1)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(selectedTopGas.o2, 1)} = {formatNumber(trainingMath.totalO2PointsDisplay, 0)}</li>
                 <li>Final O2% = O2 points / final pressure = {formatNumber(trainingMath.totalO2PointsDisplay, 0)} / {formatNumber(trainingMath.finalPressureDisplay, 1)} = {formatPercentage(result.finalO2)}</li>
                 <li>He points = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber((topOff.startHe ?? 0), 1)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(selectedTopGas.he, 1)} = {formatNumber(trainingMath.totalHePointsDisplay, 0)}; final He = {formatPercentage(result.finalHe)}</li>
@@ -497,6 +535,19 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                 Bleed tank to {formatPressure(adjustedStartPsi, settings.pressureUnit)}, then add {selectedTopGas?.name ?? "chosen gas"}: {formatPressure(bleedPreview.finalPressure, settings.pressureUnit)}
                 <span className="result-step-total"> ({formatSignedPressure(bleedPreview.addedPressure, settings.pressureUnit)})</span>
               </div>
+              {bleedFormulaMath && (
+                <TrainingMathPanel
+                  title="Bleed Pressure Formula"
+                  note="This shows the reference bleed formula for solving the pressure to keep before topping off."
+                >
+                  <ul>
+                    <li>PH = PW x (FW - FTMx) / (FH - FTMx)</li>
+                    <li>PW = {formatPressure(bleedPreview.finalPressure, settings.pressureUnit)}, FW = {formatNumber(bleedFormulaMath.targetO2Percent, 1)}%, FH = {formatNumber(bleedFormulaMath.startO2Percent, 1)}%, FTMx = {formatNumber(bleedFormulaMath.topO2Percent, 1)}%</li>
+                    <li>PH = {formatPressure(bleedPreview.finalPressure, settings.pressureUnit)} x ({formatNumber(bleedFormulaMath.targetO2Percent, 1)} - {formatNumber(bleedFormulaMath.topO2Percent, 1)}) / ({formatNumber(bleedFormulaMath.startO2Percent, 1)} - {formatNumber(bleedFormulaMath.topO2Percent, 1)}) = {formatPressure(bleedFormulaMath.solvedStartPsi, settings.pressureUnit)}</li>
+                    <li>Bleed amount = current pressure - PH = {formatPressure(startPressurePsi, settings.pressureUnit)} - {formatPressure(adjustedStartPsi, settings.pressureUnit)} = {formatPressure(effectiveBleedPsi, settings.pressureUnit)}</li>
+                  </ul>
+                </TrainingMathPanel>
+              )}
               {bleedPreview.warnings.map((warning) => (
                 <div key={warning} className="warning">
                   {warning}

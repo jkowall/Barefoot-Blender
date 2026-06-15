@@ -552,14 +552,26 @@ button {
 }
 
 .training-math-panel {
+  position: relative;
   margin-top: 16px;
-  padding: 12px;
+  padding: 14px;
   border-radius: 12px;
-  border: 1px solid rgba(250, 204, 21, 0.35);
-  background: rgba(24, 31, 43, 0.82);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  background-color: rgba(15, 23, 42, 0.96);
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.98));
+  background-size: 22px 22px, 22px 22px, auto;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 16px 28px -24px rgba(0, 0, 0, 0.65);
+  overflow: hidden;
 }
 
 .training-math-header {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -586,16 +598,26 @@ button {
 }
 
 .training-math-content {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   color: #dbeafe;
   font-size: 0.85rem;
   line-height: 1.45;
 }
 
-.training-math-content p {
+.training-math-content p,
+.training-math-content > ul,
+.training-math-grid > div,
+.training-math-section {
   margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .training-math-content ul {
@@ -615,8 +637,13 @@ button {
 
 .training-math-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+  gap: 10px;
+}
+
+.training-math-grid > div,
+.training-math-section {
+  min-width: 0;
 }
 
 .training-math-note {
@@ -627,37 +654,95 @@ button {
   color: #cbd5f5;
 }
 
+.training-math-panel > .table-note {
+  position: relative;
+  z-index: 1;
+  margin-top: 10px;
+}
+
 .formula-sheet {
   display: grid;
-  gap: 10px;
+  align-items: start;
+  gap: 12px;
+}
+
+.formula-sheet-compact {
+  gap: 8px;
+}
+
+.formula-sheet-compact .formula-step {
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.formula-sheet-compact .formula-equation {
+  gap: 6px 8px;
+  font-size: 0.95rem;
+}
+
+.formula-sheet-compact .formula-mini-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.formula-sheet-compact .formula-mini {
+  padding: 6px;
 }
 
 .formula-step {
   display: grid;
-  gap: 7px;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(250, 204, 21, 0.28);
-  background: rgba(248, 250, 252, 0.96);
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(226, 232, 240, 0.96));
   color: #0f172a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 10px 18px -16px rgba(15, 23, 42, 0.55);
   overflow-x: auto;
 }
 
+@media (min-width: 760px) {
+  .formula-sheet {
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  }
+
+  .formula-sheet-compact {
+    grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  }
+}
+
+@media (min-width: 980px) {
+  .training-math-grid-support {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .formula-step-label {
-  color: #334155;
-  font-size: 0.78rem;
+  display: inline-flex;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #facc15;
+  color: #0f172a;
+  font-size: 0.68rem;
   font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .formula-equation {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  min-width: max-content;
-  font-size: clamp(1.02rem, 2.4vw, 1.7rem);
+  gap: 8px 10px;
+  min-width: 0;
+  font-size: clamp(0.96rem, 1.7vw, 1.22rem);
   font-weight: 600;
+  line-height: 1.28;
   letter-spacing: 0;
-  white-space: nowrap;
 }
 
 .formula-equation strong {
@@ -694,8 +779,9 @@ button {
   gap: 4px;
   padding: 8px;
   border-radius: 8px;
-  background: #e2e8f0;
-  border: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, #f8fafc, #dbeafe);
+  border: 1px solid #bfdbfe;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 .formula-mini span {
@@ -711,25 +797,21 @@ button {
 
 .pearson-square {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(92px, 1fr) minmax(82px, 0.8fr) minmax(92px, 1fr);
-  grid-template-rows: repeat(2, minmax(64px, auto));
-  gap: 12px 16px;
-  align-items: center;
+  min-height: 154px;
   margin: 6px 0 10px;
   padding: 12px;
   border-radius: 10px;
   border: 1px solid rgba(96, 165, 250, 0.28);
-  background: rgba(15, 23, 42, 0.45);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(30, 41, 59, 0.68));
   overflow: hidden;
 }
 
 .pearson-square-lines {
   position: absolute;
-  inset: 12px;
+  inset: 18px 24px;
   z-index: 0;
-  width: calc(100% - 24px);
-  height: calc(100% - 24px);
+  width: calc(100% - 48px);
+  height: calc(100% - 36px);
   pointer-events: none;
 }
 
@@ -742,59 +824,106 @@ button {
 
 .pearson-square-node,
 .pearson-square-target {
-  position: relative;
+  position: absolute;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 58px;
-  padding: 8px;
-  border-radius: 8px;
+  display: inline-grid;
+  gap: 1px;
+  align-items: center;
+  min-width: 72px;
+  max-width: 118px;
+  padding: 5px 8px;
+  border-radius: 9999px;
   border: 1px solid rgba(148, 163, 184, 0.24);
-  background: rgba(30, 41, 59, 0.92);
+  background: rgba(15, 23, 42, 0.94);
+  text-align: center;
+  box-shadow: 0 8px 16px -14px rgba(0, 0, 0, 0.9);
 }
 
 .pearson-square-source-high {
-  grid-column: 1;
-  grid-row: 1;
+  top: 16px;
+  left: 12px;
 }
 
 .pearson-square-source-low {
-  grid-column: 1;
-  grid-row: 2;
+  bottom: 16px;
+  left: 12px;
 }
 
 .pearson-square-target {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: center;
-  text-align: center;
+  top: 50%;
+  left: 50%;
+  min-width: 82px;
+  transform: translate(-50%, -50%);
+  border-radius: 10px;
   border-color: rgba(250, 204, 21, 0.48);
   background: rgba(113, 63, 18, 0.78);
 }
 
 .pearson-square-parts-high {
-  grid-column: 3;
-  grid-row: 1;
+  top: 16px;
+  right: 12px;
 }
 
 .pearson-square-parts-low {
-  grid-column: 3;
-  grid-row: 2;
+  right: 12px;
+  bottom: 16px;
 }
 
 .pearson-square-label,
 .pearson-square-target span {
   color: #bfdbfe;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .pearson-square strong {
   color: #f8fafc;
-  font-size: 1.05rem;
+  font-size: 0.96rem;
   line-height: 1.2;
+}
+
+@media (max-width: 480px) {
+  .pearson-square {
+    min-height: 146px;
+    padding: 8px;
+  }
+
+  .pearson-square-lines {
+    inset: 18px;
+    width: calc(100% - 36px);
+    height: calc(100% - 36px);
+  }
+
+  .pearson-square-node,
+  .pearson-square-target {
+    min-width: 58px;
+    max-width: 72px;
+    padding: 5px 6px;
+  }
+
+  .pearson-square-source-high,
+  .pearson-square-source-low {
+    left: 8px;
+  }
+
+  .pearson-square-parts-high,
+  .pearson-square-parts-low {
+    right: 8px;
+  }
+
+  .pearson-square-target {
+    min-width: 66px;
+  }
+
+  .pearson-square-label,
+  .pearson-square-target span {
+    font-size: 0.6rem;
+  }
+
+  .pearson-square strong {
+    font-size: 0.84rem;
+  }
 }
 
 .pearson-square-adds {

@@ -2,6 +2,10 @@
 
 ## [0.12.2] - 2026-06-15
 
+### Changed
+
+- **Training Mode Work Sheets**: Expanded Standard Blend, Top-Off, Bleed Pressure, and Multi-Gas Training Mode explanations with reference-style variable substitutions for the classroom nitrox formulas.
+
 ### Fixed
 
 - **Pearson Square Rendering**: Replaced the Training Mode Pearson-square pseudo-element lines with explicit SVG strokes so the visual guide remains visible in production builds.
