@@ -627,6 +627,88 @@ button {
   color: #cbd5f5;
 }
 
+.formula-sheet {
+  display: grid;
+  gap: 10px;
+}
+
+.formula-step {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  background: rgba(248, 250, 252, 0.96);
+  color: #0f172a;
+  overflow-x: auto;
+}
+
+.formula-step-label {
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.formula-equation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: max-content;
+  font-size: clamp(1.02rem, 2.4vw, 1.7rem);
+  font-weight: 600;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.formula-equation strong {
+  color: #075985;
+  font-weight: 800;
+}
+
+.formula-fraction {
+  display: inline-grid;
+  grid-template-rows: auto auto;
+  align-items: center;
+  min-width: max-content;
+  text-align: center;
+}
+
+.formula-fraction span:first-child {
+  padding: 0 8px 5px;
+  border-bottom: 3px solid #0f172a;
+}
+
+.formula-fraction span:last-child {
+  padding-top: 5px;
+}
+
+.formula-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  min-width: min(100%, 340px);
+}
+
+.formula-mini {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+}
+
+.formula-mini span {
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.formula-mini strong {
+  color: #075985;
+  font-size: 1.15rem;
+}
+
 .pearson-square {
   position: relative;
   display: grid;

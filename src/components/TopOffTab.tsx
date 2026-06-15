@@ -343,6 +343,48 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
               <p>
                 Top-off adds {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} of {selectedTopGas?.name ?? "selected gas"} to {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)}, ending at {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)}.
               </p>
+              <div className="formula-sheet" aria-label="Top-off visual formula worksheet">
+                <div className="formula-step">
+                  <span className="formula-step-label">Step 1</span>
+                  <div className="formula-equation">
+                    <span>Added P</span>
+                    <span>=</span>
+                    <span>Final P - Start P</span>
+                    <span>=</span>
+                    <strong>{formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)}</strong>
+                  </div>
+                </div>
+                <div className="formula-step">
+                  <span className="formula-step-label">Step 2</span>
+                  <div className="formula-mini-grid">
+                    <div className="formula-mini">
+                      <span>O2 Points</span>
+                      <strong>{formatNumber(trainingMath.totalO2PointsDisplay, 0)}</strong>
+                    </div>
+                    <div className="formula-mini">
+                      <span>He Points</span>
+                      <strong>{formatNumber(trainingMath.totalHePointsDisplay, 0)}</strong>
+                    </div>
+                    <div className="formula-mini">
+                      <span>N2 Points</span>
+                      <strong>{formatNumber(trainingMath.totalN2PointsDisplay, 0)}</strong>
+                    </div>
+                  </div>
+                </div>
+                <div className="formula-step">
+                  <span className="formula-step-label">Step 3</span>
+                  <div className="formula-equation">
+                    <span>Final O2%</span>
+                    <span>=</span>
+                    <span className="formula-fraction">
+                      <span>{formatNumber(trainingMath.totalO2PointsDisplay, 0)}</span>
+                      <span>{formatNumber(trainingMath.finalPressureDisplay, 1)}</span>
+                    </span>
+                    <span>=</span>
+                    <strong>{formatPercentage(result.finalO2)}</strong>
+                  </div>
+                </div>
+              </div>
               <ul>
                 <li>Added pressure = final pressure - start pressure = {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} = {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)}</li>
                 <li>O2 points = start pressure x start O2% + added pressure x top-off O2% = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber((topOff.startO2 ?? 32), 1)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(selectedTopGas.o2, 1)} = {formatNumber(trainingMath.totalO2PointsDisplay, 0)}</li>

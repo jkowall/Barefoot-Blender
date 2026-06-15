@@ -4,7 +4,7 @@
 
 ### Changed
 
-- **Training Mode Hand Math**: Reworked Training Mode explanations to use hand-fill worksheet math, including pressure-percent points, helium-first/O2/top-off Standard Blend steps, Top-Off hand checks, and a visual Pearson-square style Multi-Gas guide where applicable.
+- **Training Mode Hand Math**: Reworked Training Mode explanations to use cheat-sheet style visual formula cards, including pressure-percent points, helium-first/O2/top-off Standard Blend steps, Top-Off hand checks, and a visual Pearson-square style Multi-Gas guide where applicable.
 
 ## [0.12.0] - 2026-06-15
 

@@ -718,8 +718,47 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                   This result is a GERG-2008 correction case. The hand-fill partial-pressure worksheet has no normal pressure add to show; GERG-2008 estimates corrected stop pressures from absolute pressure, temperature, cylinder volume, component moles, and mixture compressibility.
                 </div>
               ) : trainingMath.commonHandMethod ? (
-                <div className="training-math-grid">
-                  <div>
+                <>
+                  <div className="formula-sheet" aria-label="Standard blend visual formula worksheet">
+                    <div className="formula-step">
+                      <span className="formula-step-label">Step 1</span>
+                      <div className="formula-equation">
+                        <span>He Fill P</span>
+                        <span>=</span>
+                        <span className="formula-fraction">
+                          <span>{formatNumber(trainingMath.targetHePointsDisplay, 0)} - {formatNumber(trainingMath.startHePointsDisplay, 0)}</span>
+                          <span>100</span>
+                        </span>
+                        <span>=</span>
+                        <strong>{formatPressure(trainingMath.handHeliumAddPsi, settings.pressureUnit)}</strong>
+                      </div>
+                    </div>
+                    <div className="formula-step">
+                      <span className="formula-step-label">Step 2</span>
+                      <div className="formula-equation">
+                        <span>O2 Fill P</span>
+                        <span>=</span>
+                        <span className="formula-fraction">
+                          <span>{formatNumber(trainingMath.targetO2PointsDisplay, 0)} - {formatNumber(trainingMath.startO2PointsDisplay, 0)} - ({formatNumber(selectedTopGas.o2, 1)} x {formatNumber(trainingMath.pressureLeftAfterHeliumDisplay, 1)})</span>
+                          <span>{formatNumber(100 - selectedTopGas.o2, 1)}</span>
+                        </span>
+                        <span>=</span>
+                        <strong>{formatPressure(trainingMath.handOxygenAddPsi, settings.pressureUnit)}</strong>
+                      </div>
+                    </div>
+                    <div className="formula-step">
+                      <span className="formula-step-label">Step 3</span>
+                      <div className="formula-equation">
+                        <span>Top-off</span>
+                        <span>=</span>
+                        <span>Final P - Start P - He P - O2 P</span>
+                        <span>=</span>
+                        <strong>{formatPressure(trainingMath.handTopoffPsi, settings.pressureUnit)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="training-math-grid">
+                    <div>
                     <h4>Slate setup</h4>
                     <ul>
                       <li>Use pressure-percent points: mix percent x pressure.</li>
@@ -739,7 +778,8 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                       <li>Top-off = final - start - He - O2 = {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.handHeliumAddPsi, settings.pressureUnit)} - {formatPressure(trainingMath.handOxygenAddPsi, settings.pressureUnit)} = {formatPressure(trainingMath.handTopoffPsi, settings.pressureUnit)}</li>
                     </ul>
                   </div>
-                </div>
+                  </div>
+                </>
               ) : (
                 <div className="training-math-grid">
                   <div>

@@ -583,6 +583,45 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                           {trainingMath.pearson ? (
                             <>
                               <h4>Pearson square</h4>
+                              <div className="formula-sheet" aria-label="Pearson square visual formula worksheet">
+                                <div className="formula-step">
+                                  <span className="formula-step-label">Step 1</span>
+                                  <div className="formula-equation">
+                                    <span>Needed O2%</span>
+                                    <span>=</span>
+                                    <span className="formula-fraction">
+                                      <span>{formatNumber(trainingMath.targetO2PointsDisplay, 0)} - {formatNumber(trainingMath.startO2PointsDisplay, 0)}</span>
+                                      <span>{formatNumber(trainingMath.addedPressureDisplay, 1)}</span>
+                                    </span>
+                                    <span>=</span>
+                                    <strong>{formatNumber(trainingMath.neededAddedO2Percent, 1)}%</strong>
+                                  </div>
+                                </div>
+                                <div className="formula-step">
+                                  <span className="formula-step-label">Step 2</span>
+                                  <div className="formula-mini-grid">
+                                    <div className="formula-mini">
+                                      <span>{trainingMath.pearson.highSource.name} parts</span>
+                                      <strong>{formatNumber(trainingMath.pearson.highSourceParts, 1)}</strong>
+                                    </div>
+                                    <div className="formula-mini">
+                                      <span>{trainingMath.pearson.lowSource.name} parts</span>
+                                      <strong>{formatNumber(trainingMath.pearson.lowSourceParts, 1)}</strong>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="formula-step">
+                                  <span className="formula-step-label">Step 3</span>
+                                  <div className="formula-equation">
+                                    <span>Source add</span>
+                                    <span>=</span>
+                                    <span className="formula-fraction">
+                                      <span>Added P x parts</span>
+                                      <span>Total parts</span>
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
                               <div className="pearson-square" aria-label="Pearson square visual check">
                                 <div className="pearson-square-node pearson-square-source pearson-square-source-high">
                                   <span className="pearson-square-label">{trainingMath.pearson.highSource.name}</span>

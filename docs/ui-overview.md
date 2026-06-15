@@ -35,7 +35,7 @@ Order of content:
 2. **Tank Context** card – Per-fill tank volume and rated pressure for cost and volume conversion.
 3. **Top-Off Goal** card – Final pressure.
 4. **Top-Off Gas** card – Selected top-off source.
-5. **Top-Off Outcome** card – Final mix, added pressure, added volume, and estimated fill cost. When `Training Mode` is on, it explains the pressure-percent hand check for O2, He, and N2.
+5. **Top-Off Outcome** card – Final mix, added pressure, added volume, and estimated fill cost. When `Training Mode` is on, it explains the pressure-percent hand check for O2, He, and N2 with visual formula cards.
 6. **Bleed-Down What-If** and **Top-Off Sensitivity** cards – Optional projections for drain scenarios and alternate starts.
 
 ### Multi-Gas Blend
@@ -44,7 +44,7 @@ Order of content:
 2. **Tank Context** card – Per-fill tank volume and rated pressure.
 3. **Source Gases** card – Selectors with optional custom source gases and bank pressure limits.
 4. **Target Blend** card – Oxygen, helium, and final pressure fields.
-5. **Blend Options** card – Ranked alternatives, fill order, added PSI, cu ft, free gas liters, and estimated cost. When `Training Mode` is on, it shows the needed added gas worksheet and a visual Pearson-square style check for two-source nitrox cases, falling back to pressure-percent source checks for more complex mixes.
+5. **Blend Options** card – Ranked alternatives, fill order, added PSI, cu ft, free gas liters, and estimated cost. When `Training Mode` is on, it shows visual formula cards for the needed added gas worksheet and a Pearson-square style check for two-source nitrox cases, falling back to pressure-percent source checks for more complex mixes.
 
 ### Utilities
 
