@@ -21,6 +21,7 @@ type SettingsState = {
   gasModel: GasModel;
   defaultMaxPPO2?: number;
   defaultContingencyPPO2?: number;
+  trainingModeEnabled: boolean;
   oxygenIsNarcotic: boolean;
   customGases: GasDefinition[];
   pricePerCuFtO2?: number;
@@ -34,6 +35,7 @@ type SettingsState = {
   setGasModel: (model: GasModel) => void;
   setDefaultMaxPPO2: (value: number | undefined) => void;
   setDefaultContingencyPPO2: (value: number | undefined) => void;
+  setTrainingModeEnabled: (value: boolean) => void;
   setOxygenIsNarcotic: (value: boolean) => void;
   upsertCustomGas: (gas: GasDefinition) => void;
   removeCustomGas: (id: string) => void;
@@ -79,16 +81,20 @@ const sanitizePersistedCustomGases = (state: PersistedSettingsState): PersistedS
 
 export const migrateSettingsState = (persisted: PersistedSettingsState): PersistedSettingsState => {
   const sanitized = sanitizePersistedCustomGases(persisted);
-  if (sanitized.pricePerCuFtTopOff !== undefined) {
-    return sanitized;
+  const withTrainingModeDefault: PersistedSettingsState = {
+    ...sanitized,
+    trainingModeEnabled: sanitized.trainingModeEnabled ?? false
+  };
+  if (withTrainingModeDefault.pricePerCuFtTopOff !== undefined) {
+    return withTrainingModeDefault;
   }
-  if (sanitized.pricePerCuFtAir !== undefined) {
+  if (withTrainingModeDefault.pricePerCuFtAir !== undefined) {
     return {
-      ...sanitized,
-      pricePerCuFtTopOff: sanitized.pricePerCuFtAir
+      ...withTrainingModeDefault,
+      pricePerCuFtTopOff: withTrainingModeDefault.pricePerCuFtAir
     };
   }
-  return sanitized;
+  return withTrainingModeDefault;
 };
 
 const settingsCreator = (set: SettingsSetter, get: () => SettingsState): SettingsState => ({
@@ -98,6 +104,7 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
   gasModel: "ideal",
   defaultMaxPPO2: 1.4,
   defaultContingencyPPO2: 1.6,
+  trainingModeEnabled: false,
   oxygenIsNarcotic: false,
   customGases: [defaultGas],
   pricePerCuFtO2: 1.0,
@@ -111,6 +118,7 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
   setGasModel: (model: GasModel) => set({ gasModel: model }),
   setDefaultMaxPPO2: (value: number | undefined) => set({ defaultMaxPPO2: value }),
   setDefaultContingencyPPO2: (value: number | undefined) => set({ defaultContingencyPPO2: value }),
+  setTrainingModeEnabled: (value: boolean) => set({ trainingModeEnabled: value }),
   setOxygenIsNarcotic: (value: boolean) => set({ oxygenIsNarcotic: value }),
   upsertCustomGas: (gas: GasDefinition) => {
     const sanitizedGas = sanitizeCustomGas(gas);
@@ -137,7 +145,7 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
 export const useSettingsStore = create<SettingsState>()(
   persist(settingsCreator, {
     name: "barefoot-blender-settings",
-    version: 4,
+    version: 5,
     migrate: (persisted): PersistedSettingsState => migrateSettingsState((persisted ?? {}) as PersistedSettingsState)
   })
 );

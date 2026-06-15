@@ -32,6 +32,7 @@ import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
 import { SelectInput } from "./SelectInput";
 import TankContextFields from "./TankContextFields";
+import TrainingMathPanel from "./TrainingMathPanel";
 
 
 
@@ -55,9 +56,12 @@ const realGasResultToBlendResult = (realGasResult: RealGasBlendResult): BlendRes
 type Props = {
   settings: SettingsSnapshot;
   topOffOptions: GasSelection[];
+  trainingModeEnabled: boolean;
 };
 
-const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
+const toFraction = (percent: number | undefined, fallback: number): number => (percent ?? fallback) / 100;
+
+const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
   const standardBlend = useSessionStore((state: SessionState) => state.standardBlend);
   const standardBlendHistory = useSessionStore((state: SessionState) => state.standardBlendHistory);
   const setStandardBlend = useSessionStore((state: SessionState) => state.setStandardBlend);
@@ -467,6 +471,66 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     settings.pressureUnit === "psi" ? 5 : 0.25
   );
 
+  const trainingMath = useMemo(() => {
+    if (!trainingModeEnabled || !result?.success || !selectedTopGas || !baseVolumes) {
+      return null;
+    }
+
+    const effectiveStartPressurePsi = result.bleedPressure ?? startPressurePsi;
+    const targetPressurePsi = fromDisplayPressure(standardBlend.targetPressure ?? 3000, settings.pressureUnit);
+    const startO2Fraction = toFraction(standardBlend.startO2, 21);
+    const startHeFraction = toFraction(standardBlend.startHe, 0);
+    const startN2Fraction = Math.max(0, 1 - startO2Fraction - startHeFraction);
+    const targetO2Fraction = toFraction(standardBlend.targetO2, 32);
+    const targetHeFraction = toFraction(standardBlend.targetHe, 0);
+    const targetN2Fraction = Math.max(0, 1 - targetO2Fraction - targetHeFraction);
+    const topO2Fraction = selectedTopGas.o2 / 100;
+    const topHeFraction = selectedTopGas.he / 100;
+    const topN2Fraction = Math.max(0, 1 - topO2Fraction - topHeFraction);
+
+    const startO2Psi = effectiveStartPressurePsi * startO2Fraction;
+    const startHePsi = effectiveStartPressurePsi * startHeFraction;
+    const startN2Psi = effectiveStartPressurePsi * startN2Fraction;
+    const targetO2Psi = targetPressurePsi * targetO2Fraction;
+    const targetHePsi = targetPressurePsi * targetHeFraction;
+    const targetN2Psi = targetPressurePsi * targetN2Fraction;
+
+    return {
+      effectiveStartPressurePsi,
+      targetPressurePsi,
+      startO2Fraction,
+      startHeFraction,
+      startN2Fraction,
+      targetO2Fraction,
+      targetHeFraction,
+      targetN2Fraction,
+      topO2Fraction,
+      topHeFraction,
+      topN2Fraction,
+      startO2Psi,
+      startHePsi,
+      startN2Psi,
+      targetO2Psi,
+      targetHePsi,
+      targetN2Psi,
+      deltaO2Psi: targetO2Psi - startO2Psi,
+      deltaHePsi: targetHePsi - startHePsi,
+      deltaN2Psi: targetN2Psi - startN2Psi
+    };
+  }, [
+    baseVolumes,
+    result,
+    selectedTopGas,
+    settings.pressureUnit,
+    standardBlend.startHe,
+    standardBlend.startO2,
+    standardBlend.targetHe,
+    standardBlend.targetO2,
+    standardBlend.targetPressure,
+    startPressurePsi,
+    trainingModeEnabled
+  ]);
+
   return (
     <>
       <AccordionItem title="Start Tank" defaultOpen={true}>
@@ -601,6 +665,48 @@ const StandardBlendTab = ({ settings, topOffOptions }: Props): JSX.Element => {
               {warning}
             </div>
           ))}
+          {trainingMath && (
+            <TrainingMathPanel
+              title="Standard Blend Math"
+              note="Training Mode explains the calculation path for class use. Always analyze the finished gas with calibrated oxygen and helium analyzers."
+            >
+              {result.bleedPressure !== undefined && (
+                <p>
+                  The original start pressure was {formatPressure(startPressurePsi, settings.pressureUnit)}. The plan first bleeds to {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)}, then solves the add pressures from that lower starting point.
+                </p>
+              )}
+              <div className="training-math-grid">
+                <div>
+                  <h4>Partial pressures</h4>
+                  <ul>
+                    <li>Start O2: {formatNumber(trainingMath.startO2Fraction, 3)} x {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} = {formatPressure(trainingMath.startO2Psi, settings.pressureUnit)}</li>
+                    <li>Target O2: {formatNumber(trainingMath.targetO2Fraction, 3)} x {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatPressure(trainingMath.targetO2Psi, settings.pressureUnit)}</li>
+                    <li>O2 needed: {formatPressure(trainingMath.targetO2Psi, settings.pressureUnit)} - {formatPressure(trainingMath.startO2Psi, settings.pressureUnit)} = {formatPressure(trainingMath.deltaO2Psi, settings.pressureUnit)}</li>
+                    <li>He needed: {formatPressure(trainingMath.targetHePsi, settings.pressureUnit)} - {formatPressure(trainingMath.startHePsi, settings.pressureUnit)} = {formatPressure(trainingMath.deltaHePsi, settings.pressureUnit)}</li>
+                    <li>N2 needed: {formatPressure(trainingMath.targetN2Psi, settings.pressureUnit)} - {formatPressure(trainingMath.startN2Psi, settings.pressureUnit)} = {formatPressure(trainingMath.deltaN2Psi, settings.pressureUnit)}</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4>Add pressures</h4>
+                  <ul>
+                    {trainingMath.topN2Fraction > 0.000001 ? (
+                      <li>Top-off = N2 needed / top-off N2 = {formatPressure(trainingMath.deltaN2Psi, settings.pressureUnit)} / {formatNumber(trainingMath.topN2Fraction, 3)} = {formatPressure(baseVolumes.topoff, settings.pressureUnit)}</li>
+                    ) : (
+                      <li>Selected top-off gas has no N2, so O2 and He deltas must carry the fill directly.</li>
+                    )}
+                    <li>Helium add = He needed - top-off He = {formatPressure(trainingMath.deltaHePsi, settings.pressureUnit)} - ({formatPressure(baseVolumes.topoff, settings.pressureUnit)} x {formatNumber(trainingMath.topHeFraction, 3)}) = {formatPressure(baseVolumes.helium, settings.pressureUnit)}</li>
+                    <li>Oxygen add = O2 needed - top-off O2 = {formatPressure(trainingMath.deltaO2Psi, settings.pressureUnit)} - ({formatPressure(baseVolumes.topoff, settings.pressureUnit)} x {formatNumber(trainingMath.topO2Fraction, 3)}) = {formatPressure(baseVolumes.oxygen, settings.pressureUnit)}</li>
+                    <li>Pressure check = start + He + O2 + top-off = {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} + {formatPressure(baseVolumes.helium, settings.pressureUnit)} + {formatPressure(baseVolumes.oxygen, settings.pressureUnit)} + {formatPressure(baseVolumes.topoff, settings.pressureUnit)} = {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)}</li>
+                  </ul>
+                </div>
+              </div>
+              {settings.gasModel === "gerg2008" && (
+                <div className="training-math-note">
+                  GERG-2008 mode keeps this ideal partial-pressure plan as the working fill order, then estimates corrected stop pressures from absolute pressure, temperature, cylinder volume, component moles, and mixture compressibility. The detailed GERG solver stays high level here by design.
+                </div>
+              )}
+            </TrainingMathPanel>
+          )}
           {settings.gasModel === "gerg2008" && realGasResult && (
             <div className="cost-breakdown">
               <div className="section-title">GERG-2008 Corrected Stops</div>

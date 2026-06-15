@@ -17,10 +17,18 @@ import {
   pressureToCuFt
 } from "../utils/calculations";
 import { formatNumber } from "../utils/format";
+import { depthPerAtm } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
+import TrainingMathPanel from "./TrainingMathPanel";
 
-const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element => {
+const UtilitiesTab = ({
+  settings,
+  trainingModeEnabled
+}: {
+  settings: SettingsSnapshot;
+  trainingModeEnabled: boolean;
+}): JSX.Element => {
   const utilities = useSessionStore((state: SessionState) => state.utilities);
   const setUtilities = useSessionStore((state: SessionState) => state.setUtilities);
 
@@ -81,6 +89,43 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
   const tankConvertLiters = utilities.tankConvertLiters ?? cuFtToLiters(tankConvertCuFt);
   const tankPsiPerCuFt = calculatePsiPerCuFt(tankSizeCuFt, tankRatedPressurePsi);
   const tankFreeGasLiters = cuFtToLiters(tankSizeCuFt);
+  const perAtm = depthPerAtm(settings.depthUnit);
+
+  const modGasO2 = utilities.modGasO2 ?? 0;
+  const modMaxPPO2 = utilities.modMaxPPO2 ?? settings.defaultMaxPPO2 ?? 1.4;
+  const modContingencyPPO2 = settings.defaultContingencyPPO2 ?? 1.6;
+  const modO2Fraction = modGasO2 / 100;
+
+  const eadO2 = utilities.eadO2 ?? 0;
+  const eadDepth = utilities.eadDepth ?? 0;
+  const eadO2Fraction = eadO2 / 100;
+  const eadN2Fraction = 1 - eadO2Fraction;
+  const eadAmbient = eadDepth / perAtm + 1;
+
+  const bestMixDepth = utilities.bestMixDepth ?? 0;
+  const bestMixPPO2 = utilities.bestMixPPO2 ?? settings.defaultMaxPPO2 ?? 1.4;
+  const bestMixMaxEND = utilities.bestMixMaxEND ?? 30;
+  const bestMixAmbient = bestMixDepth / perAtm + 1;
+  const bestMixSafeN2Pressure = (bestMixMaxEND / perAtm + 1) * 0.79;
+  const bestMixMaxN2Fraction = bestMixSafeN2Pressure / bestMixAmbient;
+
+  const endO2 = utilities.endO2 ?? 0;
+  const endHe = utilities.endHe ?? 0;
+  const endDepth = utilities.endDepth ?? 0;
+  const endO2Fraction = endO2 / 100;
+  const endHeFraction = endHe / 100;
+  const endN2Fraction = Math.max(0, 1 - endO2Fraction - endHeFraction);
+  const endNarcoticFraction = settings.oxygenIsNarcotic ? endO2Fraction + endN2Fraction : endN2Fraction;
+  const endAmbient = endDepth / perAtm + 1;
+
+  const densityO2 = utilities.densityO2 ?? 0;
+  const densityHe = utilities.densityHe ?? 0;
+  const densityDepth = utilities.densityDepth ?? 0;
+  const densityO2Fraction = densityO2 / 100;
+  const densityHeFraction = densityHe / 100;
+  const densityN2Fraction = Math.max(0, 1 - densityO2Fraction - densityHeFraction);
+  const densitySurface = densityO2Fraction * 1.429 + densityN2Fraction * 1.2506 + densityHeFraction * 0.1785;
+  const densityAmbient = densityDepth / perAtm + 1;
 
   const update = (patch: Parameters<typeof setUtilities>[0]): void => {
     setUtilities(patch);
@@ -145,6 +190,16 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
           <div>Working MOD: {formatNumber(modResult.mod, 1)} {settings.depthUnit}</div>
           <div>Contingency MOD ({settings.defaultContingencyPPO2}): {formatNumber(modResult.contingency, 1)} {settings.depthUnit}</div>
         </div>
+        {trainingModeEnabled && (
+          <TrainingMathPanel title="MOD Math">
+            <ul>
+              <li>Fraction O2 = {formatNumber(modGasO2, 1)} / 100 = {formatNumber(modO2Fraction, 3)}</li>
+              <li>Ambient limit = PPO2 / fraction O2 = {formatNumber(modMaxPPO2, 2)} / {formatNumber(modO2Fraction, 3)}</li>
+              <li>Working MOD = (ambient limit - 1) x {perAtm} {settings.depthUnit}/atm = {formatNumber(modResult.mod, 1)} {settings.depthUnit}</li>
+              <li>Contingency MOD uses PPO2 {formatNumber(modContingencyPPO2, 2)} and returns {formatNumber(modResult.contingency, 1)} {settings.depthUnit}</li>
+            </ul>
+          </TrainingMathPanel>
+        )}
       </AccordionItem>
 
       <AccordionItem title="Best Mix">
@@ -174,6 +229,16 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
         <div style={{ marginTop: "12px" }}>
           <div>Best Mix: {formatNumber(bestMixResult.o2, 1)}% O2, {formatNumber(bestMixResult.he, 1)}% He</div>
         </div>
+        {trainingModeEnabled && (
+          <TrainingMathPanel title="Best Mix Math">
+            <ul>
+              <li>Ambient pressure = depth / depth-per-atm + 1 = {formatNumber(bestMixDepth, 1)} / {perAtm} + 1 = {formatNumber(bestMixAmbient, 3)} ATA</li>
+              <li>O2 percent = target PPO2 / ambient pressure x 100 = {formatNumber(bestMixPPO2, 2)} / {formatNumber(bestMixAmbient, 3)} x 100 = {formatNumber(bestMixResult.o2, 1)}%</li>
+              <li>Max N2 fraction from END = (({formatNumber(bestMixMaxEND, 1)} / {perAtm} + 1) x 0.79) / {formatNumber(bestMixAmbient, 3)} = {formatNumber(bestMixMaxN2Fraction, 3)}</li>
+              <li>He percent = 100 - O2 percent - max N2 percent = {formatNumber(bestMixResult.he, 1)}%</li>
+            </ul>
+          </TrainingMathPanel>
+        )}
       </AccordionItem>
 
       <AccordionItem title="Equivalent Air Depth">
@@ -197,6 +262,15 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
         <div style={{ marginTop: "12px" }}>
           <div>EAD: {formatNumber(eadResult, 1)} {settings.depthUnit}</div>
         </div>
+        {trainingModeEnabled && (
+          <TrainingMathPanel title="EAD Math">
+            <ul>
+              <li>Ambient pressure = {formatNumber(eadDepth, 1)} / {perAtm} + 1 = {formatNumber(eadAmbient, 3)} ATA</li>
+              <li>N2 fraction = 1 - O2 fraction = 1 - {formatNumber(eadO2Fraction, 3)} = {formatNumber(eadN2Fraction, 3)}</li>
+              <li>EAD = (ambient x N2 fraction / 0.79 - 1) x {perAtm} = {formatNumber(eadResult, 1)} {settings.depthUnit}</li>
+            </ul>
+          </TrainingMathPanel>
+        )}
       </AccordionItem>
 
       <AccordionItem title="Equivalent Narcotic Depth">
@@ -229,6 +303,16 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
           <div>END: {formatNumber(endResult, 1)} {settings.depthUnit}</div>
           <div className="table-note">Oxygen counted as narcotic: {settings.oxygenIsNarcotic ? "Yes" : "No"}</div>
         </div>
+        {trainingModeEnabled && (
+          <TrainingMathPanel title="END Math">
+            <ul>
+              <li>N2 fraction = max(0, 1 - O2 - He) = max(0, 1 - {formatNumber(endO2Fraction, 3)} - {formatNumber(endHeFraction, 3)}) = {formatNumber(endN2Fraction, 3)}</li>
+              <li>Narcotic fraction = {settings.oxygenIsNarcotic ? "O2 + N2" : "N2 only"} = {formatNumber(endNarcoticFraction, 3)}</li>
+              <li>Ambient pressure = {formatNumber(endDepth, 1)} / {perAtm} + 1 = {formatNumber(endAmbient, 3)} ATA</li>
+              <li>END = (ambient x narcotic fraction / 0.79 - 1) x {perAtm} = {formatNumber(endResult, 1)} {settings.depthUnit}</li>
+            </ul>
+          </TrainingMathPanel>
+        )}
       </AccordionItem>
 
       <AccordionItem title="Gas Density">
@@ -260,6 +344,16 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
         <div style={{ marginTop: "12px" }}>
           <div>Density: {formatNumber(densityResult, 2)} g/L</div>
         </div>
+        {trainingModeEnabled && (
+          <TrainingMathPanel title="Gas Density Math">
+            <ul>
+              <li>Surface density = O2 x 1.429 + N2 x 1.2506 + He x 0.1785</li>
+              <li>Surface density = {formatNumber(densityO2Fraction, 3)} x 1.429 + {formatNumber(densityN2Fraction, 3)} x 1.2506 + {formatNumber(densityHeFraction, 3)} x 0.1785 = {formatNumber(densitySurface, 3)} g/L</li>
+              <li>Ambient pressure = {formatNumber(densityDepth, 1)} / {perAtm} + 1 = {formatNumber(densityAmbient, 3)} ATA</li>
+              <li>Density at depth = surface density x ambient pressure = {formatNumber(densitySurface, 3)} x {formatNumber(densityAmbient, 3)} = {formatNumber(densityResult, 2)} g/L</li>
+            </ul>
+          </TrainingMathPanel>
+        )}
       </AccordionItem>
 
       <AccordionItem title="Tank Conversion">
@@ -341,6 +435,15 @@ const UtilitiesTab = ({ settings }: { settings: SettingsSnapshot }): JSX.Element
           {formatNumber(tankConvertPressurePsi, 0)} PSI = {formatNumber(tankConvertCuFt, 2)} cu ft = {formatNumber(tankConvertLiters, 2)} free gas L.
         </div>
         <div className="table-note">Free gas liters are surface-equivalent gas volume, not metric cylinder water capacity.</div>
+        {trainingModeEnabled && (
+          <TrainingMathPanel title="Tank Conversion Math">
+            <ul>
+              <li>PSI per cu ft = rated pressure / rated volume = {formatNumber(tankRatedPressurePsi, 0)} / {formatNumber(tankSizeCuFt, 2)} = {formatNumber(tankPsiPerCuFt, 2)}</li>
+              <li>cu ft from pressure = pressure / PSI per cu ft = {formatNumber(tankConvertPressurePsi, 0)} / {formatNumber(tankPsiPerCuFt, 2)} = {formatNumber(tankConvertCuFt, 2)} cu ft</li>
+              <li>Free gas liters = cu ft x 28.316846592 = {formatNumber(tankConvertCuFt, 2)} x 28.316846592 = {formatNumber(tankConvertLiters, 2)} L</li>
+            </ul>
+          </TrainingMathPanel>
+        )}
       </AccordionItem>
 
       <UnitConverter />

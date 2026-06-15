@@ -19,6 +19,7 @@ import ErrorBoundary from "./ErrorBoundary";
 import { NumberInput } from "./NumberInput";
 import { GasSourceRow } from "./GasSourceRow";
 import TankContextFields from "./TankContextFields";
+import TrainingMathPanel from "./TrainingMathPanel";
 
 
 const MAX_GAS_SOURCES = 4;
@@ -33,6 +34,7 @@ const trimixPresets: GasSelection[] = [
 type Props = {
   settings: SettingsSnapshot;
   topOffOptions: GasSelection[];
+  trainingModeEnabled: boolean;
 };
 
 const createGasSourceRowKey = (): string => {
@@ -57,7 +59,7 @@ const blendAlternativeKey = (alternative: BlendAlternative): string => {
 const costLineKey = (line: { gas: string; amount: number; cost: number }): string =>
   `${line.gas}-${line.amount.toFixed(6)}-${line.cost.toFixed(2)}`;
 
-const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
+const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
   const multiGas = useSessionStore((state: SessionState) => state.multiGas);
   const setMultiGas = useSessionStore((state: SessionState) => state.setMultiGas);
   const gasSources = multiGas.gasSources ?? EMPTY_GAS_SOURCES;
@@ -241,6 +243,66 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
     return `${formatNumber(volumeCuFt, 2)} cu ft, ${formatNumber(volumeLiters, 2)} L`;
   };
 
+  const trainingMath = useMemo(() => {
+    if (!trainingModeEnabled || !selectedAlternative) {
+      return null;
+    }
+
+    const targetPressurePsi = fromDisplayPressure(multiGas.targetPressure ?? 0, settings.pressureUnit);
+    const bleedStep = selectedAlternative.fillOrder.find((step) => step.amount < 0);
+    const effectiveStartPressurePsi = Math.max(0, startPressurePsi + (bleedStep?.amount ?? 0));
+    const startO2Fraction = (multiGas.startO2 ?? 21) / 100;
+    const startHeFraction = (multiGas.startHe ?? 0) / 100;
+    const startN2Fraction = Math.max(0, 1 - startO2Fraction - startHeFraction);
+
+    const sourceRows = selectedAlternative.steps.map((step) => {
+      const o2Fraction = step.gas.o2 / 100;
+      const heFraction = step.gas.he / 100;
+      const n2Fraction = Math.max(0, 1 - o2Fraction - heFraction);
+      return {
+        name: step.gas.name,
+        amountPsi: step.amount,
+        o2Psi: step.amount * o2Fraction,
+        hePsi: step.amount * heFraction,
+        n2Psi: step.amount * n2Fraction,
+        o2Fraction,
+        heFraction,
+        n2Fraction
+      };
+    });
+
+    const startO2Psi = effectiveStartPressurePsi * startO2Fraction;
+    const startHePsi = effectiveStartPressurePsi * startHeFraction;
+    const startN2Psi = effectiveStartPressurePsi * startN2Fraction;
+    const totalO2Psi = sourceRows.reduce((sum, row) => sum + row.o2Psi, startO2Psi);
+    const totalHePsi = sourceRows.reduce((sum, row) => sum + row.hePsi, startHePsi);
+    const totalN2Psi = sourceRows.reduce((sum, row) => sum + row.n2Psi, startN2Psi);
+
+    return {
+      bleedStep,
+      effectiveStartPressurePsi,
+      targetPressurePsi,
+      startO2Fraction,
+      startHeFraction,
+      startN2Fraction,
+      startO2Psi,
+      startHePsi,
+      startN2Psi,
+      sourceRows,
+      totalO2Psi,
+      totalHePsi,
+      totalN2Psi
+    };
+  }, [
+    multiGas.startHe,
+    multiGas.startO2,
+    multiGas.targetPressure,
+    selectedAlternative,
+    settings.pressureUnit,
+    startPressurePsi,
+    trainingModeEnabled
+  ]);
+
   return (
     <ErrorBoundary fallback={<div className="error">MultiGasTab crashed. Please check the console for details.</div>}>
       <AccordionItem title="Start Tank" defaultOpen={true}>
@@ -416,6 +478,41 @@ const MultiGasTab = ({ settings, topOffOptions }: Props): JSX.Element => {
                     </div>
                     <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
                   </div>
+                  {trainingMath && (
+                    <TrainingMathPanel
+                      title="Multi-Gas Math"
+                      note="The optimizer searches feasible source combinations and ranks them by estimated cost. This panel explains the selected option."
+                    >
+                      {trainingMath.bleedStep !== undefined && (
+                        <p>
+                          This option starts with a bleed-down from {formatPressure(startPressurePsi, settings.pressureUnit)} to {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} before adding source gases.
+                        </p>
+                      )}
+                      <div className="training-math-grid">
+                        <div>
+                          <h4>Source contributions</h4>
+                          <ul>
+                            <li>Start O2 partial pressure: {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startO2Fraction, 3)} = {formatPressure(trainingMath.startO2Psi, settings.pressureUnit)}</li>
+                            <li>Start He partial pressure: {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startHeFraction, 3)} = {formatPressure(trainingMath.startHePsi, settings.pressureUnit)}</li>
+                            <li>Start N2 partial pressure: {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startN2Fraction, 3)} = {formatPressure(trainingMath.startN2Psi, settings.pressureUnit)}</li>
+                            {trainingMath.sourceRows.map((row) => (
+                              <li key={`${row.name}-${row.amountPsi.toFixed(6)}`}>
+                                {row.name}: {formatPressure(row.amountPsi, settings.pressureUnit)} at {formatNumber(row.o2Fraction, 3)} O2 / {formatNumber(row.heFraction, 3)} He / {formatNumber(row.n2Fraction, 3)} N2
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <h4>Final mix check</h4>
+                          <ul>
+                            <li>Final O2 = total O2 partial pressure / target pressure = {formatPressure(trainingMath.totalO2Psi, settings.pressureUnit)} / {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(selectedAlternative.finalO2, 1)}%</li>
+                            <li>Final He = total He partial pressure / target pressure = {formatPressure(trainingMath.totalHePsi, settings.pressureUnit)} / {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(selectedAlternative.finalHe, 1)}%</li>
+                            <li>Final N2 = total N2 partial pressure / target pressure = {formatPressure(trainingMath.totalN2Psi, settings.pressureUnit)} / {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(Math.max(0, 100 - selectedAlternative.finalO2 - selectedAlternative.finalHe), 1)}%</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </TrainingMathPanel>
+                  )}
                 </div>
               )}
             </>

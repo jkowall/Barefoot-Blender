@@ -54,4 +54,21 @@ describe("migrateSettingsState", () => {
     expect(migrated.customGases?.[0]?.name).toBe("Trimix ".repeat(10).slice(0, GAS_NAME_MAX_LENGTH));
     expect(migrated.pricePerCuFtTopOff).toBe(0.15);
   });
+
+  test("defaults training mode to off for older persisted settings", () => {
+    const migrated = migrateSettingsState({
+      pressureUnit: "psi"
+    });
+
+    expect(migrated.trainingModeEnabled).toBe(false);
+  });
+
+  test("preserves the persisted training mode setting", () => {
+    const migrated = migrateSettingsState({
+      pressureUnit: "psi",
+      trainingModeEnabled: true
+    });
+
+    expect(migrated.trainingModeEnabled).toBe(true);
+  });
 });

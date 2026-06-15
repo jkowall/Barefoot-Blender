@@ -13,6 +13,7 @@ Source code: [github.com/jkowall/Barefoot-Blender](https://github.com/jkowall/Ba
 - **Tank Conversion** – Converts PSI, cubic feet, and free gas liters using the active tank volume and rated pressure.
 - **Blend History + Recreate** – Stores successful Standard Blend plans locally with quick recreate/remove/clear actions.
 - **Dive Utilities** – MOD, EAD, Best Mix, END, and density calculators that honor global PPO₂ and narcotic settings.
+- **Training Mode** – A footer toggle that exposes class-friendly formulas, substitutions, and intermediate values behind calculator results while preserving normal compact output when off.
 - **Persistent Settings** – Local storage of preferred units, PPO₂ defaults, narcotic rules, calculation model, temperature unit, and custom banked gases.
 - **Installable PWA** – Works fully offline after first load via Vite PWA service worker integration.
 - **In-App Bug Reporting** – Opens prefilled support email reports with optional sanitized diagnostics and a copy fallback.
