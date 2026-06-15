@@ -945,6 +945,9 @@ const MULTI_GAS_O2_TOLERANCE = 1;
 const MULTI_GAS_HE_TOLERANCE = 5;
 const MULTI_GAS_O2_STEP = 0.1;
 const MULTI_GAS_HE_STEP = 0.5;
+const MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI = 0.5;
+const MULTI_GAS_SIMILAR_BLEND_WARNING =
+  "Exact target cannot be made; showing closest blend within +/-1% O2 / +/-5% He.";
 
 const buildSearchValues = (
   target: number,
@@ -1534,7 +1537,11 @@ const tryTwoGasSolution = (
   neededO2Percent: number,
   neededHePercent: number,
   gas1: OptimizerGasSource,
-  gas2: OptimizerGasSource
+  gas2: OptimizerGasSource,
+  options: {
+    normalizeToAddedPressure?: boolean;
+    pressureTolerancePsi?: number;
+  } = {}
 ): { gas1Amount: number; gas2Amount: number; finalO2: number; finalHe: number } | null => {
   const targetO2 = fraction(neededO2Percent);
   const targetHe = fraction(neededHePercent);
@@ -1597,14 +1604,22 @@ const tryTwoGasSolution = (
   // Check if amounts are valid (non-negative)
   if (g1 < -tolerance || g2 < -tolerance) return null;
 
-  const sg1 = Math.max(0, g1);
-  const sg2 = Math.max(0, g2);
-  const totalPressure = sg1 + sg2;
+  let sg1 = Math.max(0, g1);
+  let sg2 = Math.max(0, g2);
+  let totalPressure = sg1 + sg2;
 
   // Check if total matches added pressure (within tolerance)
   // This is the third constraint - if it doesn't match, these 2 gases can't hit the target
-  if (Math.abs(totalPressure - addedPressure) > Math.max(1, addedPressure * 0.005)) {
+  const pressureTolerancePsi = options.pressureTolerancePsi ?? MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI;
+  if (Math.abs(totalPressure - addedPressure) > pressureTolerancePsi) {
     return null;
+  }
+
+  if (options.normalizeToAddedPressure && totalPressure > tolerance) {
+    const pressureScale = addedPressure / totalPressure;
+    sg1 *= pressureScale;
+    sg2 *= pressureScale;
+    totalPressure = addedPressure;
   }
 
   // Verify result
@@ -1768,7 +1783,10 @@ export const generateBlendAlternatives = (
   startHe: number,
   availableGases: OptimizerGasSource[],
   costSettings: CostSettings,
-  maxAlternatives: number = 5
+  maxAlternatives: number = 5,
+  options: {
+    allowPressureNormalization?: boolean;
+  } = {}
 ): BlendAlternative[] => {
   const addedPressure = targetPressurePsi - startPressurePsi;
   if (addedPressure <= tolerance) return [];
@@ -1826,7 +1844,19 @@ export const generateBlendAlternatives = (
       const gas1 = enabledGases[i];
       const gas2 = enabledGases[j];
 
-      const solution = tryTwoGasSolution(addedPressure, neededO2Percent, neededHePercent, gas1, gas2);
+      const solution = tryTwoGasSolution(
+        addedPressure,
+        neededO2Percent,
+        neededHePercent,
+        gas1,
+        gas2,
+        options.allowPressureNormalization
+          ? {
+              normalizeToAddedPressure: true,
+              pressureTolerancePsi: Math.max(1, addedPressure * 0.02)
+            }
+          : undefined
+      );
       if (solution && solution.gas1Amount > -tolerance && solution.gas2Amount > -tolerance) {
         const steps: { gas: OptimizerGasSource; amount: number }[] = [];
         if (solution.gas1Amount > tolerance) steps.push({ gas: gas1, amount: solution.gas1Amount });
@@ -1946,6 +1976,110 @@ export const generateBlendAlternatives = (
   return uniqueAlternatives.slice(0, maxAlternatives);
 };
 
+const blendAlternativePressureDelta = (
+  alternative: BlendAlternative,
+  startPressurePsi: number,
+  targetPressurePsi: number
+): number => {
+  const addedPressure = alternative.steps.reduce((sum, step) => sum + step.amount, 0);
+  return Math.abs(startPressurePsi + addedPressure - targetPressurePsi);
+};
+
+const blendAlternativeCompositionDistance = (alternative: BlendAlternative): number => {
+  const o2Distance = Math.abs(alternative.deviationO2) / MULTI_GAS_O2_TOLERANCE;
+  const heDistance = Math.abs(alternative.deviationHe) / MULTI_GAS_HE_TOLERANCE;
+  return o2Distance + heDistance;
+};
+
+const findSimilarNGasAlternatives = (
+  targetPressurePsi: number,
+  targetO2: number,
+  targetHe: number,
+  startPressurePsi: number,
+  startO2: number,
+  startHe: number,
+  availableGases: OptimizerGasSource[],
+  costSettings: CostSettings,
+  maxAlternatives: number = 5
+): BlendAlternative[] => {
+  const scoredAlternatives: {
+    alternative: BlendAlternative;
+    pressureDelta: number;
+    isRequestedTargetCandidate: boolean;
+    compositionDistance: number;
+  }[] = [];
+  const o2Candidates = buildSearchValues(targetO2, MULTI_GAS_O2_TOLERANCE, MULTI_GAS_O2_STEP, 0, 100);
+
+  for (const o2 of o2Candidates) {
+    const heMax = Math.max(0, 100 - o2);
+    const heCandidates = buildSearchValues(targetHe, MULTI_GAS_HE_TOLERANCE, MULTI_GAS_HE_STEP, 0, heMax);
+    for (const he of heCandidates) {
+      const alternatives = generateBlendAlternatives(
+        targetPressurePsi,
+        o2,
+        he,
+        startPressurePsi,
+        startO2,
+        startHe,
+        availableGases,
+        costSettings,
+        maxAlternatives,
+        { allowPressureNormalization: true }
+      );
+
+      for (const alternative of alternatives) {
+        const adjustedAlternative: BlendAlternative = {
+          ...alternative,
+          deviationO2: alternative.finalO2 - targetO2,
+          deviationHe: alternative.finalHe - targetHe
+        };
+
+        if (
+          Math.abs(adjustedAlternative.deviationO2) > MULTI_GAS_O2_TOLERANCE + 1e-6 ||
+          Math.abs(adjustedAlternative.deviationHe) > MULTI_GAS_HE_TOLERANCE + 1e-6
+        ) {
+          continue;
+        }
+
+        scoredAlternatives.push({
+          alternative: adjustedAlternative,
+          pressureDelta: blendAlternativePressureDelta(adjustedAlternative, startPressurePsi, targetPressurePsi),
+          isRequestedTargetCandidate: Math.abs(o2 - targetO2) < 1e-6 && Math.abs(he - targetHe) < 1e-6,
+          compositionDistance: blendAlternativeCompositionDistance(adjustedAlternative)
+        });
+      }
+    }
+  }
+
+  scoredAlternatives.sort((a, b) => {
+    if (Math.abs(a.pressureDelta - b.pressureDelta) > tolerance) {
+      return a.pressureDelta - b.pressureDelta;
+    }
+    if (a.isRequestedTargetCandidate !== b.isRequestedTargetCandidate) {
+      return a.isRequestedTargetCandidate ? -1 : 1;
+    }
+    if (Math.abs(a.alternative.estimatedCost - b.alternative.estimatedCost) > tolerance) {
+      return a.alternative.estimatedCost - b.alternative.estimatedCost;
+    }
+    return a.compositionDistance - b.compositionDistance;
+  });
+
+  const seen = new Set<string>();
+  const uniqueAlternatives: BlendAlternative[] = [];
+  for (const { alternative } of scoredAlternatives) {
+    const key = buildBlendAlternativeDedupKey(alternative.steps);
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueAlternatives.push(alternative);
+    }
+    if (uniqueAlternatives.length >= maxAlternatives) {
+      break;
+    }
+  }
+
+  return uniqueAlternatives;
+};
+
 /**
  * Main N-gas blend solver.
  * Finds optimal blend using available gas sources, minimizing cost.
@@ -2048,6 +2182,26 @@ export const solveNGasBlend = (
   }
 
   if (alternatives.length === 0) {
+    const similarAlternatives = findSimilarNGasAlternatives(
+      targetPressurePsi,
+      targetO2,
+      targetHe,
+      startPressurePsi,
+      startO2,
+      startHe,
+      availableGases,
+      costSettings
+    );
+
+    if (similarAlternatives.length > 0) {
+      warnings.push(MULTI_GAS_SIMILAR_BLEND_WARNING);
+      return {
+        success: true,
+        alternatives: similarAlternatives,
+        warnings
+      };
+    }
+
     return {
       success: false,
       alternatives: [],

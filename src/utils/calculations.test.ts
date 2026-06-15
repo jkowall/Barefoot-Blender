@@ -960,6 +960,66 @@ describe("solveNGasBlend bank limits", () => {
     expect(result.alternatives[0].finalHe).toBeCloseTo(0, 1);
   });
 
+  test("returns a closest-match alternative within tolerance when exact target is impossible", () => {
+    const result = solveNGasBlend(
+      settings,
+      3000,
+      25,
+      25,
+      0,
+      21,
+      0,
+      [
+        { id: "ean36", name: "EAN36", o2: 36, he: 0 },
+        { id: "tmx1050", name: "10/50", o2: 10, he: 50 }
+      ],
+      costSettings
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.warnings).toContain("Exact target cannot be made; showing closest blend within +/-1% O2 / +/-5% He.");
+
+    const alternative = result.alternatives[0];
+    expect(alternative).toBeDefined();
+    if (!alternative) return;
+
+    expect(alternative.finalO2).toBeCloseTo(25.6, 1);
+    expect(alternative.finalHe).toBeCloseTo(20, 1);
+    expect(Math.abs(alternative.deviationO2)).toBeLessThanOrEqual(1);
+    expect(Math.abs(alternative.deviationHe)).toBeLessThanOrEqual(5);
+    expect(alternative.steps.reduce((sum, step) => sum + step.amount, 0)).toBeCloseTo(3000, 1);
+  });
+
+  test("keeps closest-match fills at the target pressure", () => {
+    const result = solveNGasBlend(
+      settings,
+      3000,
+      18,
+      45,
+      0,
+      21,
+      0,
+      [
+        { id: "ean32", name: "32", o2: 32, he: 0 },
+        { id: "tmx1070", name: "10/70", o2: 10, he: 70 }
+      ],
+      costSettings
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.warnings).toContain("Exact target cannot be made; showing closest blend within +/-1% O2 / +/-5% He.");
+
+    const alternative = result.alternatives[0];
+    expect(alternative).toBeDefined();
+    if (!alternative) return;
+
+    expect(alternative.finalO2).toBeCloseTo(17.9, 1);
+    expect(alternative.finalHe).toBeCloseTo(44.8, 1);
+    expect(Math.abs(alternative.deviationO2)).toBeLessThanOrEqual(1);
+    expect(Math.abs(alternative.deviationHe)).toBeLessThanOrEqual(5);
+    expect(alternative.steps.reduce((sum, step) => sum + step.amount, 0)).toBeCloseTo(3000, 1);
+  });
+
   test("rejects invalid target compositions", () => {
     const result = solveNGasBlend(
       settings,

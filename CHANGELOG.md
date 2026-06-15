@@ -7,6 +7,10 @@
 - **Training Mode**: Added a persistent footer toggle that shows class-friendly formulas, substitutions, and intermediate values for Standard Blend, Top-Off, Multi-Gas, and Utilities results ([#157](https://github.com/jkowall/Barefoot-Blender/issues/157)).
 - **Store Listing Guidance**: Documented Training Mode as an educational feature for App Store and Google Play release copy.
 
+### Fixed
+
+- **Multi-Gas Closest Match**: Restored within-tolerance fallback suggestions in the N-gas optimizer when an exact target blend cannot be made with the selected banks, while keeping suggested fill totals at the requested target pressure.
+
 ## [0.11.0] - 2026-06-15
 
 ### Added
