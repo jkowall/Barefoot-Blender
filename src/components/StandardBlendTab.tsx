@@ -494,8 +494,36 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     const targetO2Psi = targetPressurePsi * targetO2Fraction;
     const targetHePsi = targetPressurePsi * targetHeFraction;
     const targetN2Psi = targetPressurePsi * targetN2Fraction;
+    const deltaO2Psi = targetO2Psi - startO2Psi;
+    const deltaHePsi = targetHePsi - startHePsi;
+    const deltaN2Psi = targetN2Psi - startN2Psi;
+    const commonHandMethod =
+      resultSource === "ideal" &&
+      topHeFraction <= 0.000001 &&
+      1 - topO2Fraction > 0.000001;
+    const handHeliumAddPsi = commonHandMethod ? deltaHePsi : 0;
+    const pressureLeftAfterHeliumPsi = targetPressurePsi - effectiveStartPressurePsi - handHeliumAddPsi;
+    const handOxygenAddPsi = commonHandMethod
+      ? (
+          targetO2Psi * 100 -
+          startO2Psi * 100 -
+          selectedTopGas.o2 * pressureLeftAfterHeliumPsi
+        ) / (100 - selectedTopGas.o2)
+      : 0;
+    const handTopoffPsi = commonHandMethod
+      ? targetPressurePsi - effectiveStartPressurePsi - handHeliumAddPsi - handOxygenAddPsi
+      : 0;
+    const effectiveStartPressureDisplay = toDisplayPressure(effectiveStartPressurePsi, settings.pressureUnit);
+    const targetPressureDisplay = toDisplayPressure(targetPressurePsi, settings.pressureUnit);
+    const pressureLeftAfterHeliumDisplay = toDisplayPressure(pressureLeftAfterHeliumPsi, settings.pressureUnit);
+    const startO2PointsDisplay = effectiveStartPressureDisplay * (standardBlend.startO2 ?? 21);
+    const startHePointsDisplay = effectiveStartPressureDisplay * (standardBlend.startHe ?? 0);
+    const targetO2PointsDisplay = targetPressureDisplay * (standardBlend.targetO2 ?? 32);
+    const targetHePointsDisplay = targetPressureDisplay * (standardBlend.targetHe ?? 0);
 
     return {
+      realGasPrimary: resultSource === "realGas",
+      commonHandMethod,
       effectiveStartPressurePsi,
       targetPressurePsi,
       startO2Fraction,
@@ -513,13 +541,23 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       targetO2Psi,
       targetHePsi,
       targetN2Psi,
-      deltaO2Psi: targetO2Psi - startO2Psi,
-      deltaHePsi: targetHePsi - startHePsi,
-      deltaN2Psi: targetN2Psi - startN2Psi
+      deltaO2Psi,
+      deltaHePsi,
+      deltaN2Psi,
+      handHeliumAddPsi,
+      pressureLeftAfterHeliumPsi,
+      pressureLeftAfterHeliumDisplay,
+      handOxygenAddPsi,
+      handTopoffPsi,
+      startO2PointsDisplay,
+      startHePointsDisplay,
+      targetO2PointsDisplay,
+      targetHePointsDisplay
     };
   }, [
     baseVolumes,
     result,
+    resultSource,
     selectedTopGas,
     settings.pressureUnit,
     standardBlend.startHe,
@@ -667,39 +705,64 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
           ))}
           {trainingMath && (
             <TrainingMathPanel
-              title="Standard Blend Math"
-              note="Training Mode explains the calculation path for class use. Always analyze the finished gas with calibrated oxygen and helium analyzers."
+              title="Standard Blend Hand Math"
+              note="This mirrors the worksheet method taught for partial-pressure fills. Always analyze the finished gas with calibrated oxygen and helium analyzers."
             >
               {result.bleedPressure !== undefined && (
                 <p>
-                  The original start pressure was {formatPressure(startPressurePsi, settings.pressureUnit)}. The plan first bleeds to {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)}, then solves the add pressures from that lower starting point.
+                  The original start pressure was {formatPressure(startPressurePsi, settings.pressureUnit)}. The worksheet starts after the bleed-down, at {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)}.
                 </p>
               )}
-              <div className="training-math-grid">
-                <div>
-                  <h4>Partial pressures</h4>
-                  <ul>
-                    <li>Start O2: {formatNumber(trainingMath.startO2Fraction, 3)} x {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} = {formatPressure(trainingMath.startO2Psi, settings.pressureUnit)}</li>
-                    <li>Target O2: {formatNumber(trainingMath.targetO2Fraction, 3)} x {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatPressure(trainingMath.targetO2Psi, settings.pressureUnit)}</li>
-                    <li>O2 needed: {formatPressure(trainingMath.targetO2Psi, settings.pressureUnit)} - {formatPressure(trainingMath.startO2Psi, settings.pressureUnit)} = {formatPressure(trainingMath.deltaO2Psi, settings.pressureUnit)}</li>
-                    <li>He needed: {formatPressure(trainingMath.targetHePsi, settings.pressureUnit)} - {formatPressure(trainingMath.startHePsi, settings.pressureUnit)} = {formatPressure(trainingMath.deltaHePsi, settings.pressureUnit)}</li>
-                    <li>N2 needed: {formatPressure(trainingMath.targetN2Psi, settings.pressureUnit)} - {formatPressure(trainingMath.startN2Psi, settings.pressureUnit)} = {formatPressure(trainingMath.deltaN2Psi, settings.pressureUnit)}</li>
-                  </ul>
+              {trainingMath.realGasPrimary ? (
+                <div className="training-math-note">
+                  This result is a GERG-2008 correction case. The hand-fill partial-pressure worksheet has no normal pressure add to show; GERG-2008 estimates corrected stop pressures from absolute pressure, temperature, cylinder volume, component moles, and mixture compressibility.
                 </div>
-                <div>
-                  <h4>Add pressures</h4>
-                  <ul>
-                    {trainingMath.topN2Fraction > 0.000001 ? (
-                      <li>Top-off = N2 needed / top-off N2 = {formatPressure(trainingMath.deltaN2Psi, settings.pressureUnit)} / {formatNumber(trainingMath.topN2Fraction, 3)} = {formatPressure(baseVolumes.topoff, settings.pressureUnit)}</li>
-                    ) : (
-                      <li>Selected top-off gas has no N2, so O2 and He deltas must carry the fill directly.</li>
-                    )}
-                    <li>Helium add = He needed - top-off He = {formatPressure(trainingMath.deltaHePsi, settings.pressureUnit)} - ({formatPressure(baseVolumes.topoff, settings.pressureUnit)} x {formatNumber(trainingMath.topHeFraction, 3)}) = {formatPressure(baseVolumes.helium, settings.pressureUnit)}</li>
-                    <li>Oxygen add = O2 needed - top-off O2 = {formatPressure(trainingMath.deltaO2Psi, settings.pressureUnit)} - ({formatPressure(baseVolumes.topoff, settings.pressureUnit)} x {formatNumber(trainingMath.topO2Fraction, 3)}) = {formatPressure(baseVolumes.oxygen, settings.pressureUnit)}</li>
-                    <li>Pressure check = start + He + O2 + top-off = {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} + {formatPressure(baseVolumes.helium, settings.pressureUnit)} + {formatPressure(baseVolumes.oxygen, settings.pressureUnit)} + {formatPressure(baseVolumes.topoff, settings.pressureUnit)} = {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)}</li>
-                  </ul>
+              ) : trainingMath.commonHandMethod ? (
+                <div className="training-math-grid">
+                  <div>
+                    <h4>Slate setup</h4>
+                    <ul>
+                      <li>Use pressure-percent points: mix percent x pressure.</li>
+                      <li>Start O2 points = {formatNumber((standardBlend.startO2 ?? 21), 1)} x {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} = {formatNumber(trainingMath.startO2PointsDisplay, 0)}</li>
+                      <li>Target O2 points = {formatNumber((standardBlend.targetO2 ?? 32), 1)} x {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(trainingMath.targetO2PointsDisplay, 0)}</li>
+                      <li>Start He points = {formatNumber((standardBlend.startHe ?? 0), 1)} x {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} = {formatNumber(trainingMath.startHePointsDisplay, 0)}</li>
+                      <li>Target He points = {formatNumber((standardBlend.targetHe ?? 0), 1)} x {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(trainingMath.targetHePointsDisplay, 0)}</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4>Fill worksheet</h4>
+                    <ul>
+                      <li>Helium first = (target He points - start He points) / 100 = ({formatNumber(trainingMath.targetHePointsDisplay, 0)} - {formatNumber(trainingMath.startHePointsDisplay, 0)}) / 100 = {formatPressure(trainingMath.handHeliumAddPsi, settings.pressureUnit)}</li>
+                      <li>Pressure left after He = final - start - He = {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.handHeliumAddPsi, settings.pressureUnit)} = {formatPressure(trainingMath.pressureLeftAfterHeliumPsi, settings.pressureUnit)}</li>
+                      <li>Oxygen add = (target O2 points - start O2 points - top gas O2% x pressure left) / (100 - top gas O2%)</li>
+                      <li>Oxygen add = ({formatNumber(trainingMath.targetO2PointsDisplay, 0)} - {formatNumber(trainingMath.startO2PointsDisplay, 0)} - {formatNumber(selectedTopGas.o2, 1)} x {formatNumber(trainingMath.pressureLeftAfterHeliumDisplay, 1)}) / ({formatNumber(100 - selectedTopGas.o2, 1)}) = {formatPressure(trainingMath.handOxygenAddPsi, settings.pressureUnit)}</li>
+                      <li>Top-off = final - start - He - O2 = {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.handHeliumAddPsi, settings.pressureUnit)} - {formatPressure(trainingMath.handOxygenAddPsi, settings.pressureUnit)} = {formatPressure(trainingMath.handTopoffPsi, settings.pressureUnit)}</li>
+                    </ul>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="training-math-grid">
+                  <div>
+                    <h4>Gas-balance worksheet</h4>
+                    <ul>
+                      <li>This top-off gas is not the common helium, oxygen, then air/nitrox-bank hand-fill case, so balance the gas that only comes from the top-off.</li>
+                      {trainingMath.topN2Fraction > 0.000001 ? (
+                        <li>Top-off = N2 needed / top-off N2 = {formatPressure(trainingMath.deltaN2Psi, settings.pressureUnit)} / {formatNumber(trainingMath.topN2Fraction, 3)} = {formatPressure(baseVolumes.topoff, settings.pressureUnit)}</li>
+                      ) : (
+                        <li>Selected top-off gas has no N2, so O2 and He additions carry the fill directly.</li>
+                      )}
+                      <li>Helium add = He needed - top-off He = {formatPressure(trainingMath.deltaHePsi, settings.pressureUnit)} - ({formatPressure(baseVolumes.topoff, settings.pressureUnit)} x {formatNumber(trainingMath.topHeFraction, 3)}) = {formatPressure(baseVolumes.helium, settings.pressureUnit)}</li>
+                      <li>Oxygen add = O2 needed - top-off O2 = {formatPressure(trainingMath.deltaO2Psi, settings.pressureUnit)} - ({formatPressure(baseVolumes.topoff, settings.pressureUnit)} x {formatNumber(trainingMath.topO2Fraction, 3)}) = {formatPressure(baseVolumes.oxygen, settings.pressureUnit)}</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4>Pressure check</h4>
+                    <ul>
+                      <li>Start + He + O2 + top-off = {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} + {formatPressure(baseVolumes.helium, settings.pressureUnit)} + {formatPressure(baseVolumes.oxygen, settings.pressureUnit)} + {formatPressure(baseVolumes.topoff, settings.pressureUnit)} = {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)}</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
               {settings.gasModel === "gerg2008" && (
                 <div className="training-math-note">
                   GERG-2008 mode keeps this ideal partial-pressure plan as the working fill order, then estimates corrected stop pressures from absolute pressure, temperature, cylinder volume, component moles, and mixture compressibility. The detailed GERG solver stays high level here by design.

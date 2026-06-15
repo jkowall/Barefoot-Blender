@@ -185,6 +185,9 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
     const topO2Fraction = selectedTopGas.o2 / 100;
     const topHeFraction = selectedTopGas.he / 100;
     const topN2Fraction = Math.max(0, 1 - topO2Fraction - topHeFraction);
+    const startPressureDisplay = toDisplayPressure(startPressurePsi, settings.pressureUnit);
+    const addedPressureDisplay = toDisplayPressure(result.addedPressure, settings.pressureUnit);
+    const finalPressureDisplay = toDisplayPressure(result.finalPressure, settings.pressureUnit);
 
     return {
       startO2Fraction,
@@ -198,9 +201,13 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       finalPressurePsi: result.finalPressure,
       totalO2Psi: startPressurePsi * startO2Fraction + result.addedPressure * topO2Fraction,
       totalHePsi: startPressurePsi * startHeFraction + result.addedPressure * topHeFraction,
-      totalN2Psi: startPressurePsi * startN2Fraction + result.addedPressure * topN2Fraction
+      totalN2Psi: startPressurePsi * startN2Fraction + result.addedPressure * topN2Fraction,
+      totalO2PointsDisplay: startPressureDisplay * (topOff.startO2 ?? 32) + addedPressureDisplay * selectedTopGas.o2,
+      totalHePointsDisplay: startPressureDisplay * (topOff.startHe ?? 0) + addedPressureDisplay * selectedTopGas.he,
+      totalN2PointsDisplay: startPressureDisplay * startN2Fraction * 100 + addedPressureDisplay * topN2Fraction * 100,
+      finalPressureDisplay
     };
-  }, [result, selectedTopGas, startPressurePsi, topOff.startHe, topOff.startO2, trainingModeEnabled]);
+  }, [result, selectedTopGas, settings.pressureUnit, startPressurePsi, topOff.startHe, topOff.startO2, trainingModeEnabled]);
 
   return (
     <>
@@ -330,17 +337,18 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
           ))}
           {trainingMath && (
             <TrainingMathPanel
-              title="Top-Off Math"
-              note="Training Mode shows the weighted-average gas math only. Analyze the actual cylinder after the fill."
+              title="Top-Off Hand Math"
+              note="This uses pressure-percent points, the common hand check for topping a cylinder. Analyze the actual cylinder after the fill."
             >
               <p>
                 Top-off adds {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} of {selectedTopGas?.name ?? "selected gas"} to {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)}, ending at {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)}.
               </p>
               <ul>
                 <li>Added pressure = final pressure - start pressure = {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} = {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)}</li>
-                <li>Final O2 = (start pressure x start O2 + added pressure x top-off O2) / final pressure = ({formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startO2Fraction, 3)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.topO2Fraction, 3)}) / {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)} = {formatPercentage(result.finalO2)}</li>
-                <li>Final He = ({formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startHeFraction, 3)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.topHeFraction, 3)}) / {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)} = {formatPercentage(result.finalHe)}</li>
-                <li>Final N2 = ({formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startN2Fraction, 3)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.topN2Fraction, 3)}) / {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)} = {formatPercentage(result.finalN2)}</li>
+                <li>O2 points = start pressure x start O2% + added pressure x top-off O2% = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber((topOff.startO2 ?? 32), 1)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(selectedTopGas.o2, 1)} = {formatNumber(trainingMath.totalO2PointsDisplay, 0)}</li>
+                <li>Final O2% = O2 points / final pressure = {formatNumber(trainingMath.totalO2PointsDisplay, 0)} / {formatNumber(trainingMath.finalPressureDisplay, 1)} = {formatPercentage(result.finalO2)}</li>
+                <li>He points = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber((topOff.startHe ?? 0), 1)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(selectedTopGas.he, 1)} = {formatNumber(trainingMath.totalHePointsDisplay, 0)}; final He = {formatPercentage(result.finalHe)}</li>
+                <li>N2 points = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startN2Fraction * 100, 1)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.topN2Fraction * 100, 1)} = {formatNumber(trainingMath.totalN2PointsDisplay, 0)}; final N2 = {formatPercentage(result.finalN2)}</li>
               </ul>
             </TrainingMathPanel>
           )}

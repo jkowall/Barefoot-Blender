@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.1] - 2026-06-15
+
+### Changed
+
+- **Training Mode Hand Math**: Reworked Training Mode explanations to use hand-fill worksheet math, including pressure-percent points, helium-first/O2/top-off Standard Blend steps, Top-Off hand checks, and Pearson-square style Multi-Gas guidance where applicable.
+
 ## [0.12.0] - 2026-06-15
 
 ### Added
