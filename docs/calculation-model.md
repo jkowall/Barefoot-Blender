@@ -178,10 +178,10 @@ Liters are free gas liters at surface pressure. They are not metric cylinder wat
 
 Training Mode is an educational display layer for classroom and self-study use.
 
-- Standard Blend shows partial-pressure substitutions for O2, He, and N2, then shows how top-off, oxygen, and helium add pressures are derived.
+- Standard Blend shows cheat-sheet style formula cards for the hand-fill worksheet used for partial-pressure fills: pressure-percent points, helium first, oxygen add with top-off credit, and final top-off.
 - Bleed-down plans explain that the math is solved from the post-bleed starting pressure.
-- Top-Off What-If shows the weighted-average formula for final O2, He, and N2.
-- Multi-Gas Blend shows source-gas contribution totals and validates the selected option against the target pressure.
+- Top-Off What-If shows visual formula cards for the pressure-percent hand check for final O2, He, and N2.
+- Multi-Gas Blend shows visual formula cards for the needed added gas worksheet, a visual Pearson-square style guide for two-source nitrox cases, and pressure-percent source checks for more complex mixes.
 - Utilities show formula substitutions for MOD, EAD, Best Mix, END, gas density, and tank pressure/volume conversion.
 - GERG-2008 Training Mode content stays high level: it explains that corrected stops are estimated from absolute pressure, temperature, cylinder volume, component moles, and mixture compressibility, without exposing every intermediate solver value.
 

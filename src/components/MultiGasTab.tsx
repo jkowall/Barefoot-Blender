@@ -12,7 +12,7 @@ import {
   pressureToCuFt
 } from "../utils/calculations";
 import { formatNumber, formatPressure, formatSignedPressure } from "../utils/format";
-import { fromDisplayPressure } from "../utils/units";
+import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { logger } from "../utils/logger";
 import { AccordionItem } from "./Accordion";
 import ErrorBoundary from "./ErrorBoundary";
@@ -262,6 +262,9 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
       return {
         name: step.gas.name,
         amountPsi: step.amount,
+        o2Percent: step.gas.o2,
+        hePercent: step.gas.he,
+        n2Percent: Math.max(0, 100 - step.gas.o2 - step.gas.he),
         o2Psi: step.amount * o2Fraction,
         hePsi: step.amount * heFraction,
         n2Psi: step.amount * n2Fraction,
@@ -277,17 +280,90 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     const totalO2Psi = sourceRows.reduce((sum, row) => sum + row.o2Psi, startO2Psi);
     const totalHePsi = sourceRows.reduce((sum, row) => sum + row.hePsi, startHePsi);
     const totalN2Psi = sourceRows.reduce((sum, row) => sum + row.n2Psi, startN2Psi);
+    const addedPressurePsi = targetPressurePsi - effectiveStartPressurePsi;
+    const targetO2Percent = selectedAlternative.finalO2;
+    const targetHePercent = selectedAlternative.finalHe;
+    const startO2Percent = multiGas.startO2 ?? 21;
+    const startHePercent = multiGas.startHe ?? 0;
+    const startO2Points = effectiveStartPressurePsi * startO2Percent;
+    const startHePoints = effectiveStartPressurePsi * startHePercent;
+    const targetO2Points = targetPressurePsi * targetO2Percent;
+    const targetHePoints = targetPressurePsi * targetHePercent;
+    const startPressureDisplay = toDisplayPressure(effectiveStartPressurePsi, settings.pressureUnit);
+    const targetPressureDisplay = toDisplayPressure(targetPressurePsi, settings.pressureUnit);
+    const addedPressureDisplay = toDisplayPressure(addedPressurePsi, settings.pressureUnit);
+    const startO2PointsDisplay = startPressureDisplay * startO2Percent;
+    const startHePointsDisplay = startPressureDisplay * startHePercent;
+    const targetO2PointsDisplay = targetPressureDisplay * targetO2Percent;
+    const targetHePointsDisplay = targetPressureDisplay * targetHePercent;
+    const totalO2PointsDisplay = toDisplayPressure(totalO2Psi, settings.pressureUnit) * 100;
+    const totalHePointsDisplay = toDisplayPressure(totalHePsi, settings.pressureUnit) * 100;
+    const totalN2PointsDisplay = toDisplayPressure(totalN2Psi, settings.pressureUnit) * 100;
+    const neededAddedO2Percent = addedPressurePsi > 0
+      ? (targetO2Points - startO2Points) / addedPressurePsi
+      : 0;
+    const neededAddedHePercent = addedPressurePsi > 0
+      ? (targetHePoints - startHePoints) / addedPressurePsi
+      : 0;
+    const nitroxPearsonRows = sourceRows.length === 2 &&
+      Math.abs(startHePsi) <= 0.000001 &&
+      Math.abs(targetHePoints) <= 0.000001 &&
+      sourceRows.every((row) => row.hePercent <= 0.000001);
+    const pearsonRows = nitroxPearsonRows
+      ? [...sourceRows].sort((a, b) => b.o2Percent - a.o2Percent)
+      : [];
+    const highSource = pearsonRows[0];
+    const lowSource = pearsonRows[1];
+    const highSourceParts = highSource && lowSource ? neededAddedO2Percent - lowSource.o2Percent : 0;
+    const lowSourceParts = highSource && lowSource ? highSource.o2Percent - neededAddedO2Percent : 0;
+    const totalPearsonParts = highSourceParts + lowSourceParts;
+    const pearson = highSource && lowSource &&
+      addedPressurePsi > 0 &&
+      totalPearsonParts > 0.000001 &&
+      highSourceParts >= -0.000001 &&
+      lowSourceParts >= -0.000001
+      ? {
+          highSource,
+          lowSource,
+          highSourceParts,
+          lowSourceParts,
+          totalPearsonParts,
+          highSourcePressurePsi: addedPressurePsi * highSourceParts / totalPearsonParts,
+          lowSourcePressurePsi: addedPressurePsi * lowSourceParts / totalPearsonParts
+        }
+      : null;
 
     return {
       bleedStep,
       effectiveStartPressurePsi,
       targetPressurePsi,
+      addedPressurePsi,
       startO2Fraction,
       startHeFraction,
       startN2Fraction,
       startO2Psi,
       startHePsi,
       startN2Psi,
+      startO2Percent,
+      startHePercent,
+      targetO2Percent,
+      targetHePercent,
+      startO2Points,
+      startHePoints,
+      targetO2Points,
+      targetHePoints,
+      startO2PointsDisplay,
+      startHePointsDisplay,
+      targetO2PointsDisplay,
+      targetHePointsDisplay,
+      totalO2PointsDisplay,
+      totalHePointsDisplay,
+      totalN2PointsDisplay,
+      targetPressureDisplay,
+      addedPressureDisplay,
+      neededAddedO2Percent,
+      neededAddedHePercent,
+      pearson,
       sourceRows,
       totalO2Psi,
       totalHePsi,
@@ -480,8 +556,8 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                   </div>
                   {trainingMath && (
                     <TrainingMathPanel
-                      title="Multi-Gas Math"
-                      note="The optimizer searches feasible source combinations and ranks them by estimated cost. This panel explains the selected option."
+                      title="Multi-Gas Hand Check"
+                      note="This shows the classroom pressure-percent check for the selected option. The app may search more combinations, but the selected fill can still be checked by hand."
                     >
                       {trainingMath.bleedStep !== undefined && (
                         <p>
@@ -490,25 +566,110 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                       )}
                       <div className="training-math-grid">
                         <div>
-                          <h4>Source contributions</h4>
+                          <h4>Needed added gas</h4>
                           <ul>
-                            <li>Start O2 partial pressure: {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startO2Fraction, 3)} = {formatPressure(trainingMath.startO2Psi, settings.pressureUnit)}</li>
-                            <li>Start He partial pressure: {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startHeFraction, 3)} = {formatPressure(trainingMath.startHePsi, settings.pressureUnit)}</li>
-                            <li>Start N2 partial pressure: {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startN2Fraction, 3)} = {formatPressure(trainingMath.startN2Psi, settings.pressureUnit)}</li>
-                            {trainingMath.sourceRows.map((row) => (
-                              <li key={`${row.name}-${row.amountPsi.toFixed(6)}`}>
-                                {row.name}: {formatPressure(row.amountPsi, settings.pressureUnit)} at {formatNumber(row.o2Fraction, 3)} O2 / {formatNumber(row.heFraction, 3)} He / {formatNumber(row.n2Fraction, 3)} N2
-                              </li>
-                            ))}
+                            <li>Added pressure = target - start = {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} - {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} = {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)}</li>
+                            <li>Needed added O2% = (target O2 points - start O2 points) / added pressure = ({formatNumber(trainingMath.targetO2PointsDisplay, 0)} - {formatNumber(trainingMath.startO2PointsDisplay, 0)}) / {formatNumber(trainingMath.addedPressureDisplay, 1)} = {formatNumber(trainingMath.neededAddedO2Percent, 1)}%</li>
+                            {Math.abs(trainingMath.targetHePercent) > 0.000001 || Math.abs(trainingMath.startHePercent) > 0.000001 ? (
+                              <li>Needed added He% = (target He points - start He points) / added pressure = ({formatNumber(trainingMath.targetHePointsDisplay, 0)} - {formatNumber(trainingMath.startHePointsDisplay, 0)}) / {formatNumber(trainingMath.addedPressureDisplay, 1)} = {formatNumber(trainingMath.neededAddedHePercent, 1)}%</li>
+                            ) : (
+                              <li>No helium target is present, so this can be checked as a nitrox alligation problem when two source gases are selected.</li>
+                            )}
                           </ul>
                         </div>
                         <div>
-                          <h4>Final mix check</h4>
-                          <ul>
-                            <li>Final O2 = total O2 partial pressure / target pressure = {formatPressure(trainingMath.totalO2Psi, settings.pressureUnit)} / {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(selectedAlternative.finalO2, 1)}%</li>
-                            <li>Final He = total He partial pressure / target pressure = {formatPressure(trainingMath.totalHePsi, settings.pressureUnit)} / {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(selectedAlternative.finalHe, 1)}%</li>
-                            <li>Final N2 = total N2 partial pressure / target pressure = {formatPressure(trainingMath.totalN2Psi, settings.pressureUnit)} / {formatPressure(trainingMath.targetPressurePsi, settings.pressureUnit)} = {formatNumber(Math.max(0, 100 - selectedAlternative.finalO2 - selectedAlternative.finalHe), 1)}%</li>
-                          </ul>
+                          {trainingMath.pearson ? (
+                            <>
+                              <h4>Pearson square</h4>
+                              <div className="formula-sheet" aria-label="Pearson square visual formula worksheet">
+                                <div className="formula-step">
+                                  <span className="formula-step-label">Step 1</span>
+                                  <div className="formula-equation">
+                                    <span>Needed O2%</span>
+                                    <span>=</span>
+                                    <span className="formula-fraction">
+                                      <span>{formatNumber(trainingMath.targetO2PointsDisplay, 0)} - {formatNumber(trainingMath.startO2PointsDisplay, 0)}</span>
+                                      <span>{formatNumber(trainingMath.addedPressureDisplay, 1)}</span>
+                                    </span>
+                                    <span>=</span>
+                                    <strong>{formatNumber(trainingMath.neededAddedO2Percent, 1)}%</strong>
+                                  </div>
+                                </div>
+                                <div className="formula-step">
+                                  <span className="formula-step-label">Step 2</span>
+                                  <div className="formula-mini-grid">
+                                    <div className="formula-mini">
+                                      <span>{trainingMath.pearson.highSource.name} parts</span>
+                                      <strong>{formatNumber(trainingMath.pearson.highSourceParts, 1)}</strong>
+                                    </div>
+                                    <div className="formula-mini">
+                                      <span>{trainingMath.pearson.lowSource.name} parts</span>
+                                      <strong>{formatNumber(trainingMath.pearson.lowSourceParts, 1)}</strong>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="formula-step">
+                                  <span className="formula-step-label">Step 3</span>
+                                  <div className="formula-equation">
+                                    <span>Source add</span>
+                                    <span>=</span>
+                                    <span className="formula-fraction">
+                                      <span>Added P x parts</span>
+                                      <span>Total parts</span>
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="pearson-square" aria-label="Pearson square visual check">
+                                <div className="pearson-square-node pearson-square-source pearson-square-source-high">
+                                  <span className="pearson-square-label">{trainingMath.pearson.highSource.name}</span>
+                                  <strong>{formatNumber(trainingMath.pearson.highSource.o2Percent, 1)}%</strong>
+                                </div>
+                                <div className="pearson-square-node pearson-square-source pearson-square-source-low">
+                                  <span className="pearson-square-label">{trainingMath.pearson.lowSource.name}</span>
+                                  <strong>{formatNumber(trainingMath.pearson.lowSource.o2Percent, 1)}%</strong>
+                                </div>
+                                <div className="pearson-square-target">
+                                  <span>Needed</span>
+                                  <strong>{formatNumber(trainingMath.neededAddedO2Percent, 1)}%</strong>
+                                </div>
+                                <div className="pearson-square-node pearson-square-parts pearson-square-parts-high">
+                                  <span className="pearson-square-label">Parts</span>
+                                  <strong>{formatNumber(trainingMath.pearson.highSourceParts, 1)}</strong>
+                                </div>
+                                <div className="pearson-square-node pearson-square-parts pearson-square-parts-low">
+                                  <span className="pearson-square-label">Parts</span>
+                                  <strong>{formatNumber(trainingMath.pearson.lowSourceParts, 1)}</strong>
+                                </div>
+                              </div>
+                              <div className="pearson-square-adds">
+                                <span>{trainingMath.pearson.highSource.name}: {formatPressure(trainingMath.pearson.highSourcePressurePsi, settings.pressureUnit)}</span>
+                                <span>{trainingMath.pearson.lowSource.name}: {formatPressure(trainingMath.pearson.lowSourcePressurePsi, settings.pressureUnit)}</span>
+                              </div>
+                              <ul>
+                                <li>High source: {trainingMath.pearson.highSource.name} at {formatNumber(trainingMath.pearson.highSource.o2Percent, 1)}% O2.</li>
+                                <li>Low source: {trainingMath.pearson.lowSource.name} at {formatNumber(trainingMath.pearson.lowSource.o2Percent, 1)}% O2.</li>
+                                <li>High-source parts = needed O2% - low O2% = {formatNumber(trainingMath.neededAddedO2Percent, 1)} - {formatNumber(trainingMath.pearson.lowSource.o2Percent, 1)} = {formatNumber(trainingMath.pearson.highSourceParts, 1)}</li>
+                                <li>Low-source parts = high O2% - needed O2% = {formatNumber(trainingMath.pearson.highSource.o2Percent, 1)} - {formatNumber(trainingMath.neededAddedO2Percent, 1)} = {formatNumber(trainingMath.pearson.lowSourceParts, 1)}</li>
+                                <li>{trainingMath.pearson.highSource.name} add = added pressure x high parts / total parts = {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.pearson.highSourceParts, 1)} / {formatNumber(trainingMath.pearson.totalPearsonParts, 1)} = {formatPressure(trainingMath.pearson.highSourcePressurePsi, settings.pressureUnit)}</li>
+                                <li>{trainingMath.pearson.lowSource.name} add = added pressure x low parts / total parts = {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.pearson.lowSourceParts, 1)} / {formatNumber(trainingMath.pearson.totalPearsonParts, 1)} = {formatPressure(trainingMath.pearson.lowSourcePressurePsi, settings.pressureUnit)}</li>
+                              </ul>
+                            </>
+                          ) : (
+                            <>
+                              <h4>Source point check</h4>
+                              <ul>
+                                {trainingMath.sourceRows.map((row) => (
+                                  <li key={`${row.name}-${row.amountPsi.toFixed(6)}`}>
+                                    {row.name}: {formatPressure(row.amountPsi, settings.pressureUnit)} x {formatNumber(row.o2Percent, 1)}% O2 / {formatNumber(row.hePercent, 1)}% He / {formatNumber(row.n2Percent, 1)}% N2
+                                  </li>
+                                ))}
+                                <li>Final O2% = total O2 points / target pressure = {formatNumber(trainingMath.totalO2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(selectedAlternative.finalO2, 1)}%</li>
+                                <li>Final He% = total He points / target pressure = {formatNumber(trainingMath.totalHePointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(selectedAlternative.finalHe, 1)}%</li>
+                                <li>Final N2% = total N2 points / target pressure = {formatNumber(trainingMath.totalN2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(Math.max(0, 100 - selectedAlternative.finalO2 - selectedAlternative.finalHe), 1)}%</li>
+                              </ul>
+                            </>
+                          )}
                         </div>
                       </div>
                     </TrainingMathPanel>

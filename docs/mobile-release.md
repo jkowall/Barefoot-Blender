@@ -184,7 +184,7 @@ jarsigner -verify -verbose -certs app/build/outputs/bundle/release/app-release.a
 - Privacy URL: `https://trimix-blender.com/privacy/`.
 - Terms URL: `https://trimix-blender.com/terms/`.
 - Safety copy: users must analyze final gas with calibrated oxygen and helium analyzers.
-- Educational feature copy: mention Training Mode as an optional explanation layer that shows the math behind calculations for students and instructors.
+- Educational feature copy: mention Training Mode as an optional explanation layer that shows classroom-style hand math, including pressure-percent worksheets and Pearson-square style checks where applicable.
 - Privacy disclosures: local settings/history, purchase/subscription data through Apple/Google/RevenueCat, no ads, no health data collection.
 
 ## Validation
