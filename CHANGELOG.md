@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.3] - 2026-06-15
+
+### Fixed
+
+- **Multi-Gas Default State**: Hid the helium-source warning for nitrox-only Multi-Gas blends where the target helium is already 0%.
+
 ## [0.12.2] - 2026-06-15
 
 ### Changed
