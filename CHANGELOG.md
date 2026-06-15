@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.4] - 2026-06-15
+
+### Fixed
+
+- **Multi-Gas Training Mode**: Added a helium-aware trimix balance worksheet so Training Mode shows O2, He, and N2 pressure-point work for Multi-Gas blends with helium.
+- **Gas Model Visibility**: Added a footer indicator for the selected gas blending model and clarified that Multi-Gas Training Mode uses ideal pressure-point balance.
+
 ## [0.12.3] - 2026-06-15
 
 ### Fixed

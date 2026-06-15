@@ -260,15 +260,22 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
       const o2Fraction = step.gas.o2 / 100;
       const heFraction = step.gas.he / 100;
       const n2Fraction = Math.max(0, 1 - o2Fraction - heFraction);
+      const n2Percent = Math.max(0, 100 - step.gas.o2 - step.gas.he);
+      const amountDisplay = toDisplayPressure(step.amount, settings.pressureUnit);
       return {
+        id: step.gas.id,
         name: step.gas.name,
         amountPsi: step.amount,
+        amountDisplay,
         o2Percent: step.gas.o2,
         hePercent: step.gas.he,
-        n2Percent: Math.max(0, 100 - step.gas.o2 - step.gas.he),
+        n2Percent,
         o2Psi: step.amount * o2Fraction,
         hePsi: step.amount * heFraction,
         n2Psi: step.amount * n2Fraction,
+        o2PointsDisplay: amountDisplay * step.gas.o2,
+        hePointsDisplay: amountDisplay * step.gas.he,
+        n2PointsDisplay: amountDisplay * n2Percent,
         o2Fraction,
         heFraction,
         n2Fraction
@@ -295,6 +302,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     const addedPressureDisplay = toDisplayPressure(addedPressurePsi, settings.pressureUnit);
     const startO2PointsDisplay = startPressureDisplay * startO2Percent;
     const startHePointsDisplay = startPressureDisplay * startHePercent;
+    const startN2PointsDisplay = startPressureDisplay * startN2Fraction * 100;
     const targetO2PointsDisplay = targetPressureDisplay * targetO2Percent;
     const targetHePointsDisplay = targetPressureDisplay * targetHePercent;
     const totalO2PointsDisplay = toDisplayPressure(totalO2Psi, settings.pressureUnit) * 100;
@@ -333,6 +341,31 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
           lowSourcePressurePsi: addedPressurePsi * lowSourceParts / totalPearsonParts
         }
       : null;
+    const startContribution = effectiveStartPressurePsi > 0.000001
+      ? {
+          id: "start",
+          name: "Start tank",
+          amountPsi: effectiveStartPressurePsi,
+          amountDisplay: startPressureDisplay,
+          o2Percent: startO2Percent,
+          hePercent: startHePercent,
+          n2Percent: startN2Fraction * 100,
+          o2Psi: startO2Psi,
+          hePsi: startHePsi,
+          n2Psi: startN2Psi,
+          o2PointsDisplay: startO2PointsDisplay,
+          hePointsDisplay: startHePointsDisplay,
+          n2PointsDisplay: startN2PointsDisplay,
+          o2Fraction: startO2Fraction,
+          heFraction: startHeFraction,
+          n2Fraction: startN2Fraction
+        }
+      : null;
+    const contributionRows = startContribution ? [startContribution, ...sourceRows] : sourceRows;
+    const trimixBalance = pearson === null &&
+      (Math.abs(targetHePercent) > 0.000001 ||
+        Math.abs(startHePercent) > 0.000001 ||
+        sourceRows.some((row) => row.hePercent > 0.000001));
 
     return {
       bleedStep,
@@ -355,6 +388,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
       targetHePoints,
       startO2PointsDisplay,
       startHePointsDisplay,
+      startN2PointsDisplay,
       targetO2PointsDisplay,
       targetHePointsDisplay,
       totalO2PointsDisplay,
@@ -365,7 +399,9 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
       neededAddedO2Percent,
       neededAddedHePercent,
       pearson,
+      trimixBalance,
       sourceRows,
+      contributionRows,
       totalO2Psi,
       totalHePsi,
       totalN2Psi
@@ -560,6 +596,11 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                       title="Multi-Gas Hand Check"
                       note="This shows the classroom pressure-percent check for the selected option. The app may search more combinations, but the selected fill can still be checked by hand."
                     >
+                      {settings.gasModel === "gerg2008" && (
+                        <div className="training-math-note">
+                          GERG-2008 is selected for Standard Blend. Multi-Gas uses the ideal pressure-point balance shown below.
+                        </div>
+                      )}
                       {trainingMath.bleedStep !== undefined && (
                         <p>
                           This option starts with a bleed-down from {formatPressure(startPressurePsi, settings.pressureUnit)} to {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} before adding source gases.
@@ -663,12 +704,87 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                               <li>{trainingMath.pearson.lowSource.name} add = added pressure x low parts / total parts = {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.pearson.lowSourceParts, 1)} / {formatNumber(trainingMath.pearson.totalPearsonParts, 1)} = {formatPressure(trainingMath.pearson.lowSourcePressurePsi, settings.pressureUnit)}</li>
                             </ul>
                           </>
+                        ) : trainingMath.trimixBalance ? (
+                          <>
+                            <h4>Trimix balance check</h4>
+                            <div className="training-math-note">
+                              Helium blends balance O2 and He at the same time, so the hand check uses pressure points instead of a one-axis Pearson square.
+                            </div>
+                            <div className="formula-sheet formula-sheet-compact" aria-label="Trimix visual formula worksheet">
+                              <div className="formula-step">
+                                <span className="formula-step-label">Step 1</span>
+                                <div className="formula-mini-grid">
+                                  <div className="formula-mini">
+                                    <span>Needed added O2</span>
+                                    <strong>{formatNumber(trainingMath.neededAddedO2Percent, 1)}%</strong>
+                                  </div>
+                                  <div className="formula-mini">
+                                    <span>Needed added He</span>
+                                    <strong>{formatNumber(trainingMath.neededAddedHePercent, 1)}%</strong>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="formula-step">
+                                <span className="formula-step-label">Step 2</span>
+                                <div className="formula-equation">
+                                  <span>Gas points</span>
+                                  <span>=</span>
+                                  <span>source pressure x gas percent</span>
+                                </div>
+                              </div>
+                              <div className="formula-step">
+                                <span className="formula-step-label">Step 3</span>
+                                <div className="formula-equation">
+                                  <span>Final gas %</span>
+                                  <span>=</span>
+                                  <span className="formula-fraction">
+                                    <span>total pressure-points</span>
+                                    <span>target pressure</span>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="trimix-balance-grid" aria-label="Trimix O2 and helium pressure point check">
+                              {trainingMath.contributionRows.map((row) => (
+                                <div key={`${row.id}-${row.amountPsi.toFixed(6)}`} className="trimix-balance-card">
+                                  <div className="trimix-balance-title">
+                                    <span>{row.name}</span>
+                                    <strong>{formatPressure(row.amountPsi, settings.pressureUnit)}</strong>
+                                  </div>
+                                  <div className="trimix-balance-points">
+                                    <div>
+                                      <span>O2</span>
+                                      <strong>{formatNumber(row.o2PointsDisplay, 0)}</strong>
+                                      <small>{formatNumber(row.amountDisplay, 1)} x {formatNumber(row.o2Percent, 1)}%</small>
+                                    </div>
+                                    <div>
+                                      <span>He</span>
+                                      <strong>{formatNumber(row.hePointsDisplay, 0)}</strong>
+                                      <small>{formatNumber(row.amountDisplay, 1)} x {formatNumber(row.hePercent, 1)}%</small>
+                                    </div>
+                                    <div>
+                                      <span>N2</span>
+                                      <strong>{formatNumber(row.n2PointsDisplay, 0)}</strong>
+                                      <small>{formatNumber(row.amountDisplay, 1)} x {formatNumber(row.n2Percent, 1)}%</small>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <ul>
+                              <li>Needed added O2% = ({formatNumber(trainingMath.targetO2PointsDisplay, 0)} - {formatNumber(trainingMath.startO2PointsDisplay, 0)}) / {formatNumber(trainingMath.addedPressureDisplay, 1)} = {formatNumber(trainingMath.neededAddedO2Percent, 1)}%</li>
+                              <li>Needed added He% = ({formatNumber(trainingMath.targetHePointsDisplay, 0)} - {formatNumber(trainingMath.startHePointsDisplay, 0)}) / {formatNumber(trainingMath.addedPressureDisplay, 1)} = {formatNumber(trainingMath.neededAddedHePercent, 1)}%</li>
+                              <li>Final O2% = total O2 points / target pressure = {formatNumber(trainingMath.totalO2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(selectedAlternative.finalO2, 1)}%</li>
+                              <li>Final He% = total He points / target pressure = {formatNumber(trainingMath.totalHePointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(selectedAlternative.finalHe, 1)}%</li>
+                              <li>Final N2% = total N2 points / target pressure = {formatNumber(trainingMath.totalN2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(Math.max(0, 100 - selectedAlternative.finalO2 - selectedAlternative.finalHe), 1)}%</li>
+                            </ul>
+                          </>
                         ) : (
                           <>
                             <h4>Source point check</h4>
                             <ul>
                               {trainingMath.sourceRows.map((row) => (
-                                <li key={`${row.name}-${row.amountPsi.toFixed(6)}`}>
+                                <li key={`${row.id}-${row.amountPsi.toFixed(6)}`}>
                                   {row.name}: {formatPressure(row.amountPsi, settings.pressureUnit)} x {formatNumber(row.o2Percent, 1)}% O2 / {formatNumber(row.hePercent, 1)}% He / {formatNumber(row.n2Percent, 1)}% N2
                                 </li>
                               ))}
