@@ -17,6 +17,8 @@ describe("SubscriptionPaywall", () => {
     expect(markup).toContain("$4.99/year");
     expect(markup).toContain("annual auto-renewing subscription");
     expect(markup).toContain('href="https://trimix-blender.com/privacy/"');
+    expect(markup).toContain('target="_blank"');
+    expect(markup).toContain('rel="noopener noreferrer"');
     expect(markup).toContain("Privacy Policy");
     expect(markup).toContain('href="https://trimix-blender.com/terms/"');
     expect(markup).toContain("Terms of Use (EULA)");

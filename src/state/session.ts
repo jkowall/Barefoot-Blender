@@ -81,6 +81,9 @@ export type StandardBlendHistoryEntry = {
   topGasName: string;
   tankSizeCuFt?: number;
   tankRatedPressurePsi?: number;
+  startTemperatureF?: number;
+  fillTemperatureF?: number;
+  settledTemperatureF?: number;
   estimatedCost?: number;
   steps: {
     kind: "bleed" | "helium" | "oxygen" | "topoff";
