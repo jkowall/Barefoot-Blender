@@ -48,9 +48,9 @@ Scope:
 - Keeps the ideal partial-pressure plan visible as the base workflow, then adds corrected stop pressures.
 
 Inputs added by the UI:
-- Start gas temperature
-- Fill temperature
+- Initial gas temperature
 - Settled cylinder temperature
+- Optional measured stage temperatures for each corrected stop
 - Tank free-gas size and rated pressure, used to infer cylinder water volume
 
 Pressure and temperature handling:
@@ -73,8 +73,9 @@ Pressure and temperature handling:
    - Helium moles from the He component delta
    - Oxygen moles from the O2 component delta after top-off gas contribution
    - Top-off moles from the N2 component delta when the top-off gas contains nitrogen
-7. After each gas addition, recalculate pressure from component moles, cylinder volume, and fill temperature.
-8. Display corrected hot stop pressures. The target pressure remains the settled cylinder pressure at the settled temperature.
+7. After each gas addition, recalculate pressure from component moles, cylinder volume, and that stage's measured temperature.
+8. Display corrected stop pressures. Stage temperatures default to the initial gas temperature and can be edited inline during the fill. When one stage temperature is changed, following unedited stages inherit it.
+9. The target pressure remains the settled cylinder pressure at the settled temperature.
 
 Supported envelope:
 - Temperature must be at least 250 K.

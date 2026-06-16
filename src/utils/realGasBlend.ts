@@ -12,7 +12,6 @@ import {
   type GergGasFractions
 } from "./gerg2008";
 import {
-  DEFAULT_FILL_TEMPERATURE_F,
   DEFAULT_SETTLED_TEMPERATURE_F,
   DEFAULT_START_TEMPERATURE_F,
   fahrenheitToKelvin
@@ -25,6 +24,7 @@ export type RealGasBlendStep = {
   molesAdded: number;
   stopPressurePsi: number;
   pressureChangePsi: number;
+  temperatureF: number;
   z: number;
 };
 
@@ -115,6 +115,17 @@ const stateFromComponents = (
   };
 };
 
+const stepTemperatureF = (
+  inputs: StandardBlendInput,
+  kind: RealGasBlendStep["kind"],
+  startTemperatureF: number
+): number => {
+  if (inputs.stageTemperatureTouched === undefined) {
+    return inputs.stageTemperaturesF?.[kind] ?? inputs.fillTemperatureF ?? startTemperatureF;
+  }
+  return inputs.stageTemperaturesF?.[kind] ?? startTemperatureF;
+};
+
 export const calculateRealGasStandardBlend = (
   settings: RealGasBlendSettings,
   inputs: StandardBlendInput,
@@ -157,7 +168,7 @@ export const calculateRealGasStandardBlend = (
   }
 
   const startTemperatureK = fahrenheitToKelvin(inputs.startTemperatureF ?? DEFAULT_START_TEMPERATURE_F);
-  const fillTemperatureK = fahrenheitToKelvin(inputs.fillTemperatureF ?? DEFAULT_FILL_TEMPERATURE_F);
+  const startTemperatureF = inputs.startTemperatureF ?? DEFAULT_START_TEMPERATURE_F;
   const settledTemperatureK = fahrenheitToKelvin(inputs.settledTemperatureF ?? DEFAULT_SETTLED_TEMPERATURE_F);
 
   let startComponents: ComponentMoles = { o2: 0, he: 0, n2: 0 };
@@ -260,31 +271,37 @@ export const calculateRealGasStandardBlend = (
   }
 
   let runningComponents = startComponents;
-  const startHotState = stateFromComponents(fillTemperatureK, runningComponents, waterVolumeLiters);
-  warnings.push(...startHotState.warnings);
-  if (!startHotState.success) {
-    return {
-      success: false,
-      steps: [],
-      startHotPressurePsi: startPressurePsi,
-      finalHotPressurePsi: targetPressurePsi,
-      targetSettledPressurePsi: targetPressurePsi,
-      warnings,
-      errors: startHotState.errors
-    };
-  }
-
-  let previousPressurePsi = startHotState.pressurePsi;
+  let startHotPressurePsi = startPressurePsi;
+  let previousPressurePsi = startPressurePsi;
   const steps: RealGasBlendStep[] = [];
   for (const step of plannedSteps) {
-    runningComponents = addGasMoles(runningComponents, step.moles, step.fractions);
-    const state = stateFromComponents(fillTemperatureK, runningComponents, waterVolumeLiters);
+    const temperatureF = stepTemperatureF(inputs, step.kind, startTemperatureF);
+    const temperatureK = fahrenheitToKelvin(temperatureF);
+    const beforeState = stateFromComponents(temperatureK, runningComponents, waterVolumeLiters);
+    warnings.push(...beforeState.warnings);
+    if (!beforeState.success) {
+      return {
+        success: false,
+        steps,
+        startHotPressurePsi,
+        finalHotPressurePsi: previousPressurePsi,
+        targetSettledPressurePsi: targetPressurePsi,
+        warnings,
+        errors: beforeState.errors
+      };
+    }
+    if (steps.length === 0) {
+      startHotPressurePsi = beforeState.pressurePsi;
+    }
+
+    const nextComponents = addGasMoles(runningComponents, step.moles, step.fractions);
+    const state = stateFromComponents(temperatureK, nextComponents, waterVolumeLiters);
     warnings.push(...state.warnings);
     if (!state.success) {
       return {
         success: false,
         steps,
-        startHotPressurePsi: startHotState.pressurePsi,
+        startHotPressurePsi,
         finalHotPressurePsi: previousPressurePsi,
         targetSettledPressurePsi: targetPressurePsi,
         warnings,
@@ -292,12 +309,14 @@ export const calculateRealGasStandardBlend = (
       };
     }
 
+    runningComponents = nextComponents;
     steps.push({
       kind: step.kind,
       gasName: step.gasName,
       molesAdded: step.moles,
       stopPressurePsi: state.pressurePsi,
-      pressureChangePsi: state.pressurePsi - previousPressurePsi,
+      pressureChangePsi: state.pressurePsi - beforeState.pressurePsi,
+      temperatureF,
       z: state.z
     });
     previousPressurePsi = state.pressurePsi;
@@ -306,7 +325,7 @@ export const calculateRealGasStandardBlend = (
   return {
     success: true,
     steps,
-    startHotPressurePsi: startHotState.pressurePsi,
+    startHotPressurePsi,
     finalHotPressurePsi: previousPressurePsi,
     targetSettledPressurePsi: targetPressurePsi,
     warnings: [...new Set(warnings)],

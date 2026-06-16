@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.6] - 2026-06-16
+
+### Fixed
+
+- **GERG Stage Temperature Corrections**: Fixed measured stage pressure deltas so gas additions are calculated against the before-add cylinder state at the same measured stage temperature, cleared stale GERG-derived primary results when inline temperature recalculation fails, preserved legacy fill temperatures when saved blends or history entries are upgraded, kept untouched earlier stage temperatures inherited from Initial Temp, kept inline GERG recalculations on the current tank context, and aligned the Initial reference readout with the first before-add stage state.
+
+## [0.12.5] - 2026-06-16
+
+### Added
+
+- **Measured GERG Stage Temperatures**: Moved GERG-2008 temperature correction into the Blend Plan with inline initial, settled, and per-stage temperature inputs. Stage temperatures default to the initial temperature and propagate to following unedited stops for quick measured-fill refinement.
+
 ## [0.12.4] - 2026-06-15
 
 ### Fixed
