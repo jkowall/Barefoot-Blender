@@ -167,6 +167,7 @@ describe("updateStageTemperatureState", () => {
 describe("resolveHistoryStageTemperatureTouched", () => {
   test("leaves legacy history entries eligible for fill temperature fallback", () => {
     expect(resolveHistoryStageTemperatureTouched({})).toBeUndefined();
+    expect(resolveHistoryStageTemperatureTouched({ stageTemperaturesF: {} })).toBeUndefined();
   });
 
   test("derives touched state only when stage temperature history exists", () => {

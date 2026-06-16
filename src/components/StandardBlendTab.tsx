@@ -136,7 +136,9 @@ export const resolveHistoryStageTemperatureTouched = (
   entry: Pick<StandardBlendHistoryEntry, "stageTemperatureTouched" | "stageTemperaturesF">
 ): StandardBlendStageTemperatureTouched | undefined =>
   entry.stageTemperatureTouched ?? (
-    entry.stageTemperaturesF === undefined ? undefined : touchedFromStageTemperatures(entry.stageTemperaturesF)
+    entry.stageTemperaturesF === undefined || Object.values(entry.stageTemperaturesF).every((value) => value === undefined)
+      ? undefined
+      : touchedFromStageTemperatures(entry.stageTemperaturesF)
   );
 
 export const resolveStageTemperatureDisplayF = (
