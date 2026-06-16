@@ -125,6 +125,41 @@ export const resolveStageTemperatureDisplayF = (
   startTemperatureF
 );
 
+export const updateStageTemperatureState = (
+  stageTemperaturesF: StandardBlendStageTemperaturesF,
+  stageTemperatureTouched: StandardBlendStageTemperatureTouched,
+  kind: StandardBlendStageKind,
+  value: number | undefined
+): {
+  stageTemperaturesF: StandardBlendStageTemperaturesF;
+  stageTemperatureTouched: StandardBlendStageTemperatureTouched;
+} => {
+  const nextStageTemperatures: StandardBlendStageTemperaturesF = { ...stageTemperaturesF };
+  const nextTouched: StandardBlendStageTemperatureTouched = { ...stageTemperatureTouched };
+  const currentIndex = stageTemperatureOrder.indexOf(kind);
+
+  if (value === undefined) {
+    delete nextStageTemperatures[kind];
+    delete nextTouched[kind];
+  } else {
+    nextStageTemperatures[kind] = value;
+    nextTouched[kind] = true;
+  }
+
+  for (const laterKind of stageTemperatureOrder.slice(currentIndex + 1)) {
+    if (stageTemperatureTouched[laterKind]) {
+      break;
+    }
+    if (value === undefined) {
+      delete nextStageTemperatures[laterKind];
+    } else {
+      nextStageTemperatures[laterKind] = value;
+    }
+  }
+
+  return { stageTemperaturesF: nextStageTemperatures, stageTemperatureTouched: nextTouched };
+};
+
 const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
   const standardBlend = useSessionStore((state: SessionState) => state.standardBlend);
   const standardBlendHistory = useSessionStore((state: SessionState) => state.standardBlendHistory);
@@ -303,35 +338,17 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     value: number | undefined
   ): void => {
     const nextValue = value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit);
-    const nextStageTemperatures: StandardBlendStageTemperaturesF = {
-      ...resolveInputStageTemperatures(standardBlend, startTemperatureF)
-    };
-    const nextTouched: StandardBlendStageTemperatureTouched = { ...stageTemperatureTouched };
-    const currentIndex = stageTemperatureOrder.indexOf(kind);
-
-    if (nextValue === undefined) {
-      delete nextStageTemperatures[kind];
-      delete nextTouched[kind];
-    } else {
-      nextStageTemperatures[kind] = nextValue;
-      nextTouched[kind] = true;
-    }
-
-    for (const laterKind of stageTemperatureOrder.slice(currentIndex + 1)) {
-      if (stageTemperatureTouched[laterKind]) {
-        continue;
-      }
-      if (nextValue === undefined) {
-        delete nextStageTemperatures[laterKind];
-      } else {
-        nextStageTemperatures[laterKind] = nextValue;
-      }
-    }
+    const nextStageTemperatureState = updateStageTemperatureState(
+      resolveInputStageTemperatures(standardBlend, startTemperatureF),
+      stageTemperatureTouched,
+      kind,
+      nextValue
+    );
 
     setStandardBlendAndRefreshRealGas({
       ...standardBlend,
-      stageTemperaturesF: nextStageTemperatures,
-      stageTemperatureTouched: nextTouched
+      stageTemperaturesF: nextStageTemperatureState.stageTemperaturesF,
+      stageTemperatureTouched: nextStageTemperatureState.stageTemperatureTouched
     });
   };
 

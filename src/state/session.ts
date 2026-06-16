@@ -132,10 +132,7 @@ const defaultValues = {
     targetHe: 0,
     targetPressure: 3000,
     startTemperatureF: 70,
-    fillTemperatureF: 90,
     settledTemperatureF: 70,
-    stageTemperaturesF: {},
-    stageTemperatureTouched: {},
     topGasId: "air"
   },
   multiGas: {

@@ -2,7 +2,8 @@ import { describe, expect, test } from "vitest";
 import {
   realGasResultToBlendResult,
   resolveInputStageTemperatures,
-  resolveStageTemperatureDisplayF
+  resolveStageTemperatureDisplayF,
+  updateStageTemperatureState
 } from "./StandardBlendTab";
 import type { RealGasBlendResult } from "../utils/realGasBlend";
 
@@ -62,6 +63,46 @@ describe("resolveInputStageTemperatures", () => {
       helium: 70,
       oxygen: 70,
       topoff: 70
+    });
+  });
+});
+
+describe("updateStageTemperatureState", () => {
+  test("stops propagation at the next touched stage", () => {
+    const nextState = updateStageTemperatureState(
+      { helium: 70, oxygen: 100, topoff: 100 },
+      { oxygen: true },
+      "helium",
+      80
+    );
+
+    expect(nextState.stageTemperaturesF).toEqual({
+      helium: 80,
+      oxygen: 100,
+      topoff: 100
+    });
+    expect(nextState.stageTemperatureTouched).toEqual({
+      helium: true,
+      oxygen: true
+    });
+  });
+
+  test("propagates through later stages until a touched stage is reached", () => {
+    const nextState = updateStageTemperatureState(
+      { helium: 70, oxygen: 70, topoff: 110 },
+      { topoff: true },
+      "helium",
+      90
+    );
+
+    expect(nextState.stageTemperaturesF).toEqual({
+      helium: 90,
+      oxygen: 90,
+      topoff: 110
+    });
+    expect(nextState.stageTemperatureTouched).toEqual({
+      helium: true,
+      topoff: true
     });
   });
 });
