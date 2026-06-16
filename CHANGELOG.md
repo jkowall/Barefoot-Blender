@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.6] - 2026-06-16
+
+### Fixed
+
+- **GERG Stage Temperature Corrections**: Fixed measured stage pressure deltas so gas additions are calculated against the before-add cylinder state at the same measured stage temperature, and cleared stale GERG-derived primary results when inline temperature recalculation fails.
+
 ## [0.12.5] - 2026-06-16
 
 ### Added

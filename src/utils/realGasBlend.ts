@@ -119,7 +119,12 @@ const stepTemperatureF = (
   inputs: StandardBlendInput,
   kind: RealGasBlendStep["kind"],
   startTemperatureF: number
-): number => inputs.stageTemperaturesF?.[kind] ?? inputs.fillTemperatureF ?? startTemperatureF;
+): number => {
+  if (inputs.stageTemperaturesF === undefined) {
+    return inputs.fillTemperatureF ?? startTemperatureF;
+  }
+  return inputs.stageTemperaturesF?.[kind] ?? startTemperatureF;
+};
 
 export const calculateRealGasStandardBlend = (
   settings: RealGasBlendSettings,
@@ -269,9 +274,24 @@ export const calculateRealGasStandardBlend = (
   let previousPressurePsi = startPressurePsi;
   const steps: RealGasBlendStep[] = [];
   for (const step of plannedSteps) {
-    runningComponents = addGasMoles(runningComponents, step.moles, step.fractions);
     const temperatureF = stepTemperatureF(inputs, step.kind, startTemperatureF);
-    const state = stateFromComponents(fahrenheitToKelvin(temperatureF), runningComponents, waterVolumeLiters);
+    const temperatureK = fahrenheitToKelvin(temperatureF);
+    const beforeState = stateFromComponents(temperatureK, runningComponents, waterVolumeLiters);
+    warnings.push(...beforeState.warnings);
+    if (!beforeState.success) {
+      return {
+        success: false,
+        steps,
+        startHotPressurePsi: startPressurePsi,
+        finalHotPressurePsi: previousPressurePsi,
+        targetSettledPressurePsi: targetPressurePsi,
+        warnings,
+        errors: beforeState.errors
+      };
+    }
+
+    const nextComponents = addGasMoles(runningComponents, step.moles, step.fractions);
+    const state = stateFromComponents(temperatureK, nextComponents, waterVolumeLiters);
     warnings.push(...state.warnings);
     if (!state.success) {
       return {
@@ -285,12 +305,13 @@ export const calculateRealGasStandardBlend = (
       };
     }
 
+    runningComponents = nextComponents;
     steps.push({
       kind: step.kind,
       gasName: step.gasName,
       molesAdded: step.moles,
       stopPressurePsi: state.pressurePsi,
-      pressureChangePsi: state.pressurePsi - previousPressurePsi,
+      pressureChangePsi: state.pressurePsi - beforeState.pressurePsi,
       temperatureF,
       z: state.z
     });

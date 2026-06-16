@@ -23,6 +23,7 @@ describe("calculateRealGasStandardBlend", () => {
         oxygen: 70,
         topoff: 70
       },
+      stageTemperatureTouched: {},
       topGasId: "air"
     };
 
@@ -54,6 +55,7 @@ describe("calculateRealGasStandardBlend", () => {
         oxygen: 90,
         topoff: 90
       },
+      stageTemperatureTouched: {},
       topGasId: "air"
     };
 
@@ -80,6 +82,7 @@ describe("calculateRealGasStandardBlend", () => {
         oxygen: 70,
         topoff: 100
       },
+      stageTemperatureTouched: {},
       topGasId: "air"
     };
     const hotOxygenInputs: StandardBlendInput = {
@@ -96,10 +99,11 @@ describe("calculateRealGasStandardBlend", () => {
     expect(coolOxygen.success).toBe(true);
     expect(hotOxygen.success).toBe(true);
     expect(coolOxygen.steps[0]?.stopPressurePsi).toBeLessThan(hotOxygen.steps[0]?.stopPressurePsi ?? 0);
+    expect(coolOxygen.steps[0]?.pressureChangePsi).toBeLessThan(hotOxygen.steps[0]?.pressureChangePsi ?? 0);
     expect(coolOxygen.steps[0]?.temperatureF).toBe(70);
     expect(coolOxygen.steps[1]?.temperatureF).toBe(100);
     expect(coolOxygen.steps[1]?.stopPressurePsi).toBeCloseTo(hotOxygen.steps[1]?.stopPressurePsi ?? 0, 6);
-    expect(coolOxygen.steps[1]?.pressureChangePsi).toBeGreaterThan(hotOxygen.steps[1]?.pressureChangePsi ?? 0);
+    expect(coolOxygen.steps[1]?.pressureChangePsi).toBeCloseTo(hotOxygen.steps[1]?.pressureChangePsi ?? 0, 6);
   });
 
   test("falls back to legacy fill temperature when stage temperatures are absent", () => {
@@ -126,6 +130,32 @@ describe("calculateRealGasStandardBlend", () => {
     expect(corrected.finalHotPressurePsi).toBeGreaterThan(3000);
   });
 
+  test("defaults missing new-schema stage temperatures to start temperature", () => {
+    const inputs: StandardBlendInput = {
+      startPressure: 0,
+      targetPressure: 3000,
+      targetO2: 32,
+      targetHe: 0,
+      startO2: 21,
+      startHe: 0,
+      tankSizeCuFt: 80,
+      tankRatedPressurePsi: 3000,
+      startTemperatureF: 70,
+      fillTemperatureF: 90,
+      settledTemperatureF: 70,
+      stageTemperaturesF: {},
+      stageTemperatureTouched: {},
+      topGasId: "air"
+    };
+
+    const corrected = calculateRealGasStandardBlend({ pressureUnit: "psi" }, inputs, air);
+
+    expect(corrected.success).toBe(true);
+    expect(corrected.steps[0]?.temperatureF).toBe(70);
+    expect(corrected.steps[1]?.temperatureF).toBe(70);
+    expect(corrected.finalHotPressurePsi).toBeCloseTo(3000, 1);
+  });
+
   test("allows a GERG-only top-off when displayed start and target pressures match", () => {
     const inputs: StandardBlendInput = {
       startPressure: 3000,
@@ -141,6 +171,7 @@ describe("calculateRealGasStandardBlend", () => {
       stageTemperaturesF: {
         topoff: 90
       },
+      stageTemperatureTouched: {},
       topGasId: "air"
     };
 
@@ -153,6 +184,34 @@ describe("calculateRealGasStandardBlend", () => {
     expect(corrected.steps).toHaveLength(1);
     expect(corrected.steps[0]?.kind).toBe("topoff");
     expect(corrected.finalHotPressurePsi).toBeGreaterThan(3000);
+  });
+
+  test("measures GERG-only stage pressure deltas at the stage temperature", () => {
+    const inputs: StandardBlendInput = {
+      startPressure: 3000,
+      targetPressure: 3000,
+      targetO2: 21,
+      targetHe: 0,
+      startO2: 21,
+      startHe: 0,
+      tankSizeCuFt: 80,
+      tankRatedPressurePsi: 3000,
+      startTemperatureF: 90,
+      settledTemperatureF: 70,
+      stageTemperaturesF: {
+        topoff: 70
+      },
+      stageTemperatureTouched: {},
+      topGasId: "air"
+    };
+
+    const corrected = calculateRealGasStandardBlend({ pressureUnit: "psi" }, inputs, air);
+
+    expect(corrected.success).toBe(true);
+    expect(corrected.steps).toHaveLength(1);
+    expect(corrected.steps[0]?.kind).toBe("topoff");
+    expect(corrected.steps[0]?.stopPressurePsi).toBeCloseTo(3000, 1);
+    expect(corrected.steps[0]?.pressureChangePsi).toBeGreaterThan(50);
   });
 
   test("rejects direct real-gas correction when the target needs bleed-down first", () => {
@@ -170,6 +229,7 @@ describe("calculateRealGasStandardBlend", () => {
       stageTemperaturesF: {
         topoff: 70
       },
+      stageTemperatureTouched: {},
       topGasId: "air"
     };
 

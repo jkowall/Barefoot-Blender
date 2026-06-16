@@ -45,16 +45,27 @@ const IDEAL_SAME_PRESSURE_ERROR = "Target pressure matches start pressure.";
 const REAL_GAS_ONLY_WARNING = "Ideal partial-pressure plan has no pressure change; showing GERG-2008 corrected stop plan.";
 const stageTemperatureOrder: StandardBlendStageKind[] = ["helium", "oxygen", "topoff"];
 
-const realGasResultToBlendResult = (realGasResult: RealGasBlendResult): BlendResult => ({
-  success: true,
-  steps: realGasResult.steps.map((step) => ({
-    kind: step.kind,
-    amount: Math.max(0, step.pressureChangePsi),
-    gasName: step.gasName
-  })),
-  warnings: [REAL_GAS_ONLY_WARNING],
-  errors: []
-});
+export const realGasResultToBlendResult = (realGasResult: RealGasBlendResult): BlendResult => {
+  if (!realGasResult.success) {
+    return {
+      success: false,
+      steps: [],
+      warnings: realGasResult.warnings,
+      errors: realGasResult.errors.length > 0 ? realGasResult.errors : ["GERG-2008 correction failed."]
+    };
+  }
+
+  return {
+    success: true,
+    steps: realGasResult.steps.map((step) => ({
+      kind: step.kind,
+      amount: Math.max(0, step.pressureChangePsi),
+      gasName: step.gasName
+    })),
+    warnings: [REAL_GAS_ONLY_WARNING],
+    errors: []
+  };
+};
 
 type Props = {
   settings: SettingsSnapshot;
@@ -73,6 +84,20 @@ const resolveStageTemperatures = (
   topoff: stageTemperaturesF?.topoff ?? startTemperatureF
 });
 
+const resolveInputStageTemperatures = (
+  input: StandardBlendInput,
+  startTemperatureF: number
+): StandardBlendStageTemperaturesF => {
+  if (input.stageTemperaturesF === undefined && input.fillTemperatureF !== undefined) {
+    return {
+      helium: input.fillTemperatureF,
+      oxygen: input.fillTemperatureF,
+      topoff: input.fillTemperatureF
+    };
+  }
+  return resolveStageTemperatures(input.stageTemperaturesF, startTemperatureF);
+};
+
 const stepLabel = (kind: StandardBlendStageKind): string => {
   if (kind === "topoff") {
     return "Top-off";
@@ -87,6 +112,17 @@ const touchedFromStageTemperatures = (
   oxygen: stageTemperaturesF?.oxygen !== undefined,
   topoff: stageTemperaturesF?.topoff !== undefined
 });
+
+export const resolveStageTemperatureDisplayF = (
+  kind: StandardBlendStageKind,
+  stageTemperaturesF: StandardBlendStageTemperaturesF | undefined,
+  startTemperatureF: number,
+  legacyFillTemperatureF: number | undefined
+): number => (
+  stageTemperaturesF?.[kind] ??
+  (stageTemperaturesF === undefined ? legacyFillTemperatureF : undefined) ??
+  startTemperatureF
+);
 
 const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
   const standardBlend = useSessionStore((state: SessionState) => state.standardBlend);
@@ -233,7 +269,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       tankRatedPressurePsi,
       startTemperatureF: resolvedStartTemperatureF,
       settledTemperatureF: input.settledTemperatureF ?? DEFAULT_SETTLED_TEMPERATURE_F,
-      stageTemperaturesF: resolveStageTemperatures(input.stageTemperaturesF, resolvedStartTemperatureF)
+      stageTemperaturesF: resolveInputStageTemperatures(input, resolvedStartTemperatureF)
     };
   };
 
@@ -249,7 +285,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       selectedTopGas
     );
     setRealGasResult(correctedResult);
-    if (resultSource === "realGas" && correctedResult.success) {
+    if (resultSource === "realGas") {
       setResult(realGasResultToBlendResult(correctedResult));
     }
   };
@@ -298,7 +334,10 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
   };
 
   const stageTemperatureDisplay = (kind: StandardBlendStageKind): number =>
-    toDisplayTemperature(stageTemperaturesF[kind] ?? startTemperatureF, settings.temperatureUnit);
+    toDisplayTemperature(
+      resolveStageTemperatureDisplayF(kind, standardBlend.stageTemperaturesF, startTemperatureF, standardBlend.fillTemperatureF),
+      settings.temperatureUnit
+    );
 
   const selectTempOnEnter = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === "Enter") {
@@ -381,6 +420,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
         fillTemperatureF: resolvedInput.stageTemperaturesF?.topoff ?? startTemperatureF,
         settledTemperatureF,
         stageTemperaturesF: resolvedInput.stageTemperaturesF,
+        stageTemperatureTouched,
         estimatedCost: estimate.totalCost,
         steps: effectiveResult.steps.map((step) => ({
           kind: step.kind,
@@ -412,7 +452,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       fillTemperatureF: entry.fillTemperatureF ?? standardBlend.fillTemperatureF,
       settledTemperatureF: entry.settledTemperatureF ?? standardBlend.settledTemperatureF,
       stageTemperaturesF: entry.stageTemperaturesF,
-      stageTemperatureTouched: touchedFromStageTemperatures(entry.stageTemperaturesF),
+      stageTemperatureTouched: entry.stageTemperatureTouched ?? touchedFromStageTemperatures(entry.stageTemperaturesF),
       topGasId: entry.topGasId
     });
     setResult(null);

@@ -91,6 +91,7 @@ export type StandardBlendHistoryEntry = {
   fillTemperatureF?: number;
   settledTemperatureF?: number;
   stageTemperaturesF?: StandardBlendStageTemperaturesF;
+  stageTemperatureTouched?: StandardBlendStageTemperatureTouched;
   estimatedCost?: number;
   steps: {
     kind: "bleed" | "helium" | "oxygen" | "topoff";
