@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { realGasResultToBlendResult, resolveStageTemperatureDisplayF } from "./StandardBlendTab";
+import {
+  realGasResultToBlendResult,
+  resolveInputStageTemperatures,
+  resolveStageTemperatureDisplayF
+} from "./StandardBlendTab";
 import type { RealGasBlendResult } from "../utils/realGasBlend";
 
 describe("realGasResultToBlendResult", () => {
@@ -34,9 +38,30 @@ describe("realGasResultToBlendResult", () => {
 });
 
 describe("resolveStageTemperatureDisplayF", () => {
-  test("shows legacy fill temperature only when stage temperatures are absent", () => {
-    expect(resolveStageTemperatureDisplayF("topoff", undefined, 70, 90)).toBe(90);
-    expect(resolveStageTemperatureDisplayF("topoff", {}, 70, 90)).toBe(70);
-    expect(resolveStageTemperatureDisplayF("topoff", { topoff: 100 }, 70, 90)).toBe(100);
+  test("shows legacy fill temperature only when the touched map is absent", () => {
+    expect(resolveStageTemperatureDisplayF("topoff", undefined, undefined, 70, 90)).toBe(90);
+    expect(resolveStageTemperatureDisplayF("topoff", {}, undefined, 70, 90)).toBe(90);
+    expect(resolveStageTemperatureDisplayF("topoff", {}, {}, 70, 90)).toBe(70);
+    expect(resolveStageTemperatureDisplayF("topoff", { topoff: 100 }, {}, 70, 90)).toBe(100);
+  });
+});
+
+describe("resolveInputStageTemperatures", () => {
+  test("seeds missing legacy stage temperatures from fill temperature", () => {
+    expect(resolveInputStageTemperatures({ topGasId: "air", fillTemperatureF: 90, stageTemperaturesF: {} }, 70)).toEqual({
+      helium: 90,
+      oxygen: 90,
+      topoff: 90
+    });
+    expect(resolveInputStageTemperatures({ topGasId: "air", fillTemperatureF: 90, stageTemperaturesF: { oxygen: 100 } }, 70)).toEqual({
+      helium: 90,
+      oxygen: 100,
+      topoff: 90
+    });
+    expect(resolveInputStageTemperatures({ topGasId: "air", fillTemperatureF: 90, stageTemperaturesF: {}, stageTemperatureTouched: {} }, 70)).toEqual({
+      helium: 70,
+      oxygen: 70,
+      topoff: 70
+    });
   });
 });

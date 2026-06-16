@@ -84,15 +84,15 @@ const resolveStageTemperatures = (
   topoff: stageTemperaturesF?.topoff ?? startTemperatureF
 });
 
-const resolveInputStageTemperatures = (
+export const resolveInputStageTemperatures = (
   input: StandardBlendInput,
   startTemperatureF: number
 ): StandardBlendStageTemperaturesF => {
-  if (input.stageTemperaturesF === undefined && input.fillTemperatureF !== undefined) {
+  if (input.stageTemperatureTouched === undefined && input.fillTemperatureF !== undefined) {
     return {
-      helium: input.fillTemperatureF,
-      oxygen: input.fillTemperatureF,
-      topoff: input.fillTemperatureF
+      helium: input.stageTemperaturesF?.helium ?? input.fillTemperatureF,
+      oxygen: input.stageTemperaturesF?.oxygen ?? input.fillTemperatureF,
+      topoff: input.stageTemperaturesF?.topoff ?? input.fillTemperatureF
     };
   }
   return resolveStageTemperatures(input.stageTemperaturesF, startTemperatureF);
@@ -116,11 +116,12 @@ const touchedFromStageTemperatures = (
 export const resolveStageTemperatureDisplayF = (
   kind: StandardBlendStageKind,
   stageTemperaturesF: StandardBlendStageTemperaturesF | undefined,
+  stageTemperatureTouched: StandardBlendStageTemperatureTouched | undefined,
   startTemperatureF: number,
   legacyFillTemperatureF: number | undefined
 ): number => (
   stageTemperaturesF?.[kind] ??
-  (stageTemperaturesF === undefined ? legacyFillTemperatureF : undefined) ??
+  (stageTemperatureTouched === undefined ? legacyFillTemperatureF : undefined) ??
   startTemperatureF
 );
 
@@ -140,7 +141,6 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
   const tankRatedPressurePsi = standardBlend.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000;
   const startTemperatureF = standardBlend.startTemperatureF ?? DEFAULT_START_TEMPERATURE_F;
   const settledTemperatureF = standardBlend.settledTemperatureF ?? DEFAULT_SETTLED_TEMPERATURE_F;
-  const stageTemperaturesF = standardBlend.stageTemperaturesF ?? {};
   const stageTemperatureTouched = standardBlend.stageTemperatureTouched ?? {};
   const temperatureLabel = temperatureUnitLabel(settings.temperatureUnit);
 
@@ -303,7 +303,9 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     value: number | undefined
   ): void => {
     const nextValue = value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit);
-    const nextStageTemperatures: StandardBlendStageTemperaturesF = { ...stageTemperaturesF };
+    const nextStageTemperatures: StandardBlendStageTemperaturesF = {
+      ...resolveInputStageTemperatures(standardBlend, startTemperatureF)
+    };
     const nextTouched: StandardBlendStageTemperatureTouched = { ...stageTemperatureTouched };
     const currentIndex = stageTemperatureOrder.indexOf(kind);
 
@@ -335,7 +337,13 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
 
   const stageTemperatureDisplay = (kind: StandardBlendStageKind): number =>
     toDisplayTemperature(
-      resolveStageTemperatureDisplayF(kind, standardBlend.stageTemperaturesF, startTemperatureF, standardBlend.fillTemperatureF),
+      resolveStageTemperatureDisplayF(
+        kind,
+        standardBlend.stageTemperaturesF,
+        standardBlend.stageTemperatureTouched,
+        startTemperatureF,
+        standardBlend.fillTemperatureF
+      ),
       settings.temperatureUnit
     );
 

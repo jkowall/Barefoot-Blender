@@ -120,8 +120,8 @@ const stepTemperatureF = (
   kind: RealGasBlendStep["kind"],
   startTemperatureF: number
 ): number => {
-  if (inputs.stageTemperaturesF === undefined) {
-    return inputs.fillTemperatureF ?? startTemperatureF;
+  if (inputs.stageTemperatureTouched === undefined) {
+    return inputs.stageTemperaturesF?.[kind] ?? inputs.fillTemperatureF ?? startTemperatureF;
   }
   return inputs.stageTemperaturesF?.[kind] ?? startTemperatureF;
 };

@@ -130,6 +130,31 @@ describe("calculateRealGasStandardBlend", () => {
     expect(corrected.finalHotPressurePsi).toBeGreaterThan(3000);
   });
 
+  test("falls back to legacy fill temperature when the touched map is absent", () => {
+    const inputs: StandardBlendInput = {
+      startPressure: 0,
+      targetPressure: 3000,
+      targetO2: 32,
+      targetHe: 0,
+      startO2: 21,
+      startHe: 0,
+      tankSizeCuFt: 80,
+      tankRatedPressurePsi: 3000,
+      startTemperatureF: 70,
+      fillTemperatureF: 90,
+      settledTemperatureF: 70,
+      stageTemperaturesF: {},
+      topGasId: "air"
+    };
+
+    const corrected = calculateRealGasStandardBlend({ pressureUnit: "psi" }, inputs, air);
+
+    expect(corrected.success).toBe(true);
+    expect(corrected.steps[0]?.temperatureF).toBe(90);
+    expect(corrected.steps[1]?.temperatureF).toBe(90);
+    expect(corrected.finalHotPressurePsi).toBeGreaterThan(3000);
+  });
+
   test("defaults missing new-schema stage temperatures to start temperature", () => {
     const inputs: StandardBlendInput = {
       startPressure: 0,
