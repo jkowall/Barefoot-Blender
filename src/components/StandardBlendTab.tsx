@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import {
   useSessionStore,
   type SessionState,
   type StandardBlendInput,
-  type StandardBlendHistoryEntry
+  type StandardBlendHistoryEntry,
+  type StandardBlendStageKind,
+  type StandardBlendStageTemperatureTouched,
+  type StandardBlendStageTemperaturesF
 } from "../state/session";
 import {
   calculateStandardBlend,
@@ -20,7 +23,6 @@ import {
 import { formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
 import { calculateRealGasStandardBlend, type RealGasBlendResult } from "../utils/realGasBlend";
 import {
-  DEFAULT_FILL_TEMPERATURE_F,
   DEFAULT_SETTLED_TEMPERATURE_F,
   DEFAULT_START_TEMPERATURE_F,
   fromDisplayTemperature,
@@ -41,6 +43,7 @@ const SENSITIVITY_STEP_PSI = 10;
 const SENSITIVITY_METRIC_STEP_PSI = 50;
 const IDEAL_SAME_PRESSURE_ERROR = "Target pressure matches start pressure.";
 const REAL_GAS_ONLY_WARNING = "Ideal partial-pressure plan has no pressure change; showing GERG-2008 corrected stop plan.";
+const stageTemperatureOrder: StandardBlendStageKind[] = ["helium", "oxygen", "topoff"];
 
 const realGasResultToBlendResult = (realGasResult: RealGasBlendResult): BlendResult => ({
   success: true,
@@ -61,6 +64,30 @@ type Props = {
 
 const toFraction = (percent: number | undefined, fallback: number): number => (percent ?? fallback) / 100;
 
+const resolveStageTemperatures = (
+  stageTemperaturesF: StandardBlendStageTemperaturesF | undefined,
+  startTemperatureF: number
+): StandardBlendStageTemperaturesF => ({
+  helium: stageTemperaturesF?.helium ?? startTemperatureF,
+  oxygen: stageTemperaturesF?.oxygen ?? startTemperatureF,
+  topoff: stageTemperaturesF?.topoff ?? startTemperatureF
+});
+
+const stepLabel = (kind: StandardBlendStageKind): string => {
+  if (kind === "topoff") {
+    return "Top-off";
+  }
+  return kind === "oxygen" ? "Oxygen" : "Helium";
+};
+
+const touchedFromStageTemperatures = (
+  stageTemperaturesF: StandardBlendStageTemperaturesF | undefined
+): StandardBlendStageTemperatureTouched => ({
+  helium: stageTemperaturesF?.helium !== undefined,
+  oxygen: stageTemperaturesF?.oxygen !== undefined,
+  topoff: stageTemperaturesF?.topoff !== undefined
+});
+
 const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
   const standardBlend = useSessionStore((state: SessionState) => state.standardBlend);
   const standardBlendHistory = useSessionStore((state: SessionState) => state.standardBlendHistory);
@@ -76,8 +103,9 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
   const tankSizeCuFt = standardBlend.tankSizeCuFt ?? settings.defaultTankSizeCuFt ?? 80;
   const tankRatedPressurePsi = standardBlend.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000;
   const startTemperatureF = standardBlend.startTemperatureF ?? DEFAULT_START_TEMPERATURE_F;
-  const fillTemperatureF = standardBlend.fillTemperatureF ?? DEFAULT_FILL_TEMPERATURE_F;
   const settledTemperatureF = standardBlend.settledTemperatureF ?? DEFAULT_SETTLED_TEMPERATURE_F;
+  const stageTemperaturesF = standardBlend.stageTemperaturesF ?? {};
+  const stageTemperatureTouched = standardBlend.stageTemperatureTouched ?? {};
   const temperatureLabel = temperatureUnitLabel(settings.temperatureUnit);
 
   const selectedTopGas = useMemo(() => {
@@ -191,11 +219,92 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     setStandardBlend({ ...standardBlend, [key]: value });
   };
 
+  const buildResolvedInput = (input: StandardBlendInput): StandardBlendInput => {
+    const resolvedStartTemperatureF = input.startTemperatureF ?? DEFAULT_START_TEMPERATURE_F;
+    return {
+      ...input,
+      startPressure: input.startPressure ?? 0,
+      targetPressure: input.targetPressure ?? 3000,
+      targetO2: input.targetO2 ?? 32,
+      startO2: input.startO2 ?? 21,
+      startHe: input.startHe ?? 0,
+      targetHe: input.targetHe ?? 0,
+      tankSizeCuFt,
+      tankRatedPressurePsi,
+      startTemperatureF: resolvedStartTemperatureF,
+      settledTemperatureF: input.settledTemperatureF ?? DEFAULT_SETTLED_TEMPERATURE_F,
+      stageTemperaturesF: resolveStageTemperatures(input.stageTemperaturesF, resolvedStartTemperatureF)
+    };
+  };
+
+  const setStandardBlendAndRefreshRealGas = (nextStandardBlend: StandardBlendInput): void => {
+    setStandardBlend(nextStandardBlend);
+    if (!result || !selectedTopGas || settings.gasModel !== "gerg2008") {
+      return;
+    }
+
+    const correctedResult = calculateRealGasStandardBlend(
+      { pressureUnit: settings.pressureUnit },
+      buildResolvedInput(nextStandardBlend),
+      selectedTopGas
+    );
+    setRealGasResult(correctedResult);
+    if (resultSource === "realGas" && correctedResult.success) {
+      setResult(realGasResultToBlendResult(correctedResult));
+    }
+  };
+
   const updateTemperatureField = (
-    key: "startTemperatureF" | "fillTemperatureF" | "settledTemperatureF",
+    key: "startTemperatureF" | "settledTemperatureF",
     value: number | undefined
   ): void => {
-    updateField(key, value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit));
+    const nextValue = value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit);
+    setStandardBlendAndRefreshRealGas({ ...standardBlend, [key]: nextValue });
+  };
+
+  const updateStageTemperatureField = (
+    kind: StandardBlendStageKind,
+    value: number | undefined
+  ): void => {
+    const nextValue = value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit);
+    const nextStageTemperatures: StandardBlendStageTemperaturesF = { ...stageTemperaturesF };
+    const nextTouched: StandardBlendStageTemperatureTouched = { ...stageTemperatureTouched };
+    const currentIndex = stageTemperatureOrder.indexOf(kind);
+
+    if (nextValue === undefined) {
+      delete nextStageTemperatures[kind];
+      delete nextTouched[kind];
+    } else {
+      nextStageTemperatures[kind] = nextValue;
+      nextTouched[kind] = true;
+    }
+
+    for (const laterKind of stageTemperatureOrder.slice(currentIndex + 1)) {
+      if (stageTemperatureTouched[laterKind]) {
+        continue;
+      }
+      if (nextValue === undefined) {
+        delete nextStageTemperatures[laterKind];
+      } else {
+        nextStageTemperatures[laterKind] = nextValue;
+      }
+    }
+
+    setStandardBlendAndRefreshRealGas({
+      ...standardBlend,
+      stageTemperaturesF: nextStageTemperatures,
+      stageTemperatureTouched: nextTouched
+    });
+  };
+
+  const stageTemperatureDisplay = (kind: StandardBlendStageKind): number =>
+    toDisplayTemperature(stageTemperaturesF[kind] ?? startTemperatureF, settings.temperatureUnit);
+
+  const selectTempOnEnter = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.currentTarget.select();
+    }
   };
 
   const onCalculate = (): void => {
@@ -207,20 +316,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       return;
     }
 
-    const resolvedInput: StandardBlendInput = {
-      ...standardBlend,
-      startPressure: standardBlend.startPressure ?? 0,
-      targetPressure: standardBlend.targetPressure ?? 3000,
-      targetO2: standardBlend.targetO2 ?? 32,
-      startO2: standardBlend.startO2 ?? 21,
-      startHe: standardBlend.startHe ?? 0,
-      targetHe: standardBlend.targetHe ?? 0,
-      tankSizeCuFt,
-      tankRatedPressurePsi,
-      startTemperatureF,
-      fillTemperatureF,
-      settledTemperatureF
-    };
+    const resolvedInput = buildResolvedInput(standardBlend);
 
     const blendResult = calculateStandardBlend(
       { pressureUnit: settings.pressureUnit },
@@ -282,8 +378,9 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
         tankSizeCuFt,
         tankRatedPressurePsi,
         startTemperatureF,
-        fillTemperatureF,
+        fillTemperatureF: resolvedInput.stageTemperaturesF?.topoff ?? startTemperatureF,
         settledTemperatureF,
+        stageTemperaturesF: resolvedInput.stageTemperaturesF,
         estimatedCost: estimate.totalCost,
         steps: effectiveResult.steps.map((step) => ({
           kind: step.kind,
@@ -314,6 +411,8 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       startTemperatureF: entry.startTemperatureF ?? standardBlend.startTemperatureF,
       fillTemperatureF: entry.fillTemperatureF ?? standardBlend.fillTemperatureF,
       settledTemperatureF: entry.settledTemperatureF ?? standardBlend.settledTemperatureF,
+      stageTemperaturesF: entry.stageTemperaturesF,
+      stageTemperatureTouched: touchedFromStageTemperatures(entry.stageTemperaturesF),
       topGasId: entry.topGasId
     });
     setResult(null);
@@ -470,6 +569,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     Math.abs(toDisplayPressure(SENSITIVITY_STEP_PSI, settings.pressureUnit)),
     settings.pressureUnit === "psi" ? 5 : 0.25
   );
+  const showBaseBlendPlan = settings.gasModel !== "gerg2008" || realGasResult?.success !== true;
 
   const trainingMath = useMemo(() => {
     if (!trainingModeEnabled || !result?.success || !selectedTopGas || !baseVolumes) {
@@ -615,32 +715,6 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
         />
       </AccordionItem>
 
-      {settings.gasModel === "gerg2008" && (
-        <AccordionItem title="Real Gas Conditions" defaultOpen={false}>
-          <div className="grid two">
-            <NumberInput
-              label={`Start Temp (${temperatureLabel})`}
-              step={1}
-              value={toDisplayTemperature(startTemperatureF, settings.temperatureUnit)}
-              onChange={(val) => updateTemperatureField("startTemperatureF", val)}
-            />
-            <NumberInput
-              label={`Fill Temp (${temperatureLabel})`}
-              step={1}
-              value={toDisplayTemperature(fillTemperatureF, settings.temperatureUnit)}
-              onChange={(val) => updateTemperatureField("fillTemperatureF", val)}
-            />
-            <NumberInput
-              label={`Settled Temp (${temperatureLabel})`}
-              step={1}
-              value={toDisplayTemperature(settledTemperatureF, settings.temperatureUnit)}
-              onChange={(val) => updateTemperatureField("settledTemperatureF", val)}
-            />
-          </div>
-          <div className="table-note">Corrected stop pressures use the fill temperature; the target pressure is the settled cylinder pressure.</div>
-        </AccordionItem>
-      )}
-
       <AccordionItem title="Target Blend" defaultOpen={true}>
         <div className="grid two">
           <NumberInput
@@ -700,7 +774,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
           {result.success && result.steps.length === 0 && (
             <div className="error">No gas additions required.</div>
           )}
-          {blendPlanItems && <ol className="result-list">{blendPlanItems}</ol>}
+          {showBaseBlendPlan && blendPlanItems && <ol className="result-list">{blendPlanItems}</ol>}
           {result.warnings.map((warning) => (
             <div key={warning} className="warning">
               {warning}
@@ -817,7 +891,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
               )}
               {settings.gasModel === "gerg2008" && (
                 <div className="training-math-note">
-                  GERG-2008 mode keeps this ideal partial-pressure plan as the working fill order, then estimates corrected stop pressures from absolute pressure, temperature, cylinder volume, component moles, and mixture compressibility. The detailed GERG solver stays high level here by design.
+                  GERG-2008 mode keeps this ideal partial-pressure plan as the working fill order, then estimates corrected stop pressures from absolute pressure, measured stage temperatures, cylinder volume, component moles, and mixture compressibility. The detailed GERG solver stays high level here by design.
                 </div>
               )}
             </TrainingMathPanel>
@@ -825,6 +899,25 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
           {settings.gasModel === "gerg2008" && realGasResult && (
             <div className="cost-breakdown">
               <div className="section-title">GERG-2008 Corrected Stops</div>
+              <div className="real-gas-temperature-grid">
+                <NumberInput
+                  label={`Initial Temp (${temperatureLabel})`}
+                  step={1}
+                  value={toDisplayTemperature(startTemperatureF, settings.temperatureUnit)}
+                  onChange={(val) => updateTemperatureField("startTemperatureF", val)}
+                  onKeyDown={selectTempOnEnter}
+                />
+                <NumberInput
+                  label={`Settled Temp (${temperatureLabel})`}
+                  step={1}
+                  value={toDisplayTemperature(settledTemperatureF, settings.temperatureUnit)}
+                  onChange={(val) => updateTemperatureField("settledTemperatureF", val)}
+                  onKeyDown={selectTempOnEnter}
+                />
+              </div>
+              <div className="table-note">
+                Stage temps default to the initial temperature. Enter a measured cylinder temperature on a stop row to update that stop and any following unedited stops.
+              </div>
               {!realGasResult.success && realGasResult.errors.map((error) => (
                 <div key={error} className="warning">
                   {error}
@@ -839,17 +932,29 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                     {realGasResult.steps.map((step, index) => {
                       const descriptor = step.kind === "topoff" ? "Top-off with" : "Add";
                       return (
-                        <li key={`${step.kind}-${step.stopPressurePsi.toFixed(4)}`}>
-                          {index + 1}. {descriptor} {step.gasName}: {formatPressure(step.stopPressurePsi, settings.pressureUnit, 1)}
-                          <span className="result-step-total">
-                            {" "}({formatSignedPressure(step.pressureChangePsi, settings.pressureUnit, 1)}, Z {formatNumber(step.z, 4)})
-                          </span>
+                        <li className="real-gas-step" key={`${step.kind}-${step.gasName}`}>
+                          <div className="real-gas-step-main">
+                            <span>
+                              {index + 1}. {descriptor} {step.gasName}: <strong>{formatPressure(step.stopPressurePsi, settings.pressureUnit, 1)}</strong>
+                            </span>
+                            <NumberInput
+                              className="stage-temperature-field"
+                              label={`${stepLabel(step.kind)} Temp (${temperatureLabel})`}
+                              step={1}
+                              value={stageTemperatureDisplay(step.kind)}
+                              onChange={(val) => updateStageTemperatureField(step.kind, val)}
+                              onKeyDown={selectTempOnEnter}
+                            />
+                          </div>
+                          <div className="real-gas-step-detail">
+                            {formatSignedPressure(step.pressureChangePsi, settings.pressureUnit, 1)}, Z {formatNumber(step.z, 4)}
+                          </div>
                         </li>
                       );
                     })}
                   </ol>
                   <div className="table-note">
-                    Start at fill temp: {formatPressure(realGasResult.startHotPressurePsi, settings.pressureUnit, 1)}. Final hot stop: {formatPressure(realGasResult.finalHotPressurePsi, settings.pressureUnit, 1)} for settled target {formatPressure(realGasResult.targetSettledPressurePsi, settings.pressureUnit, 1)}.
+                    Initial reference: {formatPressure(realGasResult.startHotPressurePsi, settings.pressureUnit, 1)}. Final stage stop: {formatPressure(realGasResult.finalHotPressurePsi, settings.pressureUnit, 1)} for settled target {formatPressure(realGasResult.targetSettledPressurePsi, settings.pressureUnit, 1)}.
                   </div>
                 </>
               )}

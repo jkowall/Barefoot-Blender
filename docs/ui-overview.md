@@ -27,7 +27,7 @@ Order of content:
 2. **Tank Context** card – Per-fill tank volume, rated pressure, derived PSI/cu ft, and free gas liters.
 3. **Target Blend** card – Desired mix and pressure inputs.
 4. **Top-Off Gas** card – Selector for Air/O₂/He plus custom banked gases; includes the `Calculate` button.
-5. **Blend Plan** card – Appears after calculation. Shows ordered steps, bleed instructions, warnings, errors, and fill cost by PSI, cu ft, and free gas liters. When `Training Mode` is on, it shows the hand-fill worksheet: pressure-percent points, helium first, oxygen add, top-off, and the pressure check.
+5. **Blend Plan** card – Appears after calculation. Shows ordered steps, bleed instructions, warnings, errors, and fill cost by PSI, cu ft, and free gas liters. When `GERG-2008` is selected, the corrected stops become the primary visible fill plan and include initial, settled, and per-stage temperature inputs for measured cylinder temperatures. Stage temperatures default to the initial temperature and propagate to following unedited stops when changed. When `Training Mode` is on, it shows the hand-fill worksheet: pressure-percent points, helium first, oxygen add, top-off, and the pressure check.
 
 ### Top-Off What-If
 

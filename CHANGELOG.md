@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Measured GERG Stage Temperatures**: Moved GERG-2008 temperature correction into the Blend Plan with inline initial, settled, and per-stage temperature inputs. Stage temperatures default to the initial temperature and propagate to following unedited stops for quick measured-fill refinement.
+
 ## [0.12.4] - 2026-06-15
 
 ### Fixed

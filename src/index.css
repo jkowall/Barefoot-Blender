@@ -493,6 +493,60 @@ button {
   color: #94a3b8;
 }
 
+.real-gas-temperature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.real-gas-step {
+  display: grid;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.real-gas-step + .real-gas-step {
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.real-gas-step-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(136px, 168px);
+  gap: 10px;
+  align-items: end;
+}
+
+.real-gas-step-main > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.real-gas-step-detail {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.stage-temperature-field {
+  gap: 4px;
+}
+
+.stage-temperature-field label {
+  font-size: 0.72rem;
+}
+
+.stage-temperature-field input {
+  padding: 7px 8px;
+  border-radius: 8px;
+}
+
+@media (max-width: 560px) {
+  .real-gas-step-main {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+}
+
 .reverse-block {
   padding: 12px;
   border-radius: 12px;

@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type KeyboardEventHandler } from "react";
 
 type Props = {
   label: string;
@@ -9,6 +9,7 @@ type Props = {
   step?: number;
   disabled?: boolean;
   onBlur?: () => void;
+  onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
   placeholder?: string;
   className?: string;
 };
@@ -22,6 +23,7 @@ export const NumberInput = ({
   step,
   disabled,
   onBlur,
+  onKeyDown,
   placeholder,
   className
 }: Props): JSX.Element => {
@@ -49,6 +51,7 @@ export const NumberInput = ({
           });
         }}
         onBlur={onBlur}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
       />
     </div>

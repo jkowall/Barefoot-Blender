@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+export type StandardBlendStageKind = "helium" | "oxygen" | "topoff";
+export type StandardBlendStageTemperaturesF = Partial<Record<StandardBlendStageKind, number>>;
+export type StandardBlendStageTemperatureTouched = Partial<Record<StandardBlendStageKind, boolean>>;
+
 export type StandardBlendInput = {
   startO2?: number;
   startHe?: number;
@@ -13,6 +17,8 @@ export type StandardBlendInput = {
   startTemperatureF?: number;
   fillTemperatureF?: number;
   settledTemperatureF?: number;
+  stageTemperaturesF?: StandardBlendStageTemperaturesF;
+  stageTemperatureTouched?: StandardBlendStageTemperatureTouched;
   topGasId: string;
 };
 
@@ -84,6 +90,7 @@ export type StandardBlendHistoryEntry = {
   startTemperatureF?: number;
   fillTemperatureF?: number;
   settledTemperatureF?: number;
+  stageTemperaturesF?: StandardBlendStageTemperaturesF;
   estimatedCost?: number;
   steps: {
     kind: "bleed" | "helium" | "oxygen" | "topoff";
@@ -126,6 +133,8 @@ const defaultValues = {
     startTemperatureF: 70,
     fillTemperatureF: 90,
     settledTemperatureF: 70,
+    stageTemperaturesF: {},
+    stageTemperatureTouched: {},
     topGasId: "air"
   },
   multiGas: {
