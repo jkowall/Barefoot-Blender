@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- **GERG Stage Temperature Corrections**: Fixed measured stage pressure deltas so gas additions are calculated against the before-add cylinder state at the same measured stage temperature, and cleared stale GERG-derived primary results when inline temperature recalculation fails.
+- **GERG Stage Temperature Corrections**: Fixed measured stage pressure deltas so gas additions are calculated against the before-add cylinder state at the same measured stage temperature, cleared stale GERG-derived primary results when inline temperature recalculation fails, preserved legacy fill temperatures when saved blends or history entries are upgraded, kept untouched earlier stage temperatures inherited from Initial Temp, and aligned the Initial reference readout with the first before-add stage state.
 
 ## [0.12.5] - 2026-06-16
 
