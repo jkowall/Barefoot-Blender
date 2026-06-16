@@ -108,6 +108,15 @@ export const stageTemperaturesForEdit = (
   return { ...(input.stageTemperaturesF ?? {}) };
 };
 
+export const resolveInputTankContext = (
+  input: Pick<StandardBlendInput, "tankSizeCuFt" | "tankRatedPressurePsi">,
+  defaultTankSizeCuFt: number | undefined,
+  defaultTankRatedPressurePsi: number | undefined
+): Pick<StandardBlendInput, "tankSizeCuFt" | "tankRatedPressurePsi"> => ({
+  tankSizeCuFt: input.tankSizeCuFt ?? defaultTankSizeCuFt ?? 80,
+  tankRatedPressurePsi: input.tankRatedPressurePsi ?? defaultTankRatedPressurePsi ?? 3000
+});
+
 const stepLabel = (kind: StandardBlendStageKind): string => {
   if (kind === "topoff") {
     return "Top-off";
@@ -189,8 +198,11 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
   const [resultSource, setResultSource] = useState<"ideal" | "realGas">("ideal");
   const [sensitivityDeltaPsi, setSensitivityDeltaPsi] = useState(0);
   const [planOpen, setPlanOpen] = useState(false);
-  const tankSizeCuFt = standardBlend.tankSizeCuFt ?? settings.defaultTankSizeCuFt ?? 80;
-  const tankRatedPressurePsi = standardBlend.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000;
+  const { tankSizeCuFt, tankRatedPressurePsi } = resolveInputTankContext(
+    standardBlend,
+    settings.defaultTankSizeCuFt,
+    settings.tankRatedPressure
+  );
   const startTemperatureF = standardBlend.startTemperatureF ?? DEFAULT_START_TEMPERATURE_F;
   const settledTemperatureF = standardBlend.settledTemperatureF ?? DEFAULT_SETTLED_TEMPERATURE_F;
   const stageTemperatureTouched = standardBlend.stageTemperatureTouched ?? {};
@@ -309,6 +321,11 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
 
   const buildResolvedInput = (input: StandardBlendInput): StandardBlendInput => {
     const resolvedStartTemperatureF = input.startTemperatureF ?? DEFAULT_START_TEMPERATURE_F;
+    const resolvedTankContext = resolveInputTankContext(
+      input,
+      settings.defaultTankSizeCuFt,
+      settings.tankRatedPressure
+    );
     return {
       ...input,
       startPressure: input.startPressure ?? 0,
@@ -317,8 +334,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       startO2: input.startO2 ?? 21,
       startHe: input.startHe ?? 0,
       targetHe: input.targetHe ?? 0,
-      tankSizeCuFt,
-      tankRatedPressurePsi,
+      ...resolvedTankContext,
       startTemperatureF: resolvedStartTemperatureF,
       settledTemperatureF: input.settledTemperatureF ?? DEFAULT_SETTLED_TEMPERATURE_F,
       stageTemperaturesF: resolveInputStageTemperatures(input, resolvedStartTemperatureF)

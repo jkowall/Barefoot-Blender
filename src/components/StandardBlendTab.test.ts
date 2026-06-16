@@ -3,6 +3,7 @@ import {
   realGasResultToBlendResult,
   resolveHistoryStageTemperatureTouched,
   resolveInputStageTemperatures,
+  resolveInputTankContext,
   resolveStageTemperatureDisplayF,
   stageTemperaturesForEdit,
   updateStageTemperatureState
@@ -65,6 +66,26 @@ describe("resolveInputStageTemperatures", () => {
       helium: 70,
       oxygen: 70,
       topoff: 70
+    });
+  });
+});
+
+describe("resolveInputTankContext", () => {
+  test("prefers input tank context over settings defaults", () => {
+    expect(resolveInputTankContext({ tankSizeCuFt: 100, tankRatedPressurePsi: 3442 }, 80, 3000)).toEqual({
+      tankSizeCuFt: 100,
+      tankRatedPressurePsi: 3442
+    });
+  });
+
+  test("falls back through settings defaults to standard aluminum 80 context", () => {
+    expect(resolveInputTankContext({}, 95, 2640)).toEqual({
+      tankSizeCuFt: 95,
+      tankRatedPressurePsi: 2640
+    });
+    expect(resolveInputTankContext({}, undefined, undefined)).toEqual({
+      tankSizeCuFt: 80,
+      tankRatedPressurePsi: 3000
     });
   });
 });
