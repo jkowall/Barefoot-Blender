@@ -237,6 +237,11 @@ describe("calculateRealGasStandardBlend", () => {
     expect(corrected.steps[0]?.kind).toBe("topoff");
     expect(corrected.steps[0]?.stopPressurePsi).toBeCloseTo(3000, 1);
     expect(corrected.steps[0]?.pressureChangePsi).toBeGreaterThan(50);
+    expect(corrected.startHotPressurePsi).toBeCloseTo(
+      (corrected.steps[0]?.stopPressurePsi ?? 0) - (corrected.steps[0]?.pressureChangePsi ?? 0),
+      6
+    );
+    expect(corrected.startHotPressurePsi).toBeLessThan(3000);
   });
 
   test("rejects direct real-gas correction when the target needs bleed-down first", () => {

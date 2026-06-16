@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest";
 import {
   realGasResultToBlendResult,
+  resolveHistoryStageTemperatureTouched,
   resolveInputStageTemperatures,
   resolveStageTemperatureDisplayF,
+  stageTemperaturesForEdit,
   updateStageTemperatureState
 } from "./StandardBlendTab";
 import type { RealGasBlendResult } from "../utils/realGasBlend";
@@ -67,6 +69,40 @@ describe("resolveInputStageTemperatures", () => {
   });
 });
 
+describe("stageTemperaturesForEdit", () => {
+  test("keeps untouched earlier new-schema stages unset during later edits", () => {
+    const nextState = updateStageTemperatureState(
+      stageTemperaturesForEdit({ topGasId: "air", stageTemperatureTouched: {} }, 70),
+      {},
+      "oxygen",
+      100
+    );
+
+    expect(nextState.stageTemperaturesF).toEqual({
+      oxygen: 100,
+      topoff: 100
+    });
+    expect(nextState.stageTemperatureTouched).toEqual({
+      oxygen: true
+    });
+  });
+
+  test("seeds legacy edits from fill temperature before setting the edited stage", () => {
+    const nextState = updateStageTemperatureState(
+      stageTemperaturesForEdit({ topGasId: "air", fillTemperatureF: 90 }, 70),
+      {},
+      "oxygen",
+      100
+    );
+
+    expect(nextState.stageTemperaturesF).toEqual({
+      helium: 90,
+      oxygen: 100,
+      topoff: 100
+    });
+  });
+});
+
 describe("updateStageTemperatureState", () => {
   test("stops propagation at the next touched stage", () => {
     const nextState = updateStageTemperatureState(
@@ -102,6 +138,23 @@ describe("updateStageTemperatureState", () => {
     });
     expect(nextState.stageTemperatureTouched).toEqual({
       helium: true,
+      topoff: true
+    });
+  });
+});
+
+describe("resolveHistoryStageTemperatureTouched", () => {
+  test("leaves legacy history entries eligible for fill temperature fallback", () => {
+    expect(resolveHistoryStageTemperatureTouched({})).toBeUndefined();
+  });
+
+  test("derives touched state only when stage temperature history exists", () => {
+    expect(resolveHistoryStageTemperatureTouched({ stageTemperaturesF: { oxygen: 100 } })).toEqual({
+      helium: false,
+      oxygen: true,
+      topoff: false
+    });
+    expect(resolveHistoryStageTemperatureTouched({ stageTemperaturesF: undefined, stageTemperatureTouched: { topoff: true } })).toEqual({
       topoff: true
     });
   });

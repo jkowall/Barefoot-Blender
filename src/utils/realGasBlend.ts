@@ -271,6 +271,7 @@ export const calculateRealGasStandardBlend = (
   }
 
   let runningComponents = startComponents;
+  let startHotPressurePsi = startPressurePsi;
   let previousPressurePsi = startPressurePsi;
   const steps: RealGasBlendStep[] = [];
   for (const step of plannedSteps) {
@@ -282,12 +283,15 @@ export const calculateRealGasStandardBlend = (
       return {
         success: false,
         steps,
-        startHotPressurePsi: startPressurePsi,
+        startHotPressurePsi,
         finalHotPressurePsi: previousPressurePsi,
         targetSettledPressurePsi: targetPressurePsi,
         warnings,
         errors: beforeState.errors
       };
+    }
+    if (steps.length === 0) {
+      startHotPressurePsi = beforeState.pressurePsi;
     }
 
     const nextComponents = addGasMoles(runningComponents, step.moles, step.fractions);
@@ -297,7 +301,7 @@ export const calculateRealGasStandardBlend = (
       return {
         success: false,
         steps,
-        startHotPressurePsi: startPressurePsi,
+        startHotPressurePsi,
         finalHotPressurePsi: previousPressurePsi,
         targetSettledPressurePsi: targetPressurePsi,
         warnings,
@@ -321,7 +325,7 @@ export const calculateRealGasStandardBlend = (
   return {
     success: true,
     steps,
-    startHotPressurePsi: startPressurePsi,
+    startHotPressurePsi,
     finalHotPressurePsi: previousPressurePsi,
     targetSettledPressurePsi: targetPressurePsi,
     warnings: [...new Set(warnings)],

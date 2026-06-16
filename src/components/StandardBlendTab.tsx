@@ -98,6 +98,16 @@ export const resolveInputStageTemperatures = (
   return resolveStageTemperatures(input.stageTemperaturesF, startTemperatureF);
 };
 
+export const stageTemperaturesForEdit = (
+  input: StandardBlendInput,
+  startTemperatureF: number
+): StandardBlendStageTemperaturesF => {
+  if (input.stageTemperatureTouched === undefined && input.fillTemperatureF !== undefined) {
+    return resolveInputStageTemperatures(input, startTemperatureF);
+  }
+  return { ...(input.stageTemperaturesF ?? {}) };
+};
+
 const stepLabel = (kind: StandardBlendStageKind): string => {
   if (kind === "topoff") {
     return "Top-off";
@@ -112,6 +122,13 @@ const touchedFromStageTemperatures = (
   oxygen: stageTemperaturesF?.oxygen !== undefined,
   topoff: stageTemperaturesF?.topoff !== undefined
 });
+
+export const resolveHistoryStageTemperatureTouched = (
+  entry: Pick<StandardBlendHistoryEntry, "stageTemperatureTouched" | "stageTemperaturesF">
+): StandardBlendStageTemperatureTouched | undefined =>
+  entry.stageTemperatureTouched ?? (
+    entry.stageTemperaturesF === undefined ? undefined : touchedFromStageTemperatures(entry.stageTemperaturesF)
+  );
 
 export const resolveStageTemperatureDisplayF = (
   kind: StandardBlendStageKind,
@@ -339,7 +356,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
   ): void => {
     const nextValue = value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit);
     const nextStageTemperatureState = updateStageTemperatureState(
-      resolveInputStageTemperatures(standardBlend, startTemperatureF),
+      stageTemperaturesForEdit(standardBlend, startTemperatureF),
       stageTemperatureTouched,
       kind,
       nextValue
@@ -477,7 +494,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       fillTemperatureF: entry.fillTemperatureF ?? standardBlend.fillTemperatureF,
       settledTemperatureF: entry.settledTemperatureF ?? standardBlend.settledTemperatureF,
       stageTemperaturesF: entry.stageTemperaturesF,
-      stageTemperatureTouched: entry.stageTemperatureTouched ?? touchedFromStageTemperatures(entry.stageTemperaturesF),
+      stageTemperatureTouched: resolveHistoryStageTemperatureTouched(entry),
       topGasId: entry.topGasId
     });
     setResult(null);
