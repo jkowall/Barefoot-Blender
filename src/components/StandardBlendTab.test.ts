@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   realGasResultToBlendResult,
+  resolveRealGasStageTemperatureRows,
   resolveHistoryStageTemperatureTouched,
   resolveInputStageTemperatures,
   resolveInputTankContext,
@@ -47,6 +48,11 @@ describe("resolveStageTemperatureDisplayF", () => {
     expect(resolveStageTemperatureDisplayF("topoff", {}, undefined, 70, 90)).toBe(90);
     expect(resolveStageTemperatureDisplayF("topoff", {}, {}, 70, 90)).toBe(70);
     expect(resolveStageTemperatureDisplayF("topoff", { topoff: 100 }, {}, 70, 90)).toBe(100);
+  });
+
+  test("keeps a cleared touched stage blank instead of falling back to the initial temperature", () => {
+    expect(resolveStageTemperatureDisplayF("topoff", {}, { topoff: true }, 70, 90)).toBeUndefined();
+    expect(resolveStageTemperatureDisplayF("oxygen", {}, { topoff: true }, 70, 90)).toBe(70);
   });
 });
 
@@ -125,6 +131,27 @@ describe("stageTemperaturesForEdit", () => {
 });
 
 describe("updateStageTemperatureState", () => {
+  test("marks a cleared edited stage as touched so the input can remain blank", () => {
+    const nextState = updateStageTemperatureState(
+      { topoff: 79 },
+      { topoff: true },
+      "topoff",
+      undefined
+    );
+
+    expect(nextState.stageTemperaturesF).toEqual({});
+    expect(nextState.stageTemperatureTouched).toEqual({
+      topoff: true
+    });
+    expect(resolveStageTemperatureDisplayF(
+      "topoff",
+      nextState.stageTemperaturesF,
+      nextState.stageTemperatureTouched,
+      70,
+      undefined
+    )).toBeUndefined();
+  });
+
   test("stops propagation at the next touched stage", () => {
     const nextState = updateStageTemperatureState(
       { helium: 70, oxygen: 100, topoff: 100 },
@@ -161,6 +188,51 @@ describe("updateStageTemperatureState", () => {
       helium: true,
       topoff: true
     });
+  });
+});
+
+describe("resolveRealGasStageTemperatureRows", () => {
+  test("keeps an editable stage temperature row when GERG has no corrected step", () => {
+    const rows = resolveRealGasStageTemperatureRows(
+      [{ kind: "topoff", amount: 3000, gasName: "Air" }],
+      [],
+      { id: "air", name: "Air", o2: 21, he: 0 }
+    );
+
+    expect(rows).toEqual([
+      {
+        kind: "topoff",
+        gasName: "Air",
+        correctedStep: undefined
+      }
+    ]);
+  });
+
+  test("keeps later planned temperature rows editable after a partial GERG failure", () => {
+    const rows = resolveRealGasStageTemperatureRows(
+      [
+        { kind: "helium", amount: 500, gasName: "Helium" },
+        { kind: "oxygen", amount: 400, gasName: "Oxygen" },
+        { kind: "topoff", amount: 2100, gasName: "Air" }
+      ],
+      [
+        {
+          kind: "helium",
+          gasName: "Helium",
+          molesAdded: 1,
+          stopPressurePsi: 500,
+          pressureChangePsi: 500,
+          temperatureF: 70,
+          z: 1
+        }
+      ],
+      { id: "air", name: "Air", o2: 21, he: 0 }
+    );
+
+    expect(rows.map((row) => row.kind)).toEqual(["helium", "oxygen", "topoff"]);
+    expect(rows[0]?.correctedStep?.kind).toBe("helium");
+    expect(rows[1]?.correctedStep).toBeUndefined();
+    expect(rows[2]?.correctedStep).toBeUndefined();
   });
 });
 

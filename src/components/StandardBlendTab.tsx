@@ -12,6 +12,7 @@ import {
 import {
   calculateStandardBlend,
   type BlendResult,
+  type BlendStep,
   type GasSelection,
   summarizeBlendVolumes,
   solveRequiredStartPressure,
@@ -21,7 +22,7 @@ import {
   clampPressure
 } from "../utils/calculations";
 import { formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
-import { calculateRealGasStandardBlend, type RealGasBlendResult } from "../utils/realGasBlend";
+import { calculateRealGasStandardBlend, type RealGasBlendResult, type RealGasBlendStep } from "../utils/realGasBlend";
 import {
   DEFAULT_SETTLED_TEMPERATURE_F,
   DEFAULT_START_TEMPERATURE_F,
@@ -71,6 +72,12 @@ type Props = {
   settings: SettingsSnapshot;
   topOffOptions: GasSelection[];
   trainingModeEnabled: boolean;
+};
+
+type RealGasStageTemperatureRow = {
+  kind: StandardBlendStageKind;
+  gasName: string;
+  correctedStep?: RealGasBlendStep;
 };
 
 const toFraction = (percent: number | undefined, fallback: number): number => (percent ?? fallback) / 100;
@@ -147,11 +154,16 @@ export const resolveStageTemperatureDisplayF = (
   stageTemperatureTouched: StandardBlendStageTemperatureTouched | undefined,
   startTemperatureF: number,
   legacyFillTemperatureF: number | undefined
-): number => (
-  stageTemperaturesF?.[kind] ??
-  (stageTemperatureTouched === undefined ? legacyFillTemperatureF : undefined) ??
-  startTemperatureF
-);
+): number | undefined => {
+  const stageTemperatureF = stageTemperaturesF?.[kind];
+  if (stageTemperatureF !== undefined) {
+    return stageTemperatureF;
+  }
+  if (stageTemperatureTouched?.[kind]) {
+    return undefined;
+  }
+  return (stageTemperatureTouched === undefined ? legacyFillTemperatureF : undefined) ?? startTemperatureF;
+};
 
 export const updateStageTemperatureState = (
   stageTemperaturesF: StandardBlendStageTemperaturesF,
@@ -168,7 +180,7 @@ export const updateStageTemperatureState = (
 
   if (value === undefined) {
     delete nextStageTemperatures[kind];
-    delete nextTouched[kind];
+    nextTouched[kind] = true;
   } else {
     nextStageTemperatures[kind] = value;
     nextTouched[kind] = true;
@@ -186,6 +198,50 @@ export const updateStageTemperatureState = (
   }
 
   return { stageTemperaturesF: nextStageTemperatures, stageTemperatureTouched: nextTouched };
+};
+
+const isGasAddStep = (step: BlendStep): step is BlendStep & { kind: StandardBlendStageKind } => step.kind !== "bleed";
+
+const stageGasName = (kind: StandardBlendStageKind, selectedTopGas: GasSelection | undefined): string => {
+  if (kind === "helium") {
+    return "Helium";
+  }
+  if (kind === "oxygen") {
+    return "Oxygen";
+  }
+  return selectedTopGas?.name ?? "Top-off gas";
+};
+
+export const resolveRealGasStageTemperatureRows = (
+  blendSteps: BlendStep[] | undefined,
+  realGasSteps: RealGasBlendStep[],
+  selectedTopGas: GasSelection | undefined
+): RealGasStageTemperatureRow[] => {
+  const correctedByKind = new Map<StandardBlendStageKind, RealGasBlendStep>(
+    realGasSteps.map((step) => [step.kind, step])
+  );
+  const rows: RealGasStageTemperatureRow[] = [];
+  const rowKinds = new Set<StandardBlendStageKind>();
+
+  const addRow = (kind: StandardBlendStageKind, gasName: string): void => {
+    if (rowKinds.has(kind)) {
+      return;
+    }
+    rowKinds.add(kind);
+    rows.push({
+      kind,
+      gasName,
+      correctedStep: correctedByKind.get(kind)
+    });
+  };
+
+  blendSteps?.filter(isGasAddStep).forEach((step) => addRow(step.kind, step.gasName));
+  realGasSteps.forEach((step) => addRow(step.kind, step.gasName));
+
+  return rows.map((row) => ({
+    ...row,
+    gasName: row.kind === "topoff" ? stageGasName(row.kind, selectedTopGas) : row.gasName
+  }));
 };
 
 const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
@@ -387,17 +443,16 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     });
   };
 
-  const stageTemperatureDisplay = (kind: StandardBlendStageKind): number =>
-    toDisplayTemperature(
-      resolveStageTemperatureDisplayF(
-        kind,
-        standardBlend.stageTemperaturesF,
-        standardBlend.stageTemperatureTouched,
-        startTemperatureF,
-        standardBlend.fillTemperatureF
-      ),
-      settings.temperatureUnit
+  const stageTemperatureDisplay = (kind: StandardBlendStageKind): number | undefined => {
+    const temperatureF = resolveStageTemperatureDisplayF(
+      kind,
+      standardBlend.stageTemperaturesF,
+      standardBlend.stageTemperatureTouched,
+      startTemperatureF,
+      standardBlend.fillTemperatureF
     );
+    return temperatureF === undefined ? undefined : toDisplayTemperature(temperatureF, settings.temperatureUnit);
+  };
 
   const selectTempOnEnter = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === "Enter") {
@@ -670,6 +725,11 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     settings.pressureUnit === "psi" ? 5 : 0.25
   );
   const showBaseBlendPlan = settings.gasModel !== "gerg2008" || realGasResult?.success !== true;
+  const realGasStageTemperatureRows = resolveRealGasStageTemperatureRows(
+    result?.success ? result.steps : undefined,
+    realGasResult?.steps ?? [],
+    selectedTopGas
+  );
 
   const trainingMath = useMemo(() => {
     if (!trainingModeEnabled || !result?.success || !selectedTopGas || !baseVolumes) {
@@ -1026,36 +1086,50 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
               {realGasResult.success && realGasResult.steps.length === 0 && (
                 <div className="table-note">No corrected gas additions required.</div>
               )}
-              {realGasResult.success && realGasResult.steps.length > 0 && (
+              {realGasStageTemperatureRows.length > 0 && (
                 <>
                   <ol className="result-list">
-                    {realGasResult.steps.map((step, index) => {
-                      const descriptor = step.kind === "topoff" ? "Top-off with" : "Add";
+                    {realGasStageTemperatureRows.map((row, index) => {
+                      const step = row.correctedStep;
+                      const descriptor = row.kind === "topoff" ? "Top-off with" : "Add";
                       return (
-                        <li className="real-gas-step" key={`${step.kind}-${step.gasName}`}>
+                        <li className="real-gas-step" key={`${row.kind}-${row.gasName}`}>
                           <div className="real-gas-step-main">
                             <span>
-                              {index + 1}. {descriptor} {step.gasName}: <strong>{formatPressure(step.stopPressurePsi, settings.pressureUnit, 1)}</strong>
+                              {index + 1}. {descriptor} {row.gasName}:{" "}
+                              <strong>
+                                {step
+                                  ? formatPressure(step.stopPressurePsi, settings.pressureUnit, 1)
+                                  : "needs valid temp"}
+                              </strong>
                             </span>
                             <NumberInput
                               className="stage-temperature-field"
-                              label={`${stepLabel(step.kind)} Temp (${temperatureLabel})`}
+                              label={`${stepLabel(row.kind)} Temp (${temperatureLabel})`}
                               step={1}
-                              value={stageTemperatureDisplay(step.kind)}
-                              onChange={(val) => updateStageTemperatureField(step.kind, val)}
+                              value={stageTemperatureDisplay(row.kind)}
+                              onChange={(val) => updateStageTemperatureField(row.kind, val)}
                               onKeyDown={selectTempOnEnter}
                             />
                           </div>
                           <div className="real-gas-step-detail">
-                            {formatSignedPressure(step.pressureChangePsi, settings.pressureUnit, 1)}, Z {formatNumber(step.z, 4)}
+                            {step
+                              ? `${formatSignedPressure(step.pressureChangePsi, settings.pressureUnit, 1)}, Z ${formatNumber(step.z, 4)}`
+                              : "Corrected stop hidden until this stage temperature is back in range."}
                           </div>
                         </li>
                       );
                     })}
                   </ol>
-                  <div className="table-note">
-                    Initial reference: {formatPressure(realGasResult.startHotPressurePsi, settings.pressureUnit, 1)}. Final stage stop: {formatPressure(realGasResult.finalHotPressurePsi, settings.pressureUnit, 1)} for settled target {formatPressure(realGasResult.targetSettledPressurePsi, settings.pressureUnit, 1)}.
-                  </div>
+                  {realGasResult.success ? (
+                    <div className="table-note">
+                      Initial reference: {formatPressure(realGasResult.startHotPressurePsi, settings.pressureUnit, 1)}. Final stage stop: {formatPressure(realGasResult.finalHotPressurePsi, settings.pressureUnit, 1)} for settled target {formatPressure(realGasResult.targetSettledPressurePsi, settings.pressureUnit, 1)}.
+                    </div>
+                  ) : (
+                    <div className="table-note">
+                      Correct the temperature input to restore corrected stop pressures.
+                    </div>
+                  )}
                 </>
               )}
               {realGasResult.warnings.map((warning) => (
