@@ -256,6 +256,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
   const [resultSource, setResultSource] = useState<"ideal" | "realGas">("ideal");
   const [sensitivityDeltaPsi, setSensitivityDeltaPsi] = useState(0);
   const [planOpen, setPlanOpen] = useState(false);
+  const [costOpen, setCostOpen] = useState(false);
   const { tankSizeCuFt, tankRatedPressurePsi } = resolveInputTankContext(
     standardBlend,
     settings.defaultTankSizeCuFt,
@@ -551,6 +552,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     setResultSource(useRealGasAsPrimary ? "realGas" : "ideal");
     setSensitivityDeltaPsi(0);
     setPlanOpen(true);
+    setCostOpen(true);
   };
 
   const applyHistory = (entry: StandardBlendHistoryEntry): void => {
@@ -865,16 +867,6 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
         </div>
       </AccordionItem>
 
-      <AccordionItem title="Tank Context" defaultOpen={false}>
-        <TankContextFields
-          tankSizeCuFt={standardBlend.tankSizeCuFt}
-          tankRatedPressurePsi={standardBlend.tankRatedPressurePsi}
-          defaultTankSizeCuFt={settings.defaultTankSizeCuFt}
-          defaultTankRatedPressurePsi={settings.tankRatedPressure}
-          onChange={(patch) => setStandardBlend({ ...standardBlend, ...patch })}
-        />
-      </AccordionItem>
-
       <AccordionItem title="Target Blend" defaultOpen={true}>
         <div className="grid two">
           <NumberInput
@@ -1139,9 +1131,21 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
               ))}
             </div>
           )}
-          {fillCost && fillCost.lines.length > 0 && (
-            <div className="cost-breakdown">
-              <div className="section-title">Fill Cost</div>
+        </AccordionItem>
+      )}
+
+      <AccordionItem title="Cost Calculation" isOpen={costOpen} onToggle={() => setCostOpen(!costOpen)}>
+        <TankContextFields
+          tankSizeCuFt={standardBlend.tankSizeCuFt}
+          tankRatedPressurePsi={standardBlend.tankRatedPressurePsi}
+          defaultTankSizeCuFt={settings.defaultTankSizeCuFt}
+          defaultTankRatedPressurePsi={settings.tankRatedPressure}
+          onChange={(patch) => setStandardBlend({ ...standardBlend, ...patch })}
+        />
+        <div className="cost-breakdown">
+          <div className="section-title">Fill Cost</div>
+          {fillCost && fillCost.lines.length > 0 ? (
+            <>
               <div className="grid two">
                 {fillCost.lines.map((line) => (
                   <div key={line.label} className="cost-line">
@@ -1152,14 +1156,15 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                   </div>
                 ))}
               </div>
-              <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
               <div className="cost-total">
                 <strong>Total: {"$"}{fillCost.totalCost.toFixed(2)}</strong>
               </div>
-            </div>
+            </>
+          ) : (
+            <div className="table-note">Calculate a successful blend with gas additions to see the estimated fill cost.</div>
           )}
-        </AccordionItem>
-      )}
+        </div>
+      </AccordionItem>
 
       <AccordionItem title={`Blend History (${standardBlendHistory.length})`} defaultOpen={false}>
         {standardBlendHistory.length === 0 && (
