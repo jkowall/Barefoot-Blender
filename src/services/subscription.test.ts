@@ -187,4 +187,27 @@ describe("subscription service", () => {
       error: "Restore failed"
     });
   });
+
+  test("returns inactive native status when annual purchase fails", async () => {
+    mocks.nativeApp = true;
+    mocks.nativePlatform = "ios";
+    vi.stubEnv("VITE_REVENUECAT_IOS_API_KEY", "appl_test_key");
+    const annualPackage: TestPurchasesPackage = {
+      packageType: "ANNUAL",
+      product: { identifier: "barefoot_blender_pro_annual" }
+    };
+    mocks.purchases.getOfferings.mockResolvedValue({
+      current: { availablePackages: [annualPackage] }
+    });
+    mocks.purchases.purchasePackage.mockRejectedValue(new Error("Purchase failed"));
+
+    const { purchaseAnnual } = await loadSubscriptionService();
+
+    await expect(purchaseAnnual()).resolves.toMatchObject({
+      loading: false,
+      active: false,
+      source: "ios",
+      error: "Purchase failed"
+    });
+  });
 });
