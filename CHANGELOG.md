@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.7] - 2026-06-17
+
+### Changed
+
+- **Standard Blend Cost Layout**: Moved editable tank context into the Cost Calculation section so mix and pressure inputs stay focused on blending instructions while fill-cost estimates keep their tank basis nearby.
+
+### Fixed
+
+- **GERG Stage Temperature Editing**: Kept cleared measured stage temperatures editable during GERG recalculation failures and preserved later planned temperature rows when only part of a corrected stop plan can be displayed.
+
 ## [0.12.6] - 2026-06-16
 
 ### Fixed
