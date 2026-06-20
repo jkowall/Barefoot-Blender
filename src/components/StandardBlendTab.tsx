@@ -1134,7 +1134,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
         </AccordionItem>
       )}
 
-      <AccordionItem title="Cost Calculation" isOpen={costOpen} onToggle={() => setCostOpen(!costOpen)}>
+      <AccordionItem title="Cost Calculation" isOpen={costOpen} onToggle={() => setCostOpen((open) => !open)}>
         <TankContextFields
           tankSizeCuFt={standardBlend.tankSizeCuFt}
           tankRatedPressurePsi={standardBlend.tankRatedPressurePsi}
