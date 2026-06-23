@@ -1081,14 +1081,6 @@ button {
   overflow-wrap: anywhere;
 }
 
-.tank-context-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  margin-top: 12px;
-  margin-bottom: 8px;
-}
-
 table {
   width: 100%;
   border-collapse: collapse;

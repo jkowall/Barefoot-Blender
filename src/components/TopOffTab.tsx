@@ -11,7 +11,7 @@ import {
   clampPercent,
   clampPressure
 } from "../utils/calculations";
-import { formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
+import { formatGasCostDetail, formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
@@ -344,9 +344,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                 {fillCost.lines.map((line) => (
                   <div key={line.label} className="cost-line">
                     <span>{line.label}:</span>
-                    <span>
-                      {formatPressure(line.pressurePsi, settings.pressureUnit)}, {formatNumber(line.volumeCuFt, 2)} cu ft, {formatNumber(line.volumeLiters, 2)} L × {"$"}{line.unitPrice.toFixed(2)} = {"$"}{line.cost.toFixed(2)}
-                    </span>
+                    <span>{formatGasCostDetail(line.volumeCuFt, line.volumeLiters, line.unitPrice, line.cost)}</span>
                   </div>
                 ))}
               </div>

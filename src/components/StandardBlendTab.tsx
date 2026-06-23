@@ -21,7 +21,7 @@ import {
   clampPercent,
   clampPressure
 } from "../utils/calculations";
-import { formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
+import { formatGasCostDetail, formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
 import { calculateRealGasStandardBlend, type RealGasBlendResult, type RealGasBlendStep } from "../utils/realGasBlend";
 import {
   DEFAULT_SETTLED_TEMPERATURE_F,
@@ -1150,9 +1150,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                 {fillCost.lines.map((line) => (
                   <div key={line.label} className="cost-line">
                     <span>{line.label}:</span>
-                    <span>
-                      {formatPressure(line.pressurePsi, settings.pressureUnit)}, {formatNumber(line.volumeCuFt, 2)} cu ft, {formatNumber(line.volumeLiters, 2)} L × {"$"}{line.unitPrice.toFixed(2)} = {"$"}{line.cost.toFixed(2)}
-                    </span>
+                    <span>{formatGasCostDetail(line.volumeCuFt, line.volumeLiters, line.unitPrice, line.cost)}</span>
                   </div>
                 ))}
               </div>

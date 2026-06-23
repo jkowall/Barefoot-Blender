@@ -1,5 +1,14 @@
 import { describe, expect, test } from "vitest";
-import { formatDepth, formatNumber, formatPercentage, formatPressure, formatSignedPressure, sanitizeGasName } from "./format";
+import {
+  formatDepth,
+  formatGasCostDetail,
+  formatGasVolume,
+  formatNumber,
+  formatPercentage,
+  formatPressure,
+  formatSignedPressure,
+  sanitizeGasName
+} from "./format";
 
 describe("formatPressure", () => {
   test("formats psi correctly", () => {
@@ -85,6 +94,18 @@ describe("formatNumber", () => {
   test("handles non-finite values", () => {
     expect(formatNumber(NaN)).toBe("0");
     expect(formatNumber(Infinity)).toBe("0");
+  });
+});
+
+describe("formatGasVolume", () => {
+  test("formats cost volume before price math", () => {
+    expect(formatGasVolume(3.85, 108.91)).toBe("3.85 cu ft, 108.91 L");
+  });
+});
+
+describe("formatGasCostDetail", () => {
+  test("omits pressure from the cost detail", () => {
+    expect(formatGasCostDetail(3.85, 108.91, 1, 3.85)).toBe("3.85 cu ft, 108.91 L × $1.00 = $3.85");
   });
 });
 

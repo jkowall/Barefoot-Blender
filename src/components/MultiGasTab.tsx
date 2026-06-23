@@ -11,7 +11,7 @@ import {
   cuFtToLiters,
   pressureToCuFt
 } from "../utils/calculations";
-import { formatNumber, formatPressure, formatSignedPressure } from "../utils/format";
+import { formatGasVolume, formatNumber, formatPressure, formatSignedPressure } from "../utils/format";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { logger } from "../utils/logger";
 import { AccordionItem } from "./Accordion";
@@ -238,10 +238,10 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     return `$${cost.toFixed(2)}`;
   };
 
-  const formatGasVolume = (pressurePsi: number): string => {
+  const formatGasVolumeFromPressure = (pressurePsi: number): string => {
     const volumeCuFt = pressureToCuFt(pressurePsi, tankSizeCuFt, tankRatedPressurePsi);
     const volumeLiters = cuFtToLiters(volumeCuFt);
-    return `${formatNumber(volumeCuFt, 2)} cu ft, ${formatNumber(volumeLiters, 2)} L`;
+    return formatGasVolume(volumeCuFt, volumeLiters);
   };
 
   const trainingMath = useMemo(() => {
@@ -540,7 +540,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                     <div className="alternative-gases">
                       {alt.costBreakdown.map((item) => (
                         <span key={costLineKey(item)} className="alternative-gas">
-                          {item.gas}: {formatPressure(item.amount, settings.pressureUnit)}, {formatGasVolume(item.amount)}
+                          {item.gas}: {formatGasVolumeFromPressure(item.amount)}
                         </span>
                       ))}
                     </div>
@@ -565,7 +565,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                           {index + 1}. {action} {step.gas}: {formatPressure(runningTotal, settings.pressureUnit)}
                           <span className="result-step-total">
                             ({formatSignedPressure(step.amount, settings.pressureUnit)}
-                            {!isBleed ? `, ${formatGasVolume(step.amount)}` : ""})
+                            {!isBleed ? `, ${formatGasVolumeFromPressure(step.amount)}` : ""})
                           </span>
                         </li>
                       );
@@ -583,9 +583,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                       {selectedAlternative.costBreakdown.map((line) => (
                         <div key={costLineKey(line)} className="cost-line">
                           <span>{line.gas}:</span>
-                          <span>
-                            {formatPressure(line.amount, settings.pressureUnit)}, {formatGasVolume(line.amount)} = {formatCost(line.cost)}
-                          </span>
+                          <span>{formatGasVolumeFromPressure(line.amount)} = {formatCost(line.cost)}</span>
                         </div>
                       ))}
                     </div>

@@ -26,3 +26,13 @@ export const formatDepth = (valueFeet: number, unit: DepthUnit, decimals = 0): s
   `${clampPrecision(toDisplayDepth(valueFeet, unit), decimals)} ${unit}`;
 
 export const formatNumber = (value: number, decimals = 1): string => `${clampPrecision(value, decimals)}`;
+
+export const formatGasVolume = (volumeCuFt: number, volumeLiters: number): string =>
+  `${formatNumber(volumeCuFt, 2)} cu ft, ${formatNumber(volumeLiters, 2)} L`;
+
+export const formatGasCostDetail = (
+  volumeCuFt: number,
+  volumeLiters: number,
+  unitPrice: number,
+  cost: number
+): string => `${formatGasVolume(volumeCuFt, volumeLiters)} × $${unitPrice.toFixed(2)} = $${cost.toFixed(2)}`;
