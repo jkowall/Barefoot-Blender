@@ -29,9 +29,11 @@ describe("SelectInput", () => {
       <SelectInput label="Auto ID" />
     );
 
-    // React's useId generates ids like :r1:
-    expect(markup).toMatch(/for="[^"]+"/);
-    expect(markup).toMatch(/id="[^"]+"/);
+    const labelFor = markup.match(/<label for="([^"]+)"/)?.[1];
+    const selectId = markup.match(/<select id="([^"]+)"/)?.[1];
+
+    expect(labelFor).toBeDefined();
+    expect(selectId).toBe(labelFor);
   });
 
   test("appends className correctly", () => {
