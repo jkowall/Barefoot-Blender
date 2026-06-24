@@ -75,6 +75,8 @@ If building from a temporary worktree, either switch to `/Users/jkowall/Barefoot
 
 ## Mobile Release Checklist
 
+Every `package.json` version bump is a web plus native release candidate unless the user explicitly excludes native release work. For each bumped app version, update the native Android `versionName`/`versionCode` and iOS `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION`, then complete this checklist before declaring the release ready.
+
 1. Confirm `package.json`, native app versions, and store target builds match the release plan.
 2. Run web and unit validation:
 

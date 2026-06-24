@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { StandardBlendInput } from "../state/session";
 import type { GasSelection } from "./calculations";
 import { calculateStandardBlend } from "./calculations";
-import { calculateRealGasStandardBlend } from "./realGasBlend";
+import { calculateRealGasStandardBlend, calculateRealGasTopOff } from "./realGasBlend";
 
 const air: GasSelection = { id: "air", name: "Air", o2: 21, he: 0 };
 
@@ -267,5 +267,195 @@ describe("calculateRealGasStandardBlend", () => {
 
     expect(corrected.success).toBe(false);
     expect(corrected.errors[0]).toContain("Complete the bleed-down step");
+  });
+});
+
+describe("calculateRealGasTopOff", () => {
+  test("keeps result pressure close to goal when start and result temperatures match", () => {
+    const corrected = calculateRealGasTopOff(
+      { pressureUnit: "psi" },
+      {
+        startPressure: 500,
+        finalPressure: 3000,
+        startO2: 32,
+        startHe: 0,
+        tankSizeCuFt: 80,
+        tankRatedPressurePsi: 3000,
+        startTemperatureF: 70,
+        resultTemperatureF: 70,
+        topGasId: "air"
+      },
+      air
+    );
+
+    expect(corrected.success).toBe(true);
+    expect(corrected.goalPressurePsi).toBe(3000);
+    expect(corrected.resultPressurePsi).toBeCloseTo(3000, 1);
+    expect(corrected.addedPressure).toBeCloseTo(2500, 6);
+    expect(corrected.finalO2).toBeGreaterThan(22);
+    expect(corrected.finalHe).toBeCloseTo(0, 6);
+  });
+
+  test("raises result pressure at higher result temperature without changing final mix", () => {
+    const baseInput = {
+      startPressure: 500,
+      finalPressure: 3000,
+      startO2: 32,
+      startHe: 0,
+      tankSizeCuFt: 80,
+      tankRatedPressurePsi: 3000,
+      startTemperatureF: 70,
+      topGasId: "air"
+    };
+
+    const settled = calculateRealGasTopOff(
+      { pressureUnit: "psi" },
+      { ...baseInput, resultTemperatureF: 70 },
+      air
+    );
+    const hot = calculateRealGasTopOff(
+      { pressureUnit: "psi" },
+      { ...baseInput, resultTemperatureF: 100 },
+      air
+    );
+
+    expect(settled.success).toBe(true);
+    expect(hot.success).toBe(true);
+    expect(hot.resultPressurePsi).toBeGreaterThan(settled.resultPressurePsi);
+    expect(hot.finalO2).toBeCloseTo(settled.finalO2, 8);
+    expect(hot.finalHe).toBeCloseTo(settled.finalHe, 8);
+    expect(hot.topOffMoles).toBeCloseTo(settled.topOffMoles, 8);
+  });
+
+  test("changing start temperature changes solved top-off moles", () => {
+    const baseInput = {
+      startPressure: 500,
+      finalPressure: 3000,
+      startO2: 32,
+      startHe: 0,
+      tankSizeCuFt: 80,
+      tankRatedPressurePsi: 3000,
+      resultTemperatureF: 70,
+      topGasId: "air"
+    };
+
+    const coolStart = calculateRealGasTopOff(
+      { pressureUnit: "psi" },
+      { ...baseInput, startTemperatureF: 70 },
+      air
+    );
+    const warmStart = calculateRealGasTopOff(
+      { pressureUnit: "psi" },
+      { ...baseInput, startTemperatureF: 90 },
+      air
+    );
+
+    expect(coolStart.success).toBe(true);
+    expect(warmStart.success).toBe(true);
+    expect(warmStart.topOffMoles).not.toBeCloseTo(coolStart.topOffMoles, 5);
+  });
+
+  test("rejects invalid start mix", () => {
+    const corrected = calculateRealGasTopOff(
+      { pressureUnit: "psi" },
+      {
+        startPressure: 500,
+        finalPressure: 3000,
+        startO2: 60,
+        startHe: 50,
+        tankSizeCuFt: 80,
+        tankRatedPressurePsi: 3000,
+        startTemperatureF: 70,
+        resultTemperatureF: 70,
+        topGasId: "air"
+      },
+      air
+    );
+
+    expect(corrected.success).toBe(false);
+    expect(corrected.errors[0]).toContain("Gas fractions");
+  });
+
+  test("rejects goal pressure below start pressure", () => {
+    const corrected = calculateRealGasTopOff(
+      { pressureUnit: "psi" },
+      {
+        startPressure: 3000,
+        finalPressure: 500,
+        startO2: 32,
+        startHe: 0,
+        tankSizeCuFt: 80,
+        tankRatedPressurePsi: 3000,
+        startTemperatureF: 70,
+        resultTemperatureF: 70,
+        topGasId: "air"
+      },
+      air
+    );
+
+    expect(corrected.success).toBe(false);
+    expect(corrected.errors).toContain("Goal pressure is below current pressure. Bleed-down required.");
+  });
+
+  test("requires tank context", () => {
+    const corrected = calculateRealGasTopOff(
+      { pressureUnit: "psi" },
+      {
+        startPressure: 500,
+        finalPressure: 3000,
+        startO2: 32,
+        startHe: 0,
+        startTemperatureF: 70,
+        resultTemperatureF: 70,
+        topGasId: "air"
+      },
+      air
+    );
+
+    expect(corrected.success).toBe(false);
+    expect(corrected.errors).toContain("Tank size and rated pressure are required for GERG-2008 correction.");
+  });
+
+  test("supports bar inputs and returns PSI internally", () => {
+    const corrected = calculateRealGasTopOff(
+      { pressureUnit: "bar" },
+      {
+        startPressure: 50,
+        finalPressure: 200,
+        startO2: 21,
+        startHe: 0,
+        tankSizeCuFt: 80,
+        tankRatedPressurePsi: 3000,
+        startTemperatureF: 70,
+        resultTemperatureF: 70,
+        topGasId: "air"
+      },
+      air
+    );
+
+    expect(corrected.success).toBe(true);
+    expect(corrected.goalPressurePsi).toBeCloseTo(200 * 14.5037738, 3);
+    expect(corrected.resultPressurePsi).toBeCloseTo(200 * 14.5037738, 1);
+  });
+
+  test("surfaces GERG envelope errors for out-of-range result temperature", () => {
+    const corrected = calculateRealGasTopOff(
+      { pressureUnit: "psi" },
+      {
+        startPressure: 500,
+        finalPressure: 3000,
+        startO2: 32,
+        startHe: 0,
+        tankSizeCuFt: 80,
+        tankRatedPressurePsi: 3000,
+        startTemperatureF: 70,
+        resultTemperatureF: -400,
+        topGasId: "air"
+      },
+      air
+    );
+
+    expect(corrected.success).toBe(false);
+    expect(corrected.errors).toContain("GERG-2008 correction is limited to temperatures at or above 250 K.");
   });
 });

@@ -71,6 +71,10 @@ export type TopOffInput = {
   finalPressure?: number;
   tankSizeCuFt?: number;
   tankRatedPressurePsi?: number;
+  startTemperatureF?: number;
+  startTemperatureTouched?: boolean;
+  resultTemperatureF?: number;
+  resultTemperatureTouched?: boolean;
   topGasId: string;
 };
 
@@ -171,6 +175,7 @@ const defaultValues = {
     startHe: 0,
     startPressure: 500,
     finalPressure: 3000,
+    startTemperatureF: 70,
     topGasId: "air"
   }
 };

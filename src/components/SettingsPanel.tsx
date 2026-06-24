@@ -138,7 +138,7 @@ const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Elemen
                   </option>
                 ))}
               </SelectInput>
-              <div className="table-note">GERG-2008 applies O2/N2/He molar corrections in Standard Blend.</div>
+              <div className="table-note">GERG-2008 applies O2/N2/He molar corrections in Standard Blend and Top-Off.</div>
 
               <div className="section-title" style={{ marginTop: 16 }}>Defaults</div>
               <div className="grid two">

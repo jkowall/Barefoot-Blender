@@ -1,6 +1,6 @@
 # Calculation Model
 
-This document details the formulas and decision logic that power Barefoot Blender. The default Standard Blend planner uses ideal gas behavior (partial pressure blending) and operates in PSI internally unless otherwise noted. Standard Blend can optionally show GERG-2008 real-gas corrected stop pressures for O2/N2/He fills.
+This document details the formulas and decision logic that power Barefoot Blender. The default Standard Blend planner uses ideal gas behavior (partial pressure blending) and operates in PSI internally unless otherwise noted. Standard Blend and Top-Off can optionally show GERG-2008 real-gas corrected pressures for O2/N2/He fills.
 
 ## 1. Standard Blend Planner
 
@@ -35,6 +35,19 @@ Module: `projectTopOffChart`
 - Marks scenarios as "Drain" when infeasible or negative.
 - Returns PSI values; UI reconverts to the user's unit selection.
 
+### Top-Off What-If
+
+Module: `src/utils/calculations.ts` (`calculateTopOffBlend`)
+
+The ideal Top-Off path uses pressure-percent balance:
+
+```
+P_added = P_goal - P_start
+F_final = (P_start * F_start + P_added * F_topoff) / P_goal
+```
+
+The same equation runs independently for O2, He, and N2, with N2 inferred as `1 - O2 - He`.
+
 ## 2. Advanced GERG-2008 Real-Gas Mode
 
 Modules:
@@ -42,10 +55,10 @@ Modules:
 - `src/utils/realGasBlend.ts`
 
 Scope:
-- Applies only to Standard Blend when the user selects the GERG-2008 gas model.
+- Applies to Standard Blend and Top-Off when the user selects the GERG-2008 gas model.
 - Covers scuba-relevant O2, N2, and He mixtures.
 - Uses the O2/N2/He subset of the NIST AGA8 GERG-2008 implementation. It does not include hydrocarbon or contaminant components from the full natural-gas model.
-- Keeps the ideal partial-pressure plan visible as the base workflow, then adds corrected stop pressures.
+- Keeps the ideal partial-pressure plan visible as the base workflow, then adds corrected stop pressures where applicable.
 
 Inputs added by the UI:
 - Initial gas temperature
@@ -81,6 +94,15 @@ Supported envelope:
 - Temperature must be at least 250 K.
 - Pressure must not exceed 400 bar absolute.
 - Direct fills are corrected. If the ideal plan requires bleed-down, complete the bleed step first and recalculate from the post-bleed state.
+
+Top-Off GERG handling:
+1. Start pressure and goal pressure are interpreted at Start Temp. This intentionally assumes Settle Temp equals Start Temp for the Top-Off workflow.
+2. Convert the starting cylinder state into O2, He, and N2 moles using Start Temp, start pressure, start mix, and tank water volume.
+3. Solve top-off gas moles with GERG pressure-from-density iteration until the cylinder reaches the entered goal pressure at Start Temp.
+4. Compute the final O2, He, and N2 fractions from the final component moles.
+5. Recalculate the displayed result pressure from the same final moles at Result Temp.
+6. Editing Result Temp changes only the displayed pressure target. It does not change top-off moles or the final mix.
+7. Fill-cost volume uses the start-temperature goal pressure delta, so changing Result Temp does not alter the cost estimate.
 
 Reference implementation:
 - GERG constants and equations are based on the NIST public AGA8 GERG-2008 source: <https://github.com/usnistgov/AGA8>.

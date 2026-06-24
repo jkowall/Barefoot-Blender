@@ -32,11 +32,10 @@ Order of content:
 ### Top-Off What-If
 
 1. **Start Tank** card – Current mix and pressure.
-2. **Tank Context** card – Per-fill tank volume and rated pressure for cost and volume conversion.
-3. **Top-Off Goal** card – Final pressure.
-4. **Top-Off Gas** card – Selected top-off source.
-5. **Top-Off Outcome** card – Final mix, added pressure, added volume, and estimated fill cost. When `Training Mode` is on, it explains the pressure-percent hand check for O2, He, and N2 with visual formula cards.
-6. **Bleed-Down What-If** and **Top-Off Sensitivity** cards – Optional projections for drain scenarios and alternate starts.
+2. **Top-Off** card – Selected top-off source, goal pressure, and `Calculate` button.
+3. **Result** card – Final O2 and He. When `GERG-2008` is selected, Start Temp appears in the Start card and Result Temp appears here. Changing Result Temp updates the displayed pressure target only; the mix stays fixed.
+4. **Fill Cost** card – Per-fill tank volume, rated pressure, gas volume, and estimated cost.
+5. **Bleed-Down What-If** and **Top-Off Sensitivity** cards – Optional ideal pressure-point projections for drain scenarios and alternate starts.
 
 ### Multi-Gas Blend
 

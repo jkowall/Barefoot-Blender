@@ -1,4 +1,4 @@
-import { useId, type KeyboardEventHandler } from "react";
+import { useId, useRef, type KeyboardEventHandler } from "react";
 
 type Props = {
   label: string;
@@ -12,6 +12,7 @@ type Props = {
   onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
   placeholder?: string;
   className?: string;
+  selectOnClick?: boolean;
 };
 
 export const NumberInput = ({
@@ -25,9 +26,25 @@ export const NumberInput = ({
   onBlur,
   onKeyDown,
   placeholder,
-  className
+  className,
+  selectOnClick
 }: Props): JSX.Element => {
   const id = useId();
+  const replaceOnNextKeyRef = useRef(false);
+  const selectedValueRef = useRef("");
+
+  const replaceValue = (target: HTMLInputElement, nextValue: string): void => {
+    target.value = nextValue;
+    onChange(nextValue === "" ? undefined : Number(nextValue));
+    replaceOnNextKeyRef.current = false;
+    selectedValueRef.current = "";
+  };
+
+  const markSelectedForReplacement = (target: HTMLInputElement): void => {
+    target.select();
+    replaceOnNextKeyRef.current = true;
+    selectedValueRef.current = target.value;
+  };
 
   return (
     <div className={`field ${className ?? ""}`}>
@@ -40,18 +57,55 @@ export const NumberInput = ({
         step={step}
         disabled={disabled}
         value={value ?? ""}
+        onMouseDown={selectOnClick ? (e) => {
+          if (document.activeElement !== e.currentTarget) {
+            e.preventDefault();
+            e.currentTarget.focus();
+            markSelectedForReplacement(e.currentTarget);
+          }
+        } : undefined}
         onChange={(e) => {
-          const val = e.target.value;
+          let val = e.target.value;
+          if (selectOnClick && replaceOnNextKeyRef.current && selectedValueRef.current !== "") {
+            const selectedValue = selectedValueRef.current;
+            if (val.startsWith(selectedValue) && val !== selectedValue) {
+              val = val.slice(selectedValue.length);
+              e.target.value = val;
+            }
+          }
+          replaceOnNextKeyRef.current = false;
+          selectedValueRef.current = "";
           onChange(val === "" ? undefined : Number(val));
         }}
         onFocus={(e) => {
           const target = e.target;
           requestAnimationFrame(() => {
-            target.select();
+            if (selectOnClick) {
+              markSelectedForReplacement(target);
+            } else {
+              target.select();
+            }
           });
         }}
+        onClick={selectOnClick ? (e) => {
+          markSelectedForReplacement(e.currentTarget);
+        } : undefined}
         onBlur={onBlur}
-        onKeyDown={onKeyDown}
+        onKeyDown={(e) => {
+          if (selectOnClick && replaceOnNextKeyRef.current && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            if (/^[0-9]$/.test(e.key)) {
+              e.preventDefault();
+              replaceValue(e.currentTarget, e.key);
+              return;
+            }
+            if (e.key === "Backspace" || e.key === "Delete") {
+              e.preventDefault();
+              replaceValue(e.currentTarget, "");
+              return;
+            }
+          }
+          onKeyDown?.(e);
+        }}
         placeholder={placeholder}
       />
     </div>
