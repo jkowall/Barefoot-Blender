@@ -350,6 +350,8 @@ As of 2026-06-07, non-secret rollout state was:
 
 Apply this checklist to release PRs, tagged releases, or merges to `main` intended for deployment. Do not force version bumps for every local fix PR.
 
+Any package version bump is a web plus native release candidate unless the user explicitly excludes native release work. When `package.json` changes version, also update Android and iOS native version metadata and run the native release validation path in `docs/mobile-release.md` before declaring the release ready.
+
 1. **Bump the version** in `package.json`:
    - `npm version patch` - Bug fixes and minor changes
    - `npm version minor` - New features

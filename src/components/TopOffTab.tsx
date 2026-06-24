@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
+import { useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type TopOffInput, type StandardBlendInput } from "../state/session";
 import {
@@ -12,13 +12,18 @@ import {
   clampPressure
 } from "../utils/calculations";
 import { formatGasCostDetail, formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
+import { calculateRealGasTopOff, type RealGasTopOffResult } from "../utils/realGasBlend";
+import {
+  DEFAULT_START_TEMPERATURE_F,
+  fromDisplayTemperature,
+  temperatureUnitLabel,
+  toDisplayTemperature
+} from "../utils/temperature";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
 import TankContextFields from "./TankContextFields";
 import TrainingMathPanel from "./TrainingMathPanel";
-
-
 
 type Props = {
   settings: SettingsSnapshot;
@@ -26,14 +31,70 @@ type Props = {
   trainingModeEnabled: boolean;
 };
 
+type TopOffDisplayResult =
+  | (TopOffResult & {
+      model: "ideal";
+      goalPressurePsi: number;
+      resultPressurePsi: number;
+    })
+  | (RealGasTopOffResult & {
+      model: "gerg2008";
+    });
+
+export const resolveTopOffResultTemperatureF = (
+  input: Pick<TopOffInput, "resultTemperatureF" | "resultTemperatureTouched">,
+  startTemperatureF: number | undefined
+): number | undefined => {
+  if (input.resultTemperatureTouched) {
+    return input.resultTemperatureF;
+  }
+  return startTemperatureF;
+};
+
+export const resolveTopOffStartTemperatureF = (
+  input: Pick<TopOffInput, "startTemperatureF" | "startTemperatureTouched">
+): number | undefined => {
+  if (input.startTemperatureTouched) {
+    return input.startTemperatureF;
+  }
+  return input.startTemperatureF ?? DEFAULT_START_TEMPERATURE_F;
+};
+
+export const updateTopOffStartTemperatureState = (
+  startTemperatureF: number | undefined
+): Pick<TopOffInput, "startTemperatureF" | "startTemperatureTouched"> => ({
+  startTemperatureF,
+  startTemperatureTouched: true
+});
+
+export const defaultTopOffStartTemperatureState = (): Pick<TopOffInput, "startTemperatureF" | "startTemperatureTouched"> => ({
+  startTemperatureF: DEFAULT_START_TEMPERATURE_F,
+  startTemperatureTouched: false
+});
+
+export const updateTopOffResultTemperatureState = (
+  resultTemperatureF: number | undefined
+): Pick<TopOffInput, "resultTemperatureF" | "resultTemperatureTouched"> => ({
+  resultTemperatureF,
+  resultTemperatureTouched: true
+});
+
+export const defaultTopOffResultTemperatureState = (): Pick<TopOffInput, "resultTemperatureF" | "resultTemperatureTouched"> => ({
+  resultTemperatureF: undefined,
+  resultTemperatureTouched: false
+});
+
 const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
   const topOff = useSessionStore((state: SessionState) => state.topOff);
   const setTopOff = useSessionStore((state: SessionState) => state.setTopOff);
-  const [result, setResult] = useState<TopOffResult | null>(null);
+  const [result, setResult] = useState<TopOffDisplayResult | null>(null);
   const [chart, setChart] = useState<TopOffProjectionRow[] | null>(null);
   const [bleedPsi, setBleedPsi] = useState(0);
   const tankSizeCuFt = topOff.tankSizeCuFt ?? settings.defaultTankSizeCuFt ?? 80;
   const tankRatedPressurePsi = topOff.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000;
+  const startTemperatureF = resolveTopOffStartTemperatureF(topOff);
+  const resultTemperatureF = resolveTopOffResultTemperatureF(topOff, startTemperatureF);
+  const temperatureLabel = temperatureUnitLabel(settings.temperatureUnit);
 
   const selectedTopGas = useMemo(() => {
     const match = topOffOptions.find((option) => option.id === topOff.topGasId);
@@ -45,20 +106,6 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
     [topOff.startPressure, settings.pressureUnit]
   );
 
-  useEffect(() => {
-    if (selectedTopGas && selectedTopGas.id !== topOff.topGasId) {
-      setTopOff({ ...topOff, topGasId: selectedTopGas.id });
-    }
-  }, [selectedTopGas, topOff, setTopOff]);
-
-  const effectiveBleedPsi = result?.success
-    ? clampPressure(Math.min(bleedPsi, startPressurePsi))
-    : 0;
-
-  function updateField<K extends keyof TopOffInput>(key: K, value: TopOffInput[K]): void {
-    setTopOff({ ...topOff, [key]: value });
-  }
-
   const selectOnFocus = (event: FocusEvent<HTMLInputElement>): void => {
     const target = event.target;
     requestAnimationFrame(() => {
@@ -66,42 +113,163 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
     });
   };
 
-  const onCalculate = (): void => {
-    if (!selectedTopGas) {
+  function calculateForInput(input: TopOffInput, topGas: GasSelection | undefined): void {
+    if (!topGas) {
       setResult(null);
       setChart(null);
       setBleedPsi(0);
       return;
     }
 
-    const outcome = calculateTopOffBlend(
-      { pressureUnit: settings.pressureUnit },
-      {
-        ...topOff,
-        startPressure: topOff.startPressure ?? 0,
-        finalPressure: topOff.finalPressure ?? 3000,
-        startO2: topOff.startO2 ?? 32,
-        startHe: topOff.startHe ?? 0
-      },
-      selectedTopGas
-    );
+    const baseInput: TopOffInput = {
+      ...input,
+      startPressure: input.startPressure ?? 0,
+      finalPressure: input.finalPressure ?? 3000,
+      startO2: input.startO2 ?? 32,
+      startHe: input.startHe ?? 0
+    };
+    const resolvedStartTemperatureF = resolveTopOffStartTemperatureF(baseInput);
+    const resolvedResultTemperatureF = resolveTopOffResultTemperatureF(baseInput, resolvedStartTemperatureF);
+    const resolvedTankSizeCuFt = baseInput.tankSizeCuFt ?? settings.defaultTankSizeCuFt ?? 80;
+    const resolvedTankRatedPressurePsi = baseInput.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000;
+    const goalPressurePsi = fromDisplayPressure(baseInput.finalPressure ?? 3000, settings.pressureUnit);
+    const outcome: TopOffDisplayResult = settings.gasModel === "gerg2008"
+      ? resolvedStartTemperatureF === undefined
+        ? {
+            success: false,
+            finalO2: 0,
+            finalHe: 0,
+            finalN2: 0,
+            startPressurePsi: fromDisplayPressure(baseInput.startPressure ?? 0, settings.pressureUnit),
+            goalPressurePsi,
+            resultPressurePsi: goalPressurePsi,
+            addedPressure: 0,
+            startTemperatureF: DEFAULT_START_TEMPERATURE_F,
+            resultTemperatureF: resolvedResultTemperatureF ?? DEFAULT_START_TEMPERATURE_F,
+            topOffMoles: 0,
+            z: 1,
+            warnings: [],
+            errors: ["Start temperature is required for GERG-2008 top-off correction."],
+            model: "gerg2008"
+          }
+        : resolvedResultTemperatureF === undefined
+        ? {
+            success: false,
+            finalO2: 0,
+            finalHe: 0,
+            finalN2: 0,
+            startPressurePsi: fromDisplayPressure(baseInput.startPressure ?? 0, settings.pressureUnit),
+            goalPressurePsi,
+            resultPressurePsi: goalPressurePsi,
+            addedPressure: 0,
+            startTemperatureF: resolvedStartTemperatureF,
+            resultTemperatureF: resolvedStartTemperatureF,
+            topOffMoles: 0,
+            z: 1,
+            warnings: [],
+            errors: ["Result temperature is required for GERG-2008 top-off correction."],
+            model: "gerg2008"
+          }
+        : {
+            ...calculateRealGasTopOff(
+              { pressureUnit: settings.pressureUnit },
+              {
+                ...baseInput,
+                tankSizeCuFt: resolvedTankSizeCuFt,
+                tankRatedPressurePsi: resolvedTankRatedPressurePsi,
+                startTemperatureF: resolvedStartTemperatureF,
+                resultTemperatureF: resolvedResultTemperatureF
+              },
+              topGas
+            ),
+            model: "gerg2008"
+          }
+      : {
+          ...calculateTopOffBlend(
+            { pressureUnit: settings.pressureUnit },
+            baseInput,
+            topGas
+          ),
+          model: "ideal",
+          goalPressurePsi,
+          resultPressurePsi: goalPressurePsi
+        };
     setResult(outcome);
 
     if (outcome.success) {
       const baseline: StandardBlendInput = {
-        startO2: topOff.startO2,
-        startHe: topOff.startHe,
-        startPressure: topOff.startPressure,
+        startO2: baseInput.startO2,
+        startHe: baseInput.startHe,
+        startPressure: baseInput.startPressure,
         targetO2: outcome.finalO2,
         targetHe: outcome.finalHe,
-        targetPressure: topOff.finalPressure,
-        topGasId: topOff.topGasId
+        targetPressure: baseInput.finalPressure,
+        topGasId: baseInput.topGasId
       };
-      setChart(projectTopOffChart({ pressureUnit: settings.pressureUnit }, baseline, selectedTopGas));
+      setChart(projectTopOffChart({ pressureUnit: settings.pressureUnit }, baseline, topGas));
     } else {
       setChart(null);
       setBleedPsi(0);
     }
+  }
+
+  function gasForInput(input: TopOffInput): GasSelection | undefined {
+    return topOffOptions.find((option) => option.id === input.topGasId) ?? topOffOptions[0];
+  }
+
+  function setTopOffInput(next: TopOffInput, recalculate = Boolean(result)): void {
+    setTopOff(next);
+    if (recalculate) {
+      calculateForInput(next, gasForInput(next));
+    }
+  }
+
+  const effectiveBleedPsi = result?.success
+    ? clampPressure(Math.min(bleedPsi, startPressurePsi))
+    : 0;
+
+  function updateField<K extends keyof TopOffInput>(key: K, value: TopOffInput[K]): void {
+    setTopOffInput({ ...topOff, [key]: value });
+  }
+
+  const updateTemperatureField = (value: number | undefined): void => {
+    setTopOffInput({
+      ...topOff,
+      ...updateTopOffStartTemperatureState(value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit))
+    });
+  };
+
+  const restoreDefaultStartTemperature = (): void => {
+    if (topOff.startTemperatureF !== undefined) {
+      return;
+    }
+
+    setTopOffInput({
+      ...topOff,
+      ...defaultTopOffStartTemperatureState()
+    });
+  };
+
+  const updateResultTemperatureField = (value: number | undefined): void => {
+    setTopOffInput({
+      ...topOff,
+      ...updateTopOffResultTemperatureState(value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit))
+    });
+  };
+
+  const restoreDefaultResultTemperature = (): void => {
+    if (topOff.resultTemperatureF !== undefined) {
+      return;
+    }
+
+    setTopOffInput({
+      ...topOff,
+      ...defaultTopOffResultTemperatureState()
+    });
+  };
+
+  const onCalculate = (): void => {
+    calculateForInput(topOff, selectedTopGas);
   };
 
   const adjustedStartPsi = useMemo(
@@ -175,7 +343,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
   }, [adjustedStartPsi, selectedTopGas, settings.pressureUnit, showBleedPreview, topOff]);
 
   const trainingMath = useMemo(() => {
-    if (!trainingModeEnabled || !result?.success || !selectedTopGas) {
+    if (!trainingModeEnabled || !result?.success || result.model !== "ideal" || !selectedTopGas) {
       return null;
     }
 
@@ -265,31 +433,20 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
             onChange={(val) => updateField("startPressure", val)}
             onBlur={() => updateField("startPressure", clampPressure(topOff.startPressure ?? 0))}
           />
+          {settings.gasModel === "gerg2008" && (
+            <NumberInput
+              label={`Start Temp (${temperatureLabel})`}
+              step={1}
+              value={startTemperatureF === undefined ? undefined : toDisplayTemperature(startTemperatureF, settings.temperatureUnit)}
+              onChange={updateTemperatureField}
+              onBlur={restoreDefaultStartTemperature}
+              selectOnClick={true}
+            />
+          )}
         </div>
       </AccordionItem>
 
-      <AccordionItem title="Tank Context" defaultOpen={false}>
-        <TankContextFields
-          tankSizeCuFt={topOff.tankSizeCuFt}
-          tankRatedPressurePsi={topOff.tankRatedPressurePsi}
-          defaultTankSizeCuFt={settings.defaultTankSizeCuFt}
-          defaultTankRatedPressurePsi={settings.tankRatedPressure}
-          onChange={(patch) => setTopOff({ ...topOff, ...patch })}
-        />
-      </AccordionItem>
-
-      <AccordionItem title="Top-Off Goal" defaultOpen={true}>
-        <NumberInput
-          label={`Final Pressure (${settings.pressureUnit.toUpperCase()})`}
-          min={0}
-          step={settings.pressureUnit === "psi" ? 10 : 1}
-          value={topOff.finalPressure}
-          onChange={(val) => updateField("finalPressure", val)}
-          onBlur={() => updateField("finalPressure", clampPressure(topOff.finalPressure ?? 0))}
-        />
-      </AccordionItem>
-
-      <AccordionItem title="Top-Off Gas" defaultOpen={true}>
+      <AccordionItem title="Top-Off" defaultOpen={true}>
         <div className="field">
           <label>Select Gas</label>
           <select
@@ -305,18 +462,26 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
             ))}
           </select>
         </div>
+        <NumberInput
+          label={`Goal Pressure (${settings.pressureUnit.toUpperCase()})`}
+          min={0}
+          step={settings.pressureUnit === "psi" ? 10 : 1}
+          value={topOff.finalPressure}
+          onChange={(val) => updateField("finalPressure", val)}
+          onBlur={() => updateField("finalPressure", clampPressure(topOff.finalPressure ?? 0))}
+        />
         <button className="calculate-button" type="button" onClick={onCalculate}>
           Calculate
         </button>
       </AccordionItem>
 
       {result && (
-        <AccordionItem title="Top-Off Outcome" defaultOpen={true}>
+        <AccordionItem title="Result" defaultOpen={true}>
           {!result.success && result.errors.length > 0 && (
             <div className="error">{result.errors[0]}</div>
           )}
           {result.success && (
-            <div className="grid three">
+            <div className="grid two">
               <div className="stat">
                 <div className="stat-label">Final O2</div>
                 <div className="stat-value">{formatPercentage(result.finalO2)}</div>
@@ -325,40 +490,46 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                 <div className="stat-label">Final He</div>
                 <div className="stat-value">{formatPercentage(result.finalHe)}</div>
               </div>
-              <div className="stat">
-                <div className="stat-label">Final N2</div>
-                <div className="stat-value">{formatPercentage(result.finalN2)}</div>
-              </div>
             </div>
+          )}
+          {settings.gasModel === "gerg2008" && (
+            <NumberInput
+              label={`Result Temp (${temperatureLabel})`}
+              step={1}
+              value={resultTemperatureF === undefined ? undefined : toDisplayTemperature(resultTemperatureF, settings.temperatureUnit)}
+              onChange={updateResultTemperatureField}
+              onBlur={restoreDefaultResultTemperature}
+              selectOnClick={true}
+            />
           )}
           {result.success && (
             <div className="result-note">
-              Add {selectedTopGas?.name ?? "chosen gas"}: {formatPressure(result.finalPressure, settings.pressureUnit)}
-              <span className="result-step-total"> ({formatSignedPressure(result.addedPressure, settings.pressureUnit)})</span>
+              {result.model === "gerg2008"
+                ? (
+                    <>
+                      Stop at {formatPressure(result.resultPressurePsi, settings.pressureUnit, 1)}
+                      {" "}at {formatNumber(toDisplayTemperature(result.resultTemperatureF, settings.temperatureUnit), 0)} {temperatureLabel}
+                      {" "}for goal {formatPressure(result.goalPressurePsi, settings.pressureUnit, 1)}
+                      {" "}at {formatNumber(toDisplayTemperature(result.startTemperatureF, settings.temperatureUnit), 0)} {temperatureLabel}.
+                    </>
+                  )
+                : <>Add {selectedTopGas?.name ?? "chosen gas"}: {formatPressure(result.resultPressurePsi, settings.pressureUnit)}</>}
+              {result.model === "ideal" && (
+                <span className="result-step-total"> ({formatSignedPressure(result.addedPressure, settings.pressureUnit)})</span>
+              )}
             </div>
           )}
-          {fillCost && fillCost.lines.length > 0 && (
-            <div className="cost-breakdown">
-              <div className="section-title">Fill Cost</div>
-              <div className="grid two">
-                {fillCost.lines.map((line) => (
-                  <div key={line.label} className="cost-line">
-                    <span>{line.label}:</span>
-                    <span>{formatGasCostDetail(line.volumeCuFt, line.volumeLiters, line.unitPrice, line.cost)}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
-              <div className="cost-total">
-                <strong>Total: {"$"}{fillCost.totalCost.toFixed(2)}</strong>
-              </div>
-            </div>
+          {result.success && (
+            <div className="table-note">Final N2: {formatPercentage(result.finalN2)}.</div>
           )}
           {result.warnings.map((warning) => (
             <div key={warning} className="warning">
               {warning}
             </div>
           ))}
+          {result.model === "gerg2008" && trainingModeEnabled && (
+            <div className="table-note">GERG-2008 Topoff solves gas moles at Start Temp. Result Temp changes the displayed stop pressure, not the calculated mix.</div>
+          )}
           {trainingMath && (
             <TrainingMathPanel
               title="Top-Off Hand Math"
@@ -433,8 +604,38 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
         </AccordionItem>
       )}
 
+      {result && (
+        <AccordionItem title="Fill Cost" defaultOpen={true}>
+          <TankContextFields
+            tankSizeCuFt={topOff.tankSizeCuFt}
+            tankRatedPressurePsi={topOff.tankRatedPressurePsi}
+            defaultTankSizeCuFt={settings.defaultTankSizeCuFt}
+            defaultTankRatedPressurePsi={settings.tankRatedPressure}
+            onChange={(patch) => setTopOffInput({ ...topOff, ...patch })}
+          />
+          {fillCost && fillCost.lines.length > 0 ? (
+            <div className="cost-breakdown">
+              <div className="grid two">
+                {fillCost.lines.map((line) => (
+                  <div key={line.label} className="cost-line">
+                    <span>{line.label}:</span>
+                    <span>{formatGasCostDetail(line.volumeCuFt, line.volumeLiters, line.unitPrice, line.cost)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
+              <div className="cost-total">
+                <strong>Total: {"$"}{fillCost.totalCost.toFixed(2)}</strong>
+              </div>
+            </div>
+          ) : (
+            <div className="table-note">Calculate a successful top-off with added gas to see the estimated fill cost.</div>
+          )}
+        </AccordionItem>
+      )}
+
       {showBleedPreview && bleedPreview && (
-        <AccordionItem title="Bleed-Down What-If" defaultOpen={false}>
+        <AccordionItem title={settings.gasModel === "gerg2008" ? "Bleed-Down What-If (Ideal)" : "Bleed-Down What-If"} defaultOpen={false}>
           <div className="field">
             <label>Bleed Amount ({settings.pressureUnit.toUpperCase()})</label>
             <input
@@ -560,7 +761,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       )}
 
       {chart && chart.length > 0 && (
-        <AccordionItem title="Top-Off Sensitivity" defaultOpen={false}>
+        <AccordionItem title={settings.gasModel === "gerg2008" ? "Top-Off Sensitivity (Ideal)" : "Top-Off Sensitivity"} defaultOpen={false}>
           <table>
             <thead>
               <tr>

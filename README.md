@@ -7,7 +7,7 @@ Source code: [github.com/jkowall/Barefoot-Blender](https://github.com/jkowall/Ba
 ## Features
 
 - **Standard Blend Planner** – Partial pressure blending with automatic bleed-down solutions, warnings, an interactive sensitivity slider, reverse solvers for required start pressure and helium-free targets, and optional GERG-2008 O2/N2/He corrected stop pressures with measured per-stage temperatures.
-- **Top-Off What-If** – Quick projections for topping a cylinder, including final mix readouts, fill cost, and a bleed/down sensitivity chart tied to the selected bank.
+- **Top-Off What-If** – Quick projections for topping a cylinder, including final mix readouts, GERG-2008 Start/Result temperature pressure correction, fill cost, and a bleed/down sensitivity chart tied to the selected bank.
 - **Dynamic Multi-Gas Blending** – Support for 1-4 gas sources with add/remove buttons, per-source bank pressure limits, linear solver for two source gases with Trimix presets, custom O₂/He mixes, target helium support, cost optimization, tank-volume cost basis, and fill order recommendations.
 - **Gas Cost Calculator** – Calculates fill cost with O₂, He, and top-off gas line items using configurable O₂/He/Top-Off pricing, per-fill tank size, and rated pressure.
 - **Tank Conversion** – Converts PSI, cubic feet, and free gas liters using the active tank volume and rated pressure.
@@ -141,6 +141,7 @@ Refer to these documents for formula references, UI intent, and caching strategi
 
 - Bump the project version in `package.json` (for example with `npm version patch`).
 - Add a corresponding entry to [`CHANGELOG.md`](CHANGELOG.md) using the `[#.#.#] - YYYY-MM-DD` format.
+- Treat every version bump as a web plus native release candidate unless explicitly excluded. Follow [`docs/mobile-release.md`](docs/mobile-release.md) for Capacitor validation, native build numbers, and TestFlight or Google Play handoff.
 - The UI footer reads the version injected at build time, so no additional code changes are required after updating `package.json`.
 
 ## Changelog

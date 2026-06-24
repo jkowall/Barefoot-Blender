@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.12.8] - 2026-06-24
+
+### Added
+
+- **Top-Off GERG Temperature Corrections**: Added GERG-2008 corrected Top-Off results with Start Temp and Result Temp controls. Result Temp changes the displayed stop pressure while keeping the calculated mix fixed.
+
+### Changed
+
+- **Top-Off Flow**: Simplified Top-Off into Start, Top-Off, Result, and Fill Cost sections, with tank context kept next to the cost breakdown.
+- **Release Policy**: Documented that app version bumps also require the native mobile release validation path unless explicitly excluded.
+
 ## [0.12.7] - 2026-06-17
 
 ### Changed

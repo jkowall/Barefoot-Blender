@@ -1,5 +1,5 @@
 import type { PressureUnit } from "../state/settings";
-import type { StandardBlendInput } from "../state/session";
+import type { StandardBlendInput, TopOffInput } from "../state/session";
 import type { GasSelection } from "./calculations";
 import {
   ATM_PRESSURE_PSI,
@@ -34,6 +34,23 @@ export type RealGasBlendResult = {
   startHotPressurePsi: number;
   finalHotPressurePsi: number;
   targetSettledPressurePsi: number;
+  warnings: string[];
+  errors: string[];
+};
+
+export type RealGasTopOffResult = {
+  success: boolean;
+  finalO2: number;
+  finalHe: number;
+  finalN2: number;
+  startPressurePsi: number;
+  goalPressurePsi: number;
+  resultPressurePsi: number;
+  addedPressure: number;
+  startTemperatureF: number;
+  resultTemperatureF: number;
+  topOffMoles: number;
+  z: number;
   warnings: string[];
   errors: string[];
 };
@@ -115,6 +132,49 @@ const stateFromComponents = (
   };
 };
 
+const invalidGergMix = (...mixes: GergGasFractions[]): boolean =>
+  mixes.some((mix) => mix.o2 < -MOLE_TOLERANCE || mix.he < -MOLE_TOLERANCE || mix.n2 < -MOLE_TOLERANCE);
+
+const percentFromFraction = (value: number): number => Math.max(0, Math.min(100, value * 100));
+
+const realGasTopOffFailure = (
+  startPressurePsi: number,
+  goalPressurePsi: number,
+  startTemperatureF: number,
+  resultTemperatureF: number,
+  warnings: string[],
+  errors: string[]
+): RealGasTopOffResult => ({
+  success: false,
+  finalO2: 0,
+  finalHe: 0,
+  finalN2: 0,
+  startPressurePsi,
+  goalPressurePsi,
+  resultPressurePsi: goalPressurePsi,
+  addedPressure: 0,
+  startTemperatureF,
+  resultTemperatureF,
+  topOffMoles: 0,
+  z: 1,
+  warnings: [...new Set(warnings)],
+  errors
+});
+
+const pressureForTopOffMoles = (
+  topOffMoles: number,
+  startComponents: ComponentMoles,
+  topFractions: GergGasFractions,
+  temperatureK: number,
+  waterVolumeLiters: number
+): { components: ComponentMoles; success: boolean; pressurePsi: number; z: number; warnings: string[]; errors: string[] } => {
+  const components = addGasMoles(startComponents, topOffMoles, topFractions);
+  return {
+    components,
+    ...stateFromComponents(temperatureK, components, waterVolumeLiters)
+  };
+};
+
 const stepTemperatureF = (
   inputs: StandardBlendInput,
   kind: RealGasBlendStep["kind"],
@@ -124,6 +184,251 @@ const stepTemperatureF = (
     return inputs.stageTemperaturesF?.[kind] ?? inputs.fillTemperatureF ?? startTemperatureF;
   }
   return inputs.stageTemperaturesF?.[kind] ?? startTemperatureF;
+};
+
+export const calculateRealGasTopOff = (
+  settings: RealGasBlendSettings,
+  inputs: TopOffInput,
+  topGas: GasSelection
+): RealGasTopOffResult => {
+  const startPressurePsi = fromDisplayPressure(inputs.startPressure ?? 0, settings.pressureUnit);
+  const goalPressurePsi = fromDisplayPressure(inputs.finalPressure ?? 0, settings.pressureUnit);
+  const startTemperatureF = inputs.startTemperatureF ?? DEFAULT_START_TEMPERATURE_F;
+  const resultTemperatureF = inputs.resultTemperatureF ?? startTemperatureF;
+  const startTemperatureK = fahrenheitToKelvin(startTemperatureF);
+  const resultTemperatureK = fahrenheitToKelvin(resultTemperatureF);
+  const warnings: string[] = [];
+
+  if (goalPressurePsi <= MOLE_TOLERANCE) {
+    return realGasTopOffFailure(
+      startPressurePsi,
+      goalPressurePsi,
+      startTemperatureF,
+      resultTemperatureF,
+      warnings,
+      ["Goal pressure must be greater than zero."]
+    );
+  }
+
+  if (startPressurePsi < -MOLE_TOLERANCE) {
+    return realGasTopOffFailure(
+      startPressurePsi,
+      goalPressurePsi,
+      startTemperatureF,
+      resultTemperatureF,
+      warnings,
+      ["Start pressure cannot be negative."]
+    );
+  }
+
+  if (goalPressurePsi < startPressurePsi - MOLE_TOLERANCE) {
+    return realGasTopOffFailure(
+      startPressurePsi,
+      goalPressurePsi,
+      startTemperatureF,
+      resultTemperatureF,
+      warnings,
+      ["Goal pressure is below current pressure. Bleed-down required."]
+    );
+  }
+
+  const waterVolumeLiters = tankWaterVolumeLiters(inputs.tankSizeCuFt ?? 0, inputs.tankRatedPressurePsi ?? 0);
+  if (waterVolumeLiters <= 0) {
+    return realGasTopOffFailure(
+      startPressurePsi,
+      goalPressurePsi,
+      startTemperatureF,
+      resultTemperatureF,
+      warnings,
+      ["Tank size and rated pressure are required for GERG-2008 correction."]
+    );
+  }
+
+  const startFractions = gasFractionsFromPercents(inputs.startO2 ?? 21, inputs.startHe ?? 0);
+  const topFractions = gasFractionsFromPercents(topGas.o2, topGas.he);
+  if (invalidGergMix(startFractions, topFractions)) {
+    return realGasTopOffFailure(
+      startPressurePsi,
+      goalPressurePsi,
+      startTemperatureF,
+      resultTemperatureF,
+      warnings,
+      ["Gas fractions must be between 0% and 100%, and O2% + He% must not exceed 100%."]
+    );
+  }
+
+  let startComponents: ComponentMoles = { o2: 0, he: 0, n2: 0 };
+  if (startPressurePsi > MOLE_TOLERANCE) {
+    const startDensity = gergDensityFromPressure(startTemperatureK, gaugePsiToAbsoluteKpa(startPressurePsi), startFractions);
+    warnings.push(...startDensity.warnings);
+    if (!startDensity.success) {
+      return realGasTopOffFailure(
+        startPressurePsi,
+        goalPressurePsi,
+        startTemperatureF,
+        resultTemperatureF,
+        warnings,
+        startDensity.errors
+      );
+    }
+    startComponents = componentMolesFromTotal(startDensity.densityMolPerLiter * waterVolumeLiters, startFractions);
+  }
+
+  if (Math.abs(goalPressurePsi - startPressurePsi) <= MOLE_TOLERANCE) {
+    const resultState = stateFromComponents(resultTemperatureK, startComponents, waterVolumeLiters);
+    warnings.push(...resultState.warnings);
+    if (!resultState.success) {
+      return realGasTopOffFailure(
+        startPressurePsi,
+        goalPressurePsi,
+        startTemperatureF,
+        resultTemperatureF,
+        warnings,
+        resultState.errors
+      );
+    }
+    const finalFractions = fractionsFromMoles(startComponents);
+    return {
+      success: true,
+      finalO2: percentFromFraction(finalFractions.o2),
+      finalHe: percentFromFraction(finalFractions.he),
+      finalN2: percentFromFraction(finalFractions.n2),
+      startPressurePsi,
+      goalPressurePsi,
+      resultPressurePsi: resultState.pressurePsi,
+      addedPressure: 0,
+      startTemperatureF,
+      resultTemperatureF,
+      topOffMoles: 0,
+      z: resultState.z,
+      warnings: [...new Set(warnings)],
+      errors: []
+    };
+  }
+
+  const topGasTargetDensity = gergDensityFromPressure(startTemperatureK, gaugePsiToAbsoluteKpa(goalPressurePsi), topFractions);
+  warnings.push(...topGasTargetDensity.warnings);
+  if (!topGasTargetDensity.success) {
+    return realGasTopOffFailure(
+      startPressurePsi,
+      goalPressurePsi,
+      startTemperatureF,
+      resultTemperatureF,
+      warnings,
+      topGasTargetDensity.errors
+    );
+  }
+
+  let lowMoles = 0;
+  let highMoles = Math.max(
+    MOLE_TOLERANCE,
+    topGasTargetDensity.densityMolPerLiter * waterVolumeLiters - totalMoles(startComponents)
+  );
+  let highState = pressureForTopOffMoles(highMoles, startComponents, topFractions, startTemperatureK, waterVolumeLiters);
+
+  for (let attempt = 0; attempt < 80 && highState.success && highState.pressurePsi < goalPressurePsi; attempt += 1) {
+    const pressureRatio = goalPressurePsi / Math.max(1, highState.pressurePsi);
+    const growth = pressureRatio > 2 ? 2 : Math.max(1.02, Math.min(1.2, pressureRatio));
+    highMoles *= growth;
+    highState = pressureForTopOffMoles(highMoles, startComponents, topFractions, startTemperatureK, waterVolumeLiters);
+  }
+
+  if (!highState.success) {
+    return realGasTopOffFailure(
+      startPressurePsi,
+      goalPressurePsi,
+      startTemperatureF,
+      resultTemperatureF,
+      warnings,
+      highState.errors
+    );
+  }
+
+  if (highState.pressurePsi < goalPressurePsi - 0.01) {
+    return realGasTopOffFailure(
+      startPressurePsi,
+      goalPressurePsi,
+      startTemperatureF,
+      resultTemperatureF,
+      warnings,
+      ["GERG-2008 top-off solver failed to bracket the goal pressure."]
+    );
+  }
+
+  for (let iteration = 0; iteration < 80; iteration += 1) {
+    const midMoles = (lowMoles + highMoles) / 2;
+    const midState = pressureForTopOffMoles(midMoles, startComponents, topFractions, startTemperatureK, waterVolumeLiters);
+    if (!midState.success) {
+      highMoles = midMoles;
+      continue;
+    }
+
+    if (Math.abs(midState.pressurePsi - goalPressurePsi) <= 0.01) {
+      lowMoles = midMoles;
+      highMoles = midMoles;
+      break;
+    }
+
+    if (midState.pressurePsi < goalPressurePsi) {
+      lowMoles = midMoles;
+    } else {
+      highMoles = midMoles;
+    }
+  }
+
+  const topOffMoles = (lowMoles + highMoles) / 2;
+  const finalStartTemperatureState = pressureForTopOffMoles(topOffMoles, startComponents, topFractions, startTemperatureK, waterVolumeLiters);
+  if (!finalStartTemperatureState.success) {
+    return realGasTopOffFailure(
+      startPressurePsi,
+      goalPressurePsi,
+      startTemperatureF,
+      resultTemperatureF,
+      warnings,
+      finalStartTemperatureState.errors
+    );
+  }
+
+  const resultState = stateFromComponents(resultTemperatureK, finalStartTemperatureState.components, waterVolumeLiters);
+  warnings.push(...finalStartTemperatureState.warnings, ...resultState.warnings);
+  if (!resultState.success) {
+    return realGasTopOffFailure(
+      startPressurePsi,
+      goalPressurePsi,
+      startTemperatureF,
+      resultTemperatureF,
+      warnings,
+      resultState.errors
+    );
+  }
+
+  const finalFractions = fractionsFromMoles(finalStartTemperatureState.components);
+  const finalO2 = percentFromFraction(finalFractions.o2);
+  const finalHe = percentFromFraction(finalFractions.he);
+  const finalN2 = percentFromFraction(finalFractions.n2);
+  if (finalO2 < 18) {
+    warnings.push("Hypoxic mix (<18% O2).");
+  }
+  if (finalO2 > 40) {
+    warnings.push("High O2 - fire risk (>40% O2).");
+  }
+
+  return {
+    success: true,
+    finalO2,
+    finalHe,
+    finalN2,
+    startPressurePsi,
+    goalPressurePsi,
+    resultPressurePsi: resultState.pressurePsi,
+    addedPressure: Math.max(0, goalPressurePsi - startPressurePsi),
+    startTemperatureF,
+    resultTemperatureF,
+    topOffMoles,
+    z: resultState.z,
+    warnings: [...new Set(warnings)],
+    errors: []
+  };
 };
 
 export const calculateRealGasStandardBlend = (
@@ -154,8 +459,7 @@ export const calculateRealGasStandardBlend = (
   const startFractions = gasFractionsFromPercents(inputs.startO2 ?? 21, inputs.startHe ?? 0);
   const targetFractions = gasFractionsFromPercents(inputs.targetO2 ?? 32, inputs.targetHe ?? 0);
   const topFractions = gasFractionsFromPercents(topGas.o2, topGas.he);
-  const invalidMix = [startFractions, targetFractions, topFractions].some((mix) => mix.o2 < -MOLE_TOLERANCE || mix.he < -MOLE_TOLERANCE || mix.n2 < -MOLE_TOLERANCE);
-  if (invalidMix) {
+  if (invalidGergMix(startFractions, targetFractions, topFractions)) {
     return {
       success: false,
       steps: [],
