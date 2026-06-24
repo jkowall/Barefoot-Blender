@@ -178,23 +178,14 @@ export const updateStageTemperatureState = (
   const nextTouched: StandardBlendStageTemperatureTouched = { ...stageTemperatureTouched };
   const currentIndex = stageTemperatureOrder.indexOf(kind);
 
-  if (value === undefined) {
-    delete nextStageTemperatures[kind];
-    nextTouched[kind] = true;
-  } else {
-    nextStageTemperatures[kind] = value;
-    nextTouched[kind] = true;
-  }
+  nextStageTemperatures[kind] = value;
+  nextTouched[kind] = true;
 
   for (const laterKind of stageTemperatureOrder.slice(currentIndex + 1)) {
     if (stageTemperatureTouched[laterKind]) {
       break;
     }
-    if (value === undefined) {
-      delete nextStageTemperatures[laterKind];
-    } else {
-      nextStageTemperatures[laterKind] = value;
-    }
+    nextStageTemperatures[laterKind] = value;
   }
 
   return { stageTemperaturesF: nextStageTemperatures, stageTemperatureTouched: nextTouched };
