@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  copyTopOffResultToStartInput,
   defaultTopOffResultTemperatureState,
   defaultTopOffStartTemperatureState,
   resolveTopOffResultTemperatureF,
@@ -80,6 +81,80 @@ describe("defaultTopOffResultTemperatureState", () => {
     expect(defaultTopOffResultTemperatureState()).toEqual({
       resultTemperatureF: undefined,
       resultTemperatureTouched: false
+    });
+  });
+});
+
+describe("copyTopOffResultToStartInput", () => {
+  test("copies the rounded result mix and goal pressure into the start tank", () => {
+    const input = {
+      startO2: 32,
+      startHe: 0,
+      startPressure: 500,
+      finalPressure: 3000,
+      topGasId: "air"
+    };
+
+    const result = {
+      success: true,
+      finalO2: 22.833333,
+      finalHe: 0.004,
+      finalN2: 77.162667,
+      finalPressure: 3000,
+      addedPressure: 2500,
+      warnings: [],
+      errors: [],
+      model: "ideal" as const,
+      goalPressurePsi: 3000,
+      resultPressurePsi: 3000
+    };
+
+    expect(copyTopOffResultToStartInput(input, result, "psi")).toEqual({
+      ...input,
+      startO2: 22.83,
+      startHe: 0,
+      startPressure: 3000
+    });
+  });
+
+  test("copies the GERG goal temperature instead of the adjusted result temperature", () => {
+    const input = {
+      startO2: 32,
+      startHe: 0,
+      startPressure: 500,
+      finalPressure: 3000,
+      startTemperatureF: 70,
+      startTemperatureTouched: true,
+      resultTemperatureF: 95,
+      resultTemperatureTouched: true,
+      topGasId: "air"
+    };
+
+    const result = {
+      success: true,
+      finalO2: 22.833333,
+      finalHe: 0,
+      finalN2: 77.166667,
+      startPressurePsi: 500,
+      goalPressurePsi: 3000,
+      resultPressurePsi: 3260,
+      addedPressure: 2500,
+      startTemperatureF: 72,
+      resultTemperatureF: 95,
+      topOffMoles: 120,
+      z: 1.01,
+      warnings: [],
+      errors: [],
+      model: "gerg2008" as const
+    };
+
+    expect(copyTopOffResultToStartInput(input, result, "psi")).toEqual({
+      ...input,
+      startO2: 22.83,
+      startHe: 0,
+      startPressure: 3000,
+      startTemperatureF: 72,
+      startTemperatureTouched: true
     });
   });
 });

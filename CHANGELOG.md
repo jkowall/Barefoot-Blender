@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.9] - 2026-06-25
+
+### Changed
+
+- **Top-Off Result Precision**: Displayed Top-Off result O2, He, and N2 values with two decimal places for finer mix evaluation.
+
+### Fixed
+
+- **Top-Off Multi-Stage Workflow**: Added a Result action that copies the calculated mix, goal pressure, and GERG goal temperature back into the Start Tank inputs with visible confirmation.
+
 ## [0.12.8] - 2026-06-24
 
 ### Added
