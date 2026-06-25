@@ -46,8 +46,17 @@ const RESULT_MIX_DECIMALS = 2;
 const roundResultMixPercent = (value: number): number =>
   Number.isFinite(value) ? clampPercent(Number(value.toFixed(RESULT_MIX_DECIMALS))) : 0;
 
+const copiedResultMix = (finalO2: number, finalHe: number): { o2: number; he: number } => {
+  const o2 = roundResultMixPercent(finalO2);
+  const he = Math.min(roundResultMixPercent(finalHe), roundResultMixPercent(100 - o2));
+  return { o2, he };
+};
+
+const formatResultMixValue = (value: number): string =>
+  Number.isFinite(value) ? value.toFixed(RESULT_MIX_DECIMALS) : "0.00";
+
 const formatResultMixPercentage = (value: number): string =>
-  `${Number.isFinite(value) ? value.toFixed(RESULT_MIX_DECIMALS) : "0.00"}%`;
+  `${formatResultMixValue(value)}%`;
 
 export const resolveTopOffResultTemperatureF = (
   input: Pick<TopOffInput, "resultTemperatureF" | "resultTemperatureTouched">,
@@ -101,10 +110,11 @@ export const copyTopOffResultToStartInput = (
     return input;
   }
 
+  const mix = copiedResultMix(result.finalO2, result.finalHe);
   const next: TopOffInput = {
     ...input,
-    startO2: roundResultMixPercent(result.finalO2),
-    startHe: roundResultMixPercent(result.finalHe),
+    startO2: mix.o2,
+    startHe: mix.he,
     startPressure: toDisplayPressure(result.goalPressurePsi, pressureUnit)
   };
 
@@ -729,7 +739,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                     min={0}
                     max={100}
                     step={0.01}
-                    value={formatNumber(bleedPreview.finalO2, RESULT_MIX_DECIMALS)}
+                    value={formatResultMixValue(bleedPreview.finalO2)}
                     onFocus={selectOnFocus}
                     onChange={(e) => {
                       // Reverse solve: P_final_O2 = (P_start_adj * Start_O2 + P_added * Top_O2) / P_total
@@ -768,7 +778,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                     min={0}
                     max={100}
                     step={0.01}
-                    value={formatNumber(bleedPreview.finalHe, RESULT_MIX_DECIMALS)}
+                    value={formatResultMixValue(bleedPreview.finalHe)}
                     onFocus={selectOnFocus}
                     onChange={(e) => {
                       const targetHe = Number(e.target.value) / 100;
