@@ -1,12 +1,20 @@
 import { describe, expect, test } from "vitest";
 import {
+  copyTopOffResultToStartInput,
   defaultTopOffResultTemperatureState,
   defaultTopOffStartTemperatureState,
   resolveTopOffResultTemperatureF,
+  resolveTopOffSelectedGas,
   resolveTopOffStartTemperatureF,
+  syncTopOffInputSelectedGas,
   updateTopOffStartTemperatureState,
   updateTopOffResultTemperatureState
 } from "./TopOffTab";
+
+const topOffOptions = [
+  { id: "air", name: "Air", o2: 21, he: 0 },
+  { id: "oxygen", name: "Oxygen", o2: 100, he: 0 }
+];
 
 describe("resolveTopOffStartTemperatureF", () => {
   test("defaults start temperature before user edit", () => {
@@ -31,6 +39,45 @@ describe("resolveTopOffResultTemperatureF", () => {
 
   test("keeps touched blank result temperature blank", () => {
     expect(resolveTopOffResultTemperatureF({ resultTemperatureTouched: true }, 70)).toBeUndefined();
+  });
+});
+
+describe("resolveTopOffSelectedGas", () => {
+  test("uses the persisted gas id when it is still available", () => {
+    expect(resolveTopOffSelectedGas("oxygen", topOffOptions)?.id).toBe("oxygen");
+  });
+
+  test("falls back to the first gas when persisted gas id is unavailable", () => {
+    expect(resolveTopOffSelectedGas("removed-bank", topOffOptions)?.id).toBe("air");
+  });
+});
+
+describe("syncTopOffInputSelectedGas", () => {
+  test("keeps the input object when the selected gas is already persisted", () => {
+    const input = {
+      startO2: 32,
+      startHe: 0,
+      startPressure: 500,
+      finalPressure: 3000,
+      topGasId: "air"
+    };
+
+    expect(syncTopOffInputSelectedGas(input, topOffOptions[0])).toBe(input);
+  });
+
+  test("updates the persisted gas id to the displayed fallback gas", () => {
+    const input = {
+      startO2: 32,
+      startHe: 0,
+      startPressure: 500,
+      finalPressure: 3000,
+      topGasId: "removed-bank"
+    };
+
+    expect(syncTopOffInputSelectedGas(input, topOffOptions[0])).toEqual({
+      ...input,
+      topGasId: "air"
+    });
   });
 });
 
@@ -81,5 +128,109 @@ describe("defaultTopOffResultTemperatureState", () => {
       resultTemperatureF: undefined,
       resultTemperatureTouched: false
     });
+  });
+});
+
+describe("copyTopOffResultToStartInput", () => {
+  test("copies the rounded result mix and goal pressure into the start tank", () => {
+    const input = {
+      startO2: 32,
+      startHe: 0,
+      startPressure: 500,
+      finalPressure: 3000,
+      topGasId: "air"
+    };
+
+    const result = {
+      success: true,
+      finalO2: 22.833333,
+      finalHe: 0.004,
+      finalN2: 77.162667,
+      finalPressure: 3000,
+      addedPressure: 2500,
+      warnings: [],
+      errors: [],
+      model: "ideal" as const,
+      goalPressurePsi: 3000,
+      resultPressurePsi: 3000
+    };
+
+    expect(copyTopOffResultToStartInput(input, result, "psi")).toEqual({
+      ...input,
+      startO2: 22.83,
+      startHe: 0,
+      startPressure: 3000
+    });
+  });
+
+  test("copies the GERG goal temperature instead of the adjusted result temperature", () => {
+    const input = {
+      startO2: 32,
+      startHe: 0,
+      startPressure: 500,
+      finalPressure: 3000,
+      startTemperatureF: 70,
+      startTemperatureTouched: true,
+      resultTemperatureF: 95,
+      resultTemperatureTouched: true,
+      topGasId: "air"
+    };
+
+    const result = {
+      success: true,
+      finalO2: 22.833333,
+      finalHe: 0,
+      finalN2: 77.166667,
+      startPressurePsi: 500,
+      goalPressurePsi: 3000,
+      resultPressurePsi: 3260,
+      addedPressure: 2500,
+      startTemperatureF: 72,
+      resultTemperatureF: 95,
+      topOffMoles: 120,
+      z: 1.01,
+      warnings: [],
+      errors: [],
+      model: "gerg2008" as const
+    };
+
+    expect(copyTopOffResultToStartInput(input, result, "psi")).toEqual({
+      ...input,
+      startO2: 22.83,
+      startHe: 0,
+      startPressure: 3000,
+      startTemperatureF: 72,
+      startTemperatureTouched: true
+    });
+  });
+
+  test("keeps rounded copied mixes at or below 100 percent", () => {
+    const input = {
+      startO2: 50,
+      startHe: 50,
+      startPressure: 1000,
+      finalPressure: 3200,
+      topGasId: "oxygen"
+    };
+
+    const result = {
+      success: true,
+      finalO2: 84.375,
+      finalHe: 15.625,
+      finalN2: 0,
+      finalPressure: 3200,
+      addedPressure: 2200,
+      warnings: [],
+      errors: [],
+      model: "ideal" as const,
+      goalPressurePsi: 3200,
+      resultPressurePsi: 3200
+    };
+
+    const copied = copyTopOffResultToStartInput(input, result, "psi");
+
+    expect(copied.startO2).toBe(84.38);
+    expect(copied.startHe).toBe(15.62);
+    expect((copied.startO2 ?? 0) + (copied.startHe ?? 0)).toBeLessThanOrEqual(100);
   });
 });

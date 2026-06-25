@@ -493,6 +493,18 @@ button {
   color: #94a3b8;
 }
 
+.result-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.result-action-note {
+  margin-top: 8px;
+  color: #7dd3fc;
+  font-size: 0.85rem;
+}
+
 .real-gas-temperature-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
