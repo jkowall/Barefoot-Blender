@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type TopOffInput, type StandardBlendInput } from "../state/session";
 import {
@@ -57,6 +57,11 @@ const formatResultMixValue = (value: number): string =>
 
 const formatResultMixPercentage = (value: number): string =>
   `${formatResultMixValue(value)}%`;
+
+export const resolveTopOffSelectedGas = (
+  topGasId: string,
+  topOffOptions: GasSelection[]
+): GasSelection | undefined => topOffOptions.find((option) => option.id === topGasId) ?? topOffOptions[0];
 
 export const resolveTopOffResultTemperatureF = (
   input: Pick<TopOffInput, "resultTemperatureF" | "resultTemperatureTouched">,
@@ -140,9 +145,14 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
   const temperatureLabel = temperatureUnitLabel(settings.temperatureUnit);
 
   const selectedTopGas = useMemo(() => {
-    const match = topOffOptions.find((option) => option.id === topOff.topGasId);
-    return match ?? topOffOptions[0];
+    return resolveTopOffSelectedGas(topOff.topGasId, topOffOptions);
   }, [topOff.topGasId, topOffOptions]);
+
+  useEffect(() => {
+    if (selectedTopGas && selectedTopGas.id !== topOff.topGasId) {
+      setTopOff({ ...topOff, topGasId: selectedTopGas.id });
+    }
+  }, [selectedTopGas, setTopOff, topOff]);
 
   const startPressurePsi = useMemo(
     () => fromDisplayPressure(topOff.startPressure, settings.pressureUnit),

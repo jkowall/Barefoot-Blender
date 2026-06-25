@@ -4,10 +4,16 @@ import {
   defaultTopOffResultTemperatureState,
   defaultTopOffStartTemperatureState,
   resolveTopOffResultTemperatureF,
+  resolveTopOffSelectedGas,
   resolveTopOffStartTemperatureF,
   updateTopOffStartTemperatureState,
   updateTopOffResultTemperatureState
 } from "./TopOffTab";
+
+const topOffOptions = [
+  { id: "air", name: "Air", o2: 21, he: 0 },
+  { id: "oxygen", name: "Oxygen", o2: 100, he: 0 }
+];
 
 describe("resolveTopOffStartTemperatureF", () => {
   test("defaults start temperature before user edit", () => {
@@ -32,6 +38,16 @@ describe("resolveTopOffResultTemperatureF", () => {
 
   test("keeps touched blank result temperature blank", () => {
     expect(resolveTopOffResultTemperatureF({ resultTemperatureTouched: true }, 70)).toBeUndefined();
+  });
+});
+
+describe("resolveTopOffSelectedGas", () => {
+  test("uses the persisted gas id when it is still available", () => {
+    expect(resolveTopOffSelectedGas("oxygen", topOffOptions)?.id).toBe("oxygen");
+  });
+
+  test("falls back to the first gas when persisted gas id is unavailable", () => {
+    expect(resolveTopOffSelectedGas("removed-bank", topOffOptions)?.id).toBe("air");
   });
 });
 
