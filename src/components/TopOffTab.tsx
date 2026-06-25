@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type TopOffInput, type StandardBlendInput } from "../state/session";
 import {
@@ -62,6 +62,16 @@ export const resolveTopOffSelectedGas = (
   topGasId: string,
   topOffOptions: GasSelection[]
 ): GasSelection | undefined => topOffOptions.find((option) => option.id === topGasId) ?? topOffOptions[0];
+
+export const syncTopOffInputSelectedGas = (
+  input: TopOffInput,
+  selectedTopGas: GasSelection | undefined
+): TopOffInput => {
+  if (!selectedTopGas || selectedTopGas.id === input.topGasId) {
+    return input;
+  }
+  return { ...input, topGasId: selectedTopGas.id };
+};
 
 export const resolveTopOffResultTemperatureF = (
   input: Pick<TopOffInput, "resultTemperatureF" | "resultTemperatureTouched">,
@@ -148,12 +158,6 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
     return resolveTopOffSelectedGas(topOff.topGasId, topOffOptions);
   }, [topOff.topGasId, topOffOptions]);
 
-  useEffect(() => {
-    if (selectedTopGas && selectedTopGas.id !== topOff.topGasId) {
-      setTopOff({ ...topOff, topGasId: selectedTopGas.id });
-    }
-  }, [selectedTopGas, setTopOff, topOff]);
-
   const startPressurePsi = useMemo(
     () => fromDisplayPressure(topOff.startPressure, settings.pressureUnit),
     [topOff.startPressure, settings.pressureUnit]
@@ -166,7 +170,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
     });
   };
 
-  function calculateForInput(input: TopOffInput, topGas: GasSelection | undefined): void {
+  const calculateForInput = useCallback((input: TopOffInput, topGas: GasSelection | undefined): void => {
     if (!topGas) {
       setResult(null);
       setChart(null);
@@ -264,18 +268,27 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       setChart(null);
       setBleedPsi(0);
     }
-  }
+  }, [settings]);
 
-  function gasForInput(input: TopOffInput): GasSelection | undefined {
+  const gasForInput = useCallback((input: TopOffInput): GasSelection | undefined => {
     return topOffOptions.find((option) => option.id === input.topGasId) ?? topOffOptions[0];
-  }
+  }, [topOffOptions]);
 
-  function setTopOffInput(next: TopOffInput, recalculate = Boolean(result)): void {
+  const setTopOffInput = useCallback((next: TopOffInput, recalculate = Boolean(result)): void => {
     setTopOff(next);
     if (recalculate) {
       calculateForInput(next, gasForInput(next));
     }
-  }
+  }, [calculateForInput, gasForInput, result, setTopOff]);
+
+  useEffect(() => {
+    const nextInput = syncTopOffInputSelectedGas(topOff, selectedTopGas);
+    if (nextInput !== topOff) {
+      queueMicrotask(() => {
+        setTopOffInput(nextInput);
+      });
+    }
+  }, [selectedTopGas, setTopOffInput, topOff]);
 
   const effectiveBleedPsi = result?.success
     ? clampPressure(Math.min(bleedPsi, startPressurePsi))

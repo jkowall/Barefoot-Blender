@@ -6,6 +6,7 @@ import {
   resolveTopOffResultTemperatureF,
   resolveTopOffSelectedGas,
   resolveTopOffStartTemperatureF,
+  syncTopOffInputSelectedGas,
   updateTopOffStartTemperatureState,
   updateTopOffResultTemperatureState
 } from "./TopOffTab";
@@ -48,6 +49,35 @@ describe("resolveTopOffSelectedGas", () => {
 
   test("falls back to the first gas when persisted gas id is unavailable", () => {
     expect(resolveTopOffSelectedGas("removed-bank", topOffOptions)?.id).toBe("air");
+  });
+});
+
+describe("syncTopOffInputSelectedGas", () => {
+  test("keeps the input object when the selected gas is already persisted", () => {
+    const input = {
+      startO2: 32,
+      startHe: 0,
+      startPressure: 500,
+      finalPressure: 3000,
+      topGasId: "air"
+    };
+
+    expect(syncTopOffInputSelectedGas(input, topOffOptions[0])).toBe(input);
+  });
+
+  test("updates the persisted gas id to the displayed fallback gas", () => {
+    const input = {
+      startO2: 32,
+      startHe: 0,
+      startPressure: 500,
+      finalPressure: 3000,
+      topGasId: "removed-bank"
+    };
+
+    expect(syncTopOffInputSelectedGas(input, topOffOptions[0])).toEqual({
+      ...input,
+      topGasId: "air"
+    });
   });
 });
 
