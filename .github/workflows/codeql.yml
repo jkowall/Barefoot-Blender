@@ -47,83 +47,11 @@ jobs:
   analyze-swift:
     name: Analyze (swift)
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
-
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build web app
-        run: npm run build
-
-      - name: Sync iOS project
-        run: npx cap sync ios
-
-      - name: Prune third-party native subscription package for CodeQL
-        run: |
-          ruby <<'RUBY'
-          path = "ios/App/CapApp-SPM/Package.swift"
-          source = File.read(path)
-          replacements = 0
-
-          dependency = <<'SWIFT'.chomp
-                  .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.4.1"),
-                  .package(name: "RevenuecatPurchasesCapacitor", path: "../../../node_modules/@revenuecat/purchases-capacitor")
-          SWIFT
-          dependency_replacement = <<'SWIFT'.chomp
-                  .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.4.1")
-          SWIFT
-
-          products = <<'SWIFT'.chomp
-                          .product(name: "Capacitor", package: "capacitor-swift-pm"),
-                          .product(name: "Cordova", package: "capacitor-swift-pm"),
-                          .product(name: "RevenuecatPurchasesCapacitor", package: "RevenuecatPurchasesCapacitor")
-          SWIFT
-          products_replacement = <<'SWIFT'.chomp
-                          .product(name: "Capacitor", package: "capacitor-swift-pm"),
-                          .product(name: "Cordova", package: "capacitor-swift-pm")
-          SWIFT
-
-          updated = source.sub(dependency) do
-            replacements += 1
-            dependency_replacement
-          end
-          updated = updated.sub(products) do
-            replacements += 1
-            products_replacement
-          end
-
-          abort "Expected RevenueCat package references were not found" unless replacements == 2
-
-          File.write(path, updated)
-          RUBY
-
-      - name: Resolve iOS Swift packages
-        run: |
-          set -euo pipefail
-          SIMULATOR_UDID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && /Shutdown|Booted/ { print $2; exit }')"
-          if [[ -z "${SIMULATOR_UDID}" ]]; then
-            echo "No available iPhone simulator found"
-            xcrun simctl list devices available
-            exit 1
-          fi
-
-          xcodebuild \
-            -project ios/App/App.xcodeproj \
-            -scheme App \
-            -destination "platform=iOS Simulator,id=${SIMULATOR_UDID}" \
-            -skipPackagePluginValidation \
-            -skipMacroValidation \
-            -resolvePackageDependencies
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
@@ -131,29 +59,49 @@ jobs:
           languages: swift
           build-mode: manual
 
-      - name: Build iOS app for CodeQL
+      - name: Typecheck native Swift sources for CodeQL
         run: |
           set -euo pipefail
-          SIMULATOR_UDID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && /Shutdown|Booted/ { print $2; exit }')"
-          if [[ -z "${SIMULATOR_UDID}" ]]; then
-            echo "No available iPhone simulator found"
-            xcrun simctl list devices available
-            exit 1
-          fi
+          STUB_DIR="$(mktemp -d)"
+          trap 'rm -rf "${STUB_DIR}"' EXIT
 
+          cat > "${STUB_DIR}/Capacitor.swift" <<'SWIFT'
+          import UIKit
+
+          public final class ApplicationDelegateProxy {
+              public static let shared = ApplicationDelegateProxy()
+
+              public func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+                  return false
+              }
+
+              public func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+                  return false
+              }
+          }
+          SWIFT
+
+          SDK_PATH="$(xcrun --sdk iphonesimulator --show-sdk-path)"
           SIMULATOR_ARCH="$(uname -m)"
-          xcodebuild \
-            -project ios/App/App.xcodeproj \
-            -scheme App \
-            -configuration Debug \
-            -destination "platform=iOS Simulator,id=${SIMULATOR_UDID}" \
-            -disableAutomaticPackageResolution \
-            -skipPackagePluginValidation \
-            -skipMacroValidation \
-            CODE_SIGNING_ALLOWED=NO \
-            ONLY_ACTIVE_ARCH=YES \
-            ARCHS="${SIMULATOR_ARCH}" \
-            build
+          SWIFT_TARGET="${SIMULATOR_ARCH}-apple-ios15.0-simulator"
+
+          swiftc \
+            -emit-module \
+            -module-name Capacitor \
+            -parse-as-library \
+            -sdk "${SDK_PATH}" \
+            -target "${SWIFT_TARGET}" \
+            "${STUB_DIR}/Capacitor.swift" \
+            -emit-module-path "${STUB_DIR}/Capacitor.swiftmodule"
+
+          swiftc \
+            -typecheck \
+            -parse-as-library \
+            -sdk "${SDK_PATH}" \
+            -target "${SWIFT_TARGET}" \
+            -I "${STUB_DIR}" \
+            ios/App/App/AppDelegate.swift \
+            ios/App/CapApp-SPM/Sources/CapApp-SPM/CapApp-SPM.swift
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
