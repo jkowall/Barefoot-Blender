@@ -47,7 +47,7 @@ jobs:
   analyze-swift:
     name: Analyze (swift)
     runs-on: macos-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
 
     steps:
       - name: Check out repository
