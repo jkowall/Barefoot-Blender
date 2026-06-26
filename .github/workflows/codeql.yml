@@ -68,6 +68,45 @@ jobs:
       - name: Sync iOS project
         run: npx cap sync ios
 
+      - name: Prune third-party native subscription package for CodeQL
+        run: |
+          ruby <<'RUBY'
+          path = "ios/App/CapApp-SPM/Package.swift"
+          source = File.read(path)
+          replacements = 0
+
+          dependency = <<'SWIFT'.chomp
+                  .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.4.1"),
+                  .package(name: "RevenuecatPurchasesCapacitor", path: "../../../node_modules/@revenuecat/purchases-capacitor")
+          SWIFT
+          dependency_replacement = <<'SWIFT'.chomp
+                  .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.4.1")
+          SWIFT
+
+          products = <<'SWIFT'.chomp
+                          .product(name: "Capacitor", package: "capacitor-swift-pm"),
+                          .product(name: "Cordova", package: "capacitor-swift-pm"),
+                          .product(name: "RevenuecatPurchasesCapacitor", package: "RevenuecatPurchasesCapacitor")
+          SWIFT
+          products_replacement = <<'SWIFT'.chomp
+                          .product(name: "Capacitor", package: "capacitor-swift-pm"),
+                          .product(name: "Cordova", package: "capacitor-swift-pm")
+          SWIFT
+
+          updated = source.sub(dependency) do
+            replacements += 1
+            dependency_replacement
+          end
+          updated = updated.sub(products) do
+            replacements += 1
+            products_replacement
+          end
+
+          abort "Expected RevenueCat package references were not found" unless replacements == 2
+
+          File.write(path, updated)
+          RUBY
+
       - name: Resolve iOS Swift packages
         run: |
           set -euo pipefail
