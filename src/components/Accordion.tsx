@@ -1,8 +1,8 @@
-import { useState, useId } from "react";
+import { type ReactNode, useState, useId } from "react";
 
 type AccordionItemProps = {
     title: string;
-    children: React.ReactNode;
+    children: ReactNode;
     defaultOpen?: boolean;
     isOpen?: boolean;
     onToggle?: () => void;
