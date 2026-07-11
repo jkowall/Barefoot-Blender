@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useSessionStore, type SessionState } from "../state/session";
-import { useSettingsStore, type SettingsSnapshot } from "../state/settings";
+import { useSettingsStore } from "../state/settings";
 import {
   buildBugReport,
   buildBugReportMailtoLink,
@@ -27,17 +27,6 @@ const getCurrentInputs = (activeTab: string, session: SessionState): Record<stri
   if (activeTab === "utilities") return session.utilities;
   return undefined;
 };
-
-const buildSettingsSummary = (settings: SettingsSnapshot): Pick<
-  SettingsSnapshot,
-  "pressureUnit" | "depthUnit" | "defaultMaxPPO2" | "defaultContingencyPPO2" | "oxygenIsNarcotic"
-> => ({
-  pressureUnit: settings.pressureUnit,
-  depthUnit: settings.depthUnit,
-  defaultMaxPPO2: settings.defaultMaxPPO2,
-  defaultContingencyPPO2: settings.defaultContingencyPPO2,
-  oxygenIsNarcotic: settings.oxygenIsNarcotic
-});
 
 const BugReportDialog = ({
   activeTab,
@@ -70,7 +59,13 @@ const BugReportDialog = ({
       online: browserDiagnostics.online,
       viewport: browserDiagnostics.viewport,
       currentInputs: {
-        settings: buildSettingsSummary(settings),
+        settings: {
+          pressureUnit: settings.pressureUnit,
+          depthUnit: settings.depthUnit,
+          defaultMaxPPO2: settings.defaultMaxPPO2,
+          defaultContingencyPPO2: settings.defaultContingencyPPO2,
+          oxygenIsNarcotic: settings.oxygenIsNarcotic
+        },
         activeCalculator: getCurrentInputs(activeTab, session)
       },
       errorMessage
