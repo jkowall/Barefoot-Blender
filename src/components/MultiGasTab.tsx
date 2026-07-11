@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { SettingsSnapshot } from "../state/settings";
-import { useSessionStore, type SessionState, type MultiGasInput, type GasSourceInput } from "../state/session";
+import { useSessionStore, type MultiGasInput, type GasSourceInput } from "../state/session";
 import {
   solveNGasBlend,
   type GasSelection,
@@ -60,8 +60,8 @@ const costLineKey = (line: { gas: string; amount: number; cost: number }): strin
   `${line.gas}-${line.amount.toFixed(6)}-${line.cost.toFixed(2)}`;
 
 const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
-  const multiGas = useSessionStore((state: SessionState) => state.multiGas);
-  const setMultiGas = useSessionStore((state: SessionState) => state.setMultiGas);
+  const multiGas = useSessionStore((state) => state.multiGas);
+  const setMultiGas = useSessionStore((state) => state.setMultiGas);
   const gasSources = multiGas.gasSources ?? EMPTY_GAS_SOURCES;
   const [gasSourceRowKeys, setGasSourceRowKeys] = useState<string[]>(() =>
     gasSources.map(() => createGasSourceRowKey())
