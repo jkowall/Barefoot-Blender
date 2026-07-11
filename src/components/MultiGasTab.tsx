@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { SettingsSnapshot } from "../state/settings";
-import { useSessionStore, type SessionState, type MultiGasInput, type GasSourceInput } from "../state/session";
+import { useSessionStore, type SessionState, type GasSourceInput } from "../state/session";
 import {
   solveNGasBlend,
   type GasSelection,
@@ -119,7 +119,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     return false;
   }, [multiGas.startHe, gasSources, gasOptions, settings.pressureUnit]);
 
-  const updateField = (patch: Partial<MultiGasInput>): void => {
+  const updateField = (patch: Partial<SessionState['multiGas']>): void => {
     setMultiGas({ ...multiGas, ...patch });
   };
 
