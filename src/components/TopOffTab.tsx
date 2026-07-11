@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type TopOffInput, type StandardBlendInput } from "../state/session";
 import {
@@ -537,7 +537,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
           <label>Select Gas</label>
           <select
             value={selectedTopGas?.id ?? ""}
-            onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+            onChange={(event) =>
               updateField("topGasId", event.target.value)
             }
           >
@@ -740,7 +740,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
               max={bleedSliderMaxDisplay}
               step={bleedSliderStepDisplay}
               value={bleedSliderValueDisplay}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+              onChange={(event) => {
                 const displayValue = Number(event.target.value);
                 const nextPsi = fromDisplayPressure(displayValue, settings.pressureUnit);
                 setBleedPsi(clampPressure(Math.min(nextPsi, startPressurePsi)));
