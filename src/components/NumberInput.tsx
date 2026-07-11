@@ -1,4 +1,4 @@
-import { useId, useRef, type KeyboardEventHandler } from "react";
+import React, { useId, useRef } from "react";
 
 type Props = {
   label: string;
@@ -9,7 +9,7 @@ type Props = {
   step?: number;
   disabled?: boolean;
   onBlur?: () => void;
-  onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   placeholder?: string;
   className?: string;
   selectOnClick?: boolean;
