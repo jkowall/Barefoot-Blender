@@ -254,7 +254,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
     setResult(outcome);
 
     if (outcome.success) {
-      const baseline: StandardBlendInput = {
+      const baseline = {
         startO2: baseInput.startO2,
         startHe: baseInput.startHe,
         startPressure: baseInput.startPressure,
