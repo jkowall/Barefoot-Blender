@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSessionStore, type SessionState } from "../state/session";
 import { useSettingsStore, type SettingsSnapshot } from "../state/settings";
 import {
@@ -132,7 +132,7 @@ const BugReportDialog = ({
               id="bug-report-happened"
               rows={4}
               value={whatHappened}
-              onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setWhatHappened(event.target.value)}
+              onChange={(event) => setWhatHappened(event.target.value)}
             />
           </div>
 
@@ -142,7 +142,7 @@ const BugReportDialog = ({
               id="bug-report-expected"
               rows={3}
               value={expectedBehavior}
-              onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setExpectedBehavior(event.target.value)}
+              onChange={(event) => setExpectedBehavior(event.target.value)}
             />
           </div>
 
@@ -152,7 +152,7 @@ const BugReportDialog = ({
               id="bug-report-contact"
               type="email"
               value={contactEmail}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => setContactEmail(event.target.value)}
+              onChange={(event) => setContactEmail(event.target.value)}
             />
           </div>
 
@@ -160,7 +160,7 @@ const BugReportDialog = ({
             <input
               type="checkbox"
               checked={includeDiagnostics}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => setIncludeDiagnostics(event.target.checked)}
+              onChange={(event) => setIncludeDiagnostics(event.target.checked)}
             />
             <span>Include app diagnostics</span>
           </label>
