@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type SessionState, type TopOffInput, type StandardBlendInput } from "../state/session";
 import {
@@ -162,13 +162,6 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
     () => fromDisplayPressure(topOff.startPressure, settings.pressureUnit),
     [topOff.startPressure, settings.pressureUnit]
   );
-
-  const selectOnFocus = (event: FocusEvent<HTMLInputElement>): void => {
-    const target = event.target;
-    requestAnimationFrame(() => {
-      target.select();
-    });
-  };
 
   const calculateForInput = useCallback((input: TopOffInput, topGas: GasSelection | undefined): void => {
     if (!topGas) {
@@ -537,7 +530,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
           <label>Select Gas</label>
           <select
             value={selectedTopGas?.id ?? ""}
-            onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+            onChange={(event) =>
               updateField("topGasId", event.target.value)
             }
           >
@@ -740,7 +733,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
               max={bleedSliderMaxDisplay}
               step={bleedSliderStepDisplay}
               value={bleedSliderValueDisplay}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+              onChange={(event) => {
                 const displayValue = Number(event.target.value);
                 const nextPsi = fromDisplayPressure(displayValue, settings.pressureUnit);
                 setBleedPsi(clampPressure(Math.min(nextPsi, startPressurePsi)));
@@ -763,7 +756,12 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                     max={100}
                     step={0.01}
                     value={formatResultMixValue(bleedPreview.finalO2)}
-                    onFocus={selectOnFocus}
+                    onFocus={(e) => {
+                      const target = e.target;
+                      requestAnimationFrame(() => {
+                        target.select();
+                      });
+                    }}
                     onChange={(e) => {
                       // Reverse solve: P_final_O2 = (P_start_adj * Start_O2 + P_added * Top_O2) / P_total
                       // We know P_total (finalPressure), Top_O2, Start_O2.
@@ -802,7 +800,12 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                     max={100}
                     step={0.01}
                     value={formatResultMixValue(bleedPreview.finalHe)}
-                    onFocus={selectOnFocus}
+                    onFocus={(e) => {
+                      const target = e.target;
+                      requestAnimationFrame(() => {
+                        target.select();
+                      });
+                    }}
                     onChange={(e) => {
                       const targetHe = Number(e.target.value) / 100;
                       const topHe = selectedTopGas?.he ?? 0;
