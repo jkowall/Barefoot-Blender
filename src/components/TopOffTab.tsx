@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
-import { useSessionStore, type SessionState, type TopOffInput, type StandardBlendInput } from "../state/session";
+import { useSessionStore, type SessionState, type TopOffInput } from "../state/session";
 import {
   calculateFillCostEstimate,
   calculateTopOffBlend,
