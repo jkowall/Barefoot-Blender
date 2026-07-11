@@ -12,7 +12,7 @@ import {
   clampPressure
 } from "../utils/calculations";
 import { formatGasCostDetail, formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
-import { calculateRealGasTopOff } from "../utils/realGasBlend";
+import { calculateRealGasTopOff, type RealGasTopOffResult } from "../utils/realGasBlend";
 import {
   DEFAULT_START_TEMPERATURE_F,
   fromDisplayTemperature,
@@ -37,7 +37,7 @@ type TopOffDisplayResult =
       goalPressurePsi: number;
       resultPressurePsi: number;
     })
-  | (ReturnType<typeof calculateRealGasTopOff> & {
+  | (RealGasTopOffResult & {
       model: "gerg2008";
     });
 
