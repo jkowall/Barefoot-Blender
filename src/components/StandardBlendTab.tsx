@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent } fr
 import type { SettingsSnapshot } from "../state/settings";
 import {
   useSessionStore,
-  type SessionState,
   type StandardBlendInput,
   type StandardBlendHistoryEntry,
   type StandardBlendStageKind,
@@ -236,12 +235,12 @@ export const resolveRealGasStageTemperatureRows = (
 };
 
 const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
-  const standardBlend = useSessionStore((state: SessionState) => state.standardBlend);
-  const standardBlendHistory = useSessionStore((state: SessionState) => state.standardBlendHistory);
-  const setStandardBlend = useSessionStore((state: SessionState) => state.setStandardBlend);
-  const addStandardBlendHistory = useSessionStore((state: SessionState) => state.addStandardBlendHistory);
-  const removeStandardBlendHistory = useSessionStore((state: SessionState) => state.removeStandardBlendHistory);
-  const clearStandardBlendHistory = useSessionStore((state: SessionState) => state.clearStandardBlendHistory);
+  const standardBlend = useSessionStore((state) => state.standardBlend);
+  const standardBlendHistory = useSessionStore((state) => state.standardBlendHistory);
+  const setStandardBlend = useSessionStore((state) => state.setStandardBlend);
+  const addStandardBlendHistory = useSessionStore((state) => state.addStandardBlendHistory);
+  const removeStandardBlendHistory = useSessionStore((state) => state.removeStandardBlendHistory);
+  const clearStandardBlendHistory = useSessionStore((state) => state.clearStandardBlendHistory);
   const [result, setResult] = useState<BlendResult | null>(null);
   const [realGasResult, setRealGasResult] = useState<RealGasBlendResult | null>(null);
   const [resultSource, setResultSource] = useState<"ideal" | "realGas">("ideal");

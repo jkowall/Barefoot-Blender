@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
-import { useSessionStore, type SessionState, type TopOffInput, type StandardBlendInput } from "../state/session";
+import { useSessionStore, type TopOffInput, type StandardBlendInput } from "../state/session";
 import {
   calculateFillCostEstimate,
   calculateTopOffBlend,
@@ -142,8 +142,8 @@ export const copyTopOffResultToStartInput = (
 };
 
 const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
-  const topOff = useSessionStore((state: SessionState) => state.topOff);
-  const setTopOff = useSessionStore((state: SessionState) => state.setTopOff);
+  const topOff = useSessionStore((state) => state.topOff);
+  const setTopOff = useSessionStore((state) => state.setTopOff);
   const [result, setResult] = useState<TopOffDisplayResult | null>(null);
   const [chart, setChart] = useState<TopOffProjectionRow[] | null>(null);
   const [bleedPsi, setBleedPsi] = useState(0);
