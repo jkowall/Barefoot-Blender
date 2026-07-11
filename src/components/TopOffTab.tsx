@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
-import { useSessionStore, type TopOffInput, type StandardBlendInput } from "../state/session";
+import { useSessionStore, type TopOffInput } from "../state/session";
 import {
   calculateFillCostEstimate,
   calculateTopOffBlend,
@@ -254,7 +254,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
     setResult(outcome);
 
     if (outcome.success) {
-      const baseline: StandardBlendInput = {
+      const baseline = {
         startO2: baseInput.startO2,
         startHe: baseInput.startHe,
         startPressure: baseInput.startPressure,
