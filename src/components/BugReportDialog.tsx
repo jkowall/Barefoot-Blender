@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
-import { useSessionStore, type SessionState } from "../state/session";
+import { useSessionStore } from "../state/session";
 import { useSettingsStore, type SettingsSnapshot } from "../state/settings";
 import {
   buildBugReport,
@@ -19,14 +19,6 @@ type BugReportDialogProps = {
 };
 
 const getPlatform = (): BugReportPlatform => getNativePlatform() ?? "web";
-
-const getCurrentInputs = (activeTab: string, session: SessionState): Record<string, unknown> | undefined => {
-  if (activeTab === "standard") return session.standardBlend;
-  if (activeTab === "topoff") return session.topOff;
-  if (activeTab === "multi") return session.multiGas;
-  if (activeTab === "utilities") return session.utilities;
-  return undefined;
-};
 
 const buildSettingsSummary = (settings: SettingsSnapshot): Pick<
   SettingsSnapshot,
@@ -71,7 +63,12 @@ const BugReportDialog = ({
       viewport: browserDiagnostics.viewport,
       currentInputs: {
         settings: buildSettingsSummary(settings),
-        activeCalculator: getCurrentInputs(activeTab, session)
+        activeCalculator:
+          activeTab === "standard" ? session.standardBlend :
+          activeTab === "topoff" ? session.topOff :
+          activeTab === "multi" ? session.multiGas :
+          activeTab === "utilities" ? session.utilities :
+          undefined
       },
       errorMessage
     };
