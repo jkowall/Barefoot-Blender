@@ -1,6 +1,6 @@
 import { useMemo, useState, useId, type FocusEvent } from "react";
 import type { SettingsSnapshot } from "../state/settings";
-import { useSessionStore, type SessionState } from "../state/session";
+import { useSessionStore } from "../state/session";
 import {
   calculateBestMix,
   calculateDensity,
@@ -29,8 +29,8 @@ const UtilitiesTab = ({
   settings: SettingsSnapshot;
   trainingModeEnabled: boolean;
 }): JSX.Element => {
-  const utilities = useSessionStore((state: SessionState) => state.utilities);
-  const setUtilities = useSessionStore((state: SessionState) => state.setUtilities);
+  const utilities = useSessionStore((state) => state.utilities);
+  const setUtilities = useSessionStore((state) => state.setUtilities);
 
   const modResult = useMemo(
     () =>
