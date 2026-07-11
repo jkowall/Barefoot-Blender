@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from "react";
+import { useState } from "react";
 import {
   useSettingsStore,
   type GasDefinition,
@@ -94,7 +94,7 @@ const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Elemen
                 <SelectInput
                   label="Pressure"
                   value={settings.pressureUnit}
-                  onChange={(event: ChangeEvent<HTMLSelectElement>) => setPressureUnit(event.target.value as PressureUnit)}
+                  onChange={(event) => setPressureUnit(event.target.value as PressureUnit)}
                 >
                   {pressureUnits.map((unit) => (
                     <option key={unit} value={unit}>
@@ -105,7 +105,7 @@ const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Elemen
                 <SelectInput
                   label="Depth"
                   value={settings.depthUnit}
-                  onChange={(event: ChangeEvent<HTMLSelectElement>) => setDepthUnit(event.target.value as DepthUnit)}
+                  onChange={(event) => setDepthUnit(event.target.value as DepthUnit)}
                 >
                   {depthUnits.map((unit) => (
                     <option key={unit} value={unit}>
@@ -116,7 +116,7 @@ const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Elemen
                 <SelectInput
                   label="Temperature"
                   value={settings.temperatureUnit}
-                  onChange={(event: ChangeEvent<HTMLSelectElement>) => setTemperatureUnit(event.target.value as TemperatureUnit)}
+                  onChange={(event) => setTemperatureUnit(event.target.value as TemperatureUnit)}
                 >
                   {temperatureUnits.map((unit) => (
                     <option key={unit} value={unit}>
@@ -130,7 +130,7 @@ const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Elemen
               <SelectInput
                 label="Gas model"
                 value={settings.gasModel}
-                onChange={(event: ChangeEvent<HTMLSelectElement>) => setGasModel(event.target.value as GasModel)}
+                onChange={(event) => setGasModel(event.target.value as GasModel)}
               >
                 {gasModels.map((model) => (
                   <option key={model} value={model}>
@@ -166,7 +166,7 @@ const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Elemen
               <SelectInput
                 label="Oxygen is narcotic?"
                 value={settings.oxygenIsNarcotic ? "yes" : "no"}
-                onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                onChange={(event) =>
                   setOxygenIsNarcotic(event.target.value === "yes")
                 }
               >
@@ -183,7 +183,7 @@ const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Elemen
                       type="text"
                       maxLength={GAS_NAME_MAX_LENGTH}
                       value={sanitizeGasName(gas.name)}
-                      onChange={(event: ChangeEvent<HTMLInputElement>) => handleGasChange(gas, { name: event.target.value })}
+                      onChange={(event) => handleGasChange(gas, { name: event.target.value })}
                     />
                   </div>
                   <div className="grid two">
