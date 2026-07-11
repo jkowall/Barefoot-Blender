@@ -1,4 +1,4 @@
-import { memo, useMemo, type ChangeEvent } from "react";
+import { memo, useMemo } from "react";
 import type { GasSourceInput } from "../state/session";
 import type { PressureUnit } from "../state/settings";
 import { type GasSelection, clampPercent } from "../utils/calculations";
@@ -62,7 +62,7 @@ export const GasSourceRow = memo(({
             )
           }
           value={source.id}
-          onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+          onChange={(event) =>
             onUpdate(index, { id: event.target.value })
           }
         >
@@ -77,7 +77,7 @@ export const GasSourceRow = memo(({
           <input
             type="checkbox"
             checked={source.enabled}
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+            onChange={(event) =>
               onUpdate(index, { enabled: event.target.checked })
             }
           />
