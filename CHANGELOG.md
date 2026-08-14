@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.10] - 2026-08-14
+
+### Fixed
+
+- **iOS Viewport Stability**: Allowed footer actions to wrap on narrow screens and kept form controls at an iOS-safe text size so the app no longer expands beyond the physical viewport or becomes stuck after focusing an input.
+
 ## [0.12.9] - 2026-06-25
 
 ### Changed
