@@ -20,7 +20,10 @@ a {
   color: inherit;
 }
 
-button {
+button,
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -351,6 +354,8 @@ button {
 .app-footer-links {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 8px;
 }
 
