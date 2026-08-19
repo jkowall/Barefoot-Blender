@@ -105,11 +105,17 @@ const fractionsFromMoles = (components: ComponentMoles): GergGasFractions => {
 };
 
 const tankWaterVolumeLiters = (tankSizeCuFt: number, tankRatedPressurePsi: number): number => {
-  if (tankSizeCuFt <= 0 || tankRatedPressurePsi <= 0) {
+  if (
+    !Number.isFinite(tankSizeCuFt) ||
+    !Number.isFinite(tankRatedPressurePsi) ||
+    tankSizeCuFt <= 0 ||
+    tankRatedPressurePsi <= 0
+  ) {
     return 0;
   }
   const freeGasLiters = tankSizeCuFt * CUFT_TO_LITERS;
-  return freeGasLiters * ATM_PRESSURE_PSI / (tankRatedPressurePsi + ATM_PRESSURE_PSI);
+  const waterVolumeLiters = freeGasLiters * ATM_PRESSURE_PSI / (tankRatedPressurePsi + ATM_PRESSURE_PSI);
+  return Number.isFinite(waterVolumeLiters) ? waterVolumeLiters : 0;
 };
 
 const stateFromComponents = (
@@ -136,6 +142,15 @@ const invalidGergMix = (...mixes: GergGasFractions[]): boolean =>
   mixes.some((mix) => mix.o2 < -MOLE_TOLERANCE || mix.he < -MOLE_TOLERANCE || mix.n2 < -MOLE_TOLERANCE);
 
 const percentFromFraction = (value: number): number => Math.max(0, Math.min(100, value * 100));
+
+const appendMixSafetyWarnings = (warnings: string[], o2Percent: number): void => {
+  if (o2Percent < 18) {
+    warnings.push("Hypoxic mix (<18% O2).");
+  }
+  if (o2Percent > 40) {
+    warnings.push("High O2 - fire risk (>40% O2).");
+  }
+};
 
 const realGasTopOffFailure = (
   startPressurePsi: number,
@@ -199,6 +214,17 @@ export const calculateRealGasTopOff = (
   const resultTemperatureK = fahrenheitToKelvin(resultTemperatureF);
   const warnings: string[] = [];
 
+  if (!Number.isFinite(goalPressurePsi)) {
+    return realGasTopOffFailure(
+      startPressurePsi,
+      goalPressurePsi,
+      startTemperatureF,
+      resultTemperatureF,
+      warnings,
+      ["Goal pressure must be a finite value."]
+    );
+  }
+
   if (goalPressurePsi <= MOLE_TOLERANCE) {
     return realGasTopOffFailure(
       startPressurePsi,
@@ -207,6 +233,17 @@ export const calculateRealGasTopOff = (
       resultTemperatureF,
       warnings,
       ["Goal pressure must be greater than zero."]
+    );
+  }
+
+  if (!Number.isFinite(startPressurePsi)) {
+    return realGasTopOffFailure(
+      startPressurePsi,
+      goalPressurePsi,
+      startTemperatureF,
+      resultTemperatureF,
+      warnings,
+      ["Start pressure must be a finite value."]
     );
   }
 
@@ -288,6 +325,7 @@ export const calculateRealGasTopOff = (
       );
     }
     const finalFractions = fractionsFromMoles(startComponents);
+    appendMixSafetyWarnings(warnings, percentFromFraction(finalFractions.o2));
     return {
       success: true,
       finalO2: percentFromFraction(finalFractions.o2),
@@ -406,12 +444,7 @@ export const calculateRealGasTopOff = (
   const finalO2 = percentFromFraction(finalFractions.o2);
   const finalHe = percentFromFraction(finalFractions.he);
   const finalN2 = percentFromFraction(finalFractions.n2);
-  if (finalO2 < 18) {
-    warnings.push("Hypoxic mix (<18% O2).");
-  }
-  if (finalO2 > 40) {
-    warnings.push("High O2 - fire risk (>40% O2).");
-  }
+  appendMixSafetyWarnings(warnings, finalO2);
 
   return {
     success: true,
@@ -444,6 +477,54 @@ export const calculateRealGasStandardBlend = (
   const warnings: string[] = [];
   const errors: string[] = [];
 
+  if (!Number.isFinite(targetPressurePsi)) {
+    return {
+      success: false,
+      steps: [],
+      startHotPressurePsi: startPressurePsi,
+      finalHotPressurePsi: targetPressurePsi,
+      targetSettledPressurePsi: targetPressurePsi,
+      warnings,
+      errors: ["Target pressure must be a finite value."]
+    };
+  }
+
+  if (targetPressurePsi <= 0) {
+    return {
+      success: false,
+      steps: [],
+      startHotPressurePsi: startPressurePsi,
+      finalHotPressurePsi: targetPressurePsi,
+      targetSettledPressurePsi: targetPressurePsi,
+      warnings,
+      errors: ["Target pressure must be greater than zero."]
+    };
+  }
+
+  if (!Number.isFinite(startPressurePsi)) {
+    return {
+      success: false,
+      steps: [],
+      startHotPressurePsi: startPressurePsi,
+      finalHotPressurePsi: targetPressurePsi,
+      targetSettledPressurePsi: targetPressurePsi,
+      warnings,
+      errors: ["Start pressure must be a finite value."]
+    };
+  }
+
+  if (startPressurePsi < 0) {
+    return {
+      success: false,
+      steps: [],
+      startHotPressurePsi: startPressurePsi,
+      finalHotPressurePsi: targetPressurePsi,
+      targetSettledPressurePsi: targetPressurePsi,
+      warnings,
+      errors: ["Start pressure cannot be negative."]
+    };
+  }
+
   if (waterVolumeLiters <= 0) {
     return {
       success: false,
@@ -469,6 +550,14 @@ export const calculateRealGasStandardBlend = (
       warnings,
       errors: ["Gas fractions must be between 0% and 100%, and O2% + He% must not exceed 100%."]
     };
+  }
+
+  const targetO2Percent = inputs.targetO2 ?? 32;
+  if (targetO2Percent < 18) {
+    warnings.push("Hypoxic mix (<18% O2).");
+  }
+  if (targetO2Percent > 40) {
+    warnings.push("High O2 - fire risk (>40% O2).");
   }
 
   const startTemperatureK = fahrenheitToKelvin(inputs.startTemperatureF ?? DEFAULT_START_TEMPERATURE_F);

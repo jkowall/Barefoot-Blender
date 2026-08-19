@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   realGasResultToBlendResult,
+  selectStandardBlendResult,
   resolveRealGasStageTemperatureRows,
   resolveHistoryStageTemperatureTouched,
   resolveInputStageTemperatures,
@@ -39,6 +40,95 @@ describe("realGasResultToBlendResult", () => {
     expect(primaryResult.steps).toHaveLength(0);
     expect(primaryResult.warnings).toEqual(failedResult.warnings);
     expect(primaryResult.errors).toEqual(failedResult.errors);
+  });
+
+  test("explains when a corrected result replaces an ideal no-op", () => {
+    const correctedResult: RealGasBlendResult = {
+      success: true,
+      steps: [
+        {
+          kind: "topoff",
+          gasName: "Air",
+          molesAdded: 1,
+          stopPressurePsi: 3100,
+          pressureChangePsi: 100,
+          temperatureF: 410,
+          z: 1.02
+        }
+      ],
+      startHotPressurePsi: 3000,
+      finalHotPressurePsi: 3100,
+      targetSettledPressurePsi: 3000,
+      warnings: [],
+      errors: []
+    };
+
+    const primaryResult = realGasResultToBlendResult(correctedResult);
+
+    expect(primaryResult.warnings).toEqual([
+      "Ideal partial-pressure plan has no pressure change; showing GERG-2008 corrected stop plan."
+    ]);
+  });
+});
+
+describe("selectStandardBlendResult", () => {
+  test("selects the corrected result when ideal math misses a GERG-only fill", () => {
+    const idealResult = {
+      success: false,
+      steps: [],
+      warnings: [],
+      errors: ["Target pressure matches start pressure."]
+    };
+    const correctedResult: RealGasBlendResult = {
+      success: true,
+      steps: [
+        {
+          kind: "topoff",
+          gasName: "Air",
+          molesAdded: 1,
+          stopPressurePsi: 3100,
+          pressureChangePsi: 100,
+          temperatureF: 90,
+          z: 1.02
+        }
+      ],
+      startHotPressurePsi: 3000,
+      finalHotPressurePsi: 3100,
+      targetSettledPressurePsi: 3000,
+      warnings: [],
+      errors: []
+    };
+
+    const selection = selectStandardBlendResult(idealResult, correctedResult);
+
+    expect(selection.source).toBe("realGas");
+    expect(selection.result.success).toBe(true);
+    expect(selection.result.steps).toEqual([
+      { kind: "topoff", amount: 100, gasName: "Air" }
+    ]);
+  });
+
+  test("keeps the ideal same-pressure error when the GERG correction also fails", () => {
+    const idealResult = {
+      success: false,
+      steps: [],
+      warnings: [],
+      errors: ["Target pressure matches start pressure."]
+    };
+    const correctedResult: RealGasBlendResult = {
+      success: false,
+      steps: [],
+      startHotPressurePsi: 3000,
+      finalHotPressurePsi: 3000,
+      targetSettledPressurePsi: 3000,
+      warnings: [],
+      errors: ["GERG-2008 correction failed."]
+    };
+
+    const selection = selectStandardBlendResult(idealResult, correctedResult);
+
+    expect(selection.source).toBe("ideal");
+    expect(selection.result).toBe(idealResult);
   });
 });
 

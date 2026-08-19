@@ -67,6 +67,26 @@ export const realGasResultToBlendResult = (realGasResult: RealGasBlendResult): B
   };
 };
 
+export type StandardBlendResultSelection = {
+  result: BlendResult;
+  source: "ideal" | "realGas";
+};
+
+export const selectStandardBlendResult = (
+  idealResult: BlendResult,
+  realGasResult: RealGasBlendResult | null
+): StandardBlendResultSelection => {
+  const useRealGasAsPrimary =
+    realGasResult?.success === true &&
+    realGasResult.steps.length > 0 &&
+    !idealResult.success &&
+    idealResult.errors.includes(IDEAL_SAME_PRESSURE_ERROR);
+
+  return useRealGasAsPrimary && realGasResult
+    ? { result: realGasResultToBlendResult(realGasResult), source: "realGas" }
+    : { result: idealResult, source: "ideal" };
+};
+
 type Props = {
   settings: SettingsSnapshot;
   topOffOptions: GasSelection[];
@@ -471,14 +491,8 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     const correctedResult = settings.gasModel === "gerg2008"
       ? calculateRealGasStandardBlend({ pressureUnit: settings.pressureUnit }, resolvedInput, selectedTopGas)
       : null;
-    const useRealGasAsPrimary =
-      correctedResult?.success === true &&
-      correctedResult.steps.length > 0 &&
-      !blendResult.success &&
-      blendResult.errors.includes(IDEAL_SAME_PRESSURE_ERROR);
-    const effectiveResult = useRealGasAsPrimary && correctedResult
-      ? realGasResultToBlendResult(correctedResult)
-      : blendResult;
+    const selection = selectStandardBlendResult(blendResult, correctedResult);
+    const effectiveResult = selection.result;
 
     if (effectiveResult.success && effectiveResult.steps.length > 0) {
       const volumes = summarizeBlendVolumes(effectiveResult);
@@ -539,7 +553,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
 
     setResult(effectiveResult);
     setRealGasResult(correctedResult);
-    setResultSource(useRealGasAsPrimary ? "realGas" : "ideal");
+    setResultSource(selection.source);
     setSensitivityDeltaPsi(0);
     setPlanOpen(true);
     setCostOpen(true);

@@ -63,6 +63,8 @@ export const GERG_MAX_PRESSURE_KPA = 40000;
 const R_GERG = 8.314472;
 const EPSILON = 1e-12;
 const DENSITY_TOLERANCE = 1e-7;
+// Allow only one millipascal of floating-point noise at the 400 bar boundary.
+const PRESSURE_ENVELOPE_TOLERANCE_KPA = 1e-6;
 
 const COMMON_DENSITY_EXPONENTS = [1, 1, 1, 2, 3, 7, 2, 5, 1, 4, 3, 4];
 const COMMON_TEMPERATURE_EXPONENTS = [0.25, 1.125, 1.5, 1.375, 0.25, 0.875, 0.625, 1.75, 3.625, 3.625, 14.5, 12];
@@ -245,7 +247,7 @@ const validateEnvelope = (temperatureK: number, pressureKpa: number): { warnings
 
   if (!Number.isFinite(pressureKpa) || pressureKpa < 0) {
     errors.push("Pressure must be zero or greater.");
-  } else if (pressureKpa > GERG_MAX_PRESSURE_KPA) {
+  } else if (pressureKpa > GERG_MAX_PRESSURE_KPA + PRESSURE_ENVELOPE_TOLERANCE_KPA) {
     errors.push("GERG-2008 correction is limited to pressures at or below 400 bar absolute.");
   }
 
@@ -406,6 +408,30 @@ export const gergPressureFromDensity = (
       dPdD: 0,
       warnings: [],
       errors: fractionErrors
+    };
+  }
+
+  if (!Number.isFinite(densityMolPerLiter)) {
+    return {
+      success: false,
+      pressureKpa: 0,
+      densityMolPerLiter: 0,
+      z: 1,
+      dPdD: 0,
+      warnings: [],
+      errors: ["Density must be a finite value."]
+    };
+  }
+
+  if (densityMolPerLiter < 0) {
+    return {
+      success: false,
+      pressureKpa: 0,
+      densityMolPerLiter: 0,
+      z: 1,
+      dPdD: 0,
+      warnings: [],
+      errors: ["Density must be zero or greater."]
     };
   }
 

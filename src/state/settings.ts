@@ -101,7 +101,7 @@ const settingsCreator = (set: SettingsSetter, get: () => SettingsState): Setting
   pressureUnit: "psi",
   depthUnit: "ft",
   temperatureUnit: "f",
-  gasModel: "ideal",
+  gasModel: "gerg2008",
   defaultMaxPPO2: 1.4,
   defaultContingencyPPO2: 1.6,
   trainingModeEnabled: false,

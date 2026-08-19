@@ -41,6 +41,11 @@ type TopOffDisplayResult =
       model: "gerg2008";
     });
 
+type TopOffCalculationSettings = Pick<
+  SettingsSnapshot,
+  "pressureUnit" | "gasModel" | "defaultTankSizeCuFt" | "tankRatedPressure"
+>;
+
 const RESULT_MIX_DECIMALS = 2;
 
 const roundResultMixPercent = (value: number): number =>
@@ -116,6 +121,108 @@ export const defaultTopOffResultTemperatureState = (): Pick<TopOffInput, "result
   resultTemperatureTouched: false
 });
 
+export const calculateTopOffForModel = (
+  settings: TopOffCalculationSettings,
+  input: TopOffInput,
+  topGas: GasSelection
+): TopOffDisplayResult => {
+  const baseInput: TopOffInput = {
+    ...input,
+    startPressure: input.startPressure ?? 0,
+    finalPressure: input.finalPressure ?? 3000,
+    startO2: input.startO2 ?? 32,
+    startHe: input.startHe ?? 0
+  };
+  const resolvedStartTemperatureF = resolveTopOffStartTemperatureF(baseInput);
+  const resolvedResultTemperatureF = resolveTopOffResultTemperatureF(baseInput, resolvedStartTemperatureF);
+  const goalPressurePsi = fromDisplayPressure(baseInput.finalPressure ?? 3000, settings.pressureUnit);
+
+  if (settings.gasModel === "ideal") {
+    return {
+      ...calculateTopOffBlend(
+        { pressureUnit: settings.pressureUnit },
+        baseInput,
+        topGas
+      ),
+      model: "ideal",
+      goalPressurePsi,
+      resultPressurePsi: goalPressurePsi
+    };
+  }
+
+  if (resolvedStartTemperatureF === undefined) {
+    return {
+      success: false,
+      finalO2: 0,
+      finalHe: 0,
+      finalN2: 0,
+      startPressurePsi: fromDisplayPressure(baseInput.startPressure ?? 0, settings.pressureUnit),
+      goalPressurePsi,
+      resultPressurePsi: goalPressurePsi,
+      addedPressure: 0,
+      startTemperatureF: DEFAULT_START_TEMPERATURE_F,
+      resultTemperatureF: resolvedResultTemperatureF ?? DEFAULT_START_TEMPERATURE_F,
+      topOffMoles: 0,
+      z: 1,
+      warnings: [],
+      errors: ["Start temperature is required for GERG-2008 top-off correction."],
+      model: "gerg2008"
+    };
+  }
+
+  if (resolvedResultTemperatureF === undefined) {
+    return {
+      success: false,
+      finalO2: 0,
+      finalHe: 0,
+      finalN2: 0,
+      startPressurePsi: fromDisplayPressure(baseInput.startPressure ?? 0, settings.pressureUnit),
+      goalPressurePsi,
+      resultPressurePsi: goalPressurePsi,
+      addedPressure: 0,
+      startTemperatureF: resolvedStartTemperatureF,
+      resultTemperatureF: resolvedStartTemperatureF,
+      topOffMoles: 0,
+      z: 1,
+      warnings: [],
+      errors: ["Result temperature is required for GERG-2008 top-off correction."],
+      model: "gerg2008"
+    };
+  }
+
+  return {
+    ...calculateRealGasTopOff(
+      { pressureUnit: settings.pressureUnit },
+      {
+        ...baseInput,
+        tankSizeCuFt: baseInput.tankSizeCuFt ?? settings.defaultTankSizeCuFt ?? 80,
+        tankRatedPressurePsi: baseInput.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000,
+        startTemperatureF: resolvedStartTemperatureF,
+        resultTemperatureF: resolvedResultTemperatureF
+      },
+      topGas
+    ),
+    model: "gerg2008"
+  };
+};
+
+export const calculateTopOffBleedPreview = (
+  settings: TopOffCalculationSettings,
+  input: TopOffInput,
+  topGas: GasSelection,
+  adjustedStartPsi: number
+): TopOffDisplayResult => calculateTopOffForModel(
+  settings,
+  {
+    ...input,
+    startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit),
+    finalPressure: input.finalPressure ?? 3000,
+    startO2: input.startO2 ?? 32,
+    startHe: input.startHe ?? 0
+  },
+  topGas
+);
+
 export const copyTopOffResultToStartInput = (
   input: TopOffInput,
   result: TopOffDisplayResult,
@@ -185,72 +292,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       startO2: input.startO2 ?? 32,
       startHe: input.startHe ?? 0
     };
-    const resolvedStartTemperatureF = resolveTopOffStartTemperatureF(baseInput);
-    const resolvedResultTemperatureF = resolveTopOffResultTemperatureF(baseInput, resolvedStartTemperatureF);
-    const resolvedTankSizeCuFt = baseInput.tankSizeCuFt ?? settings.defaultTankSizeCuFt ?? 80;
-    const resolvedTankRatedPressurePsi = baseInput.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000;
-    const goalPressurePsi = fromDisplayPressure(baseInput.finalPressure ?? 3000, settings.pressureUnit);
-    const outcome: TopOffDisplayResult = settings.gasModel === "gerg2008"
-      ? resolvedStartTemperatureF === undefined
-        ? {
-            success: false,
-            finalO2: 0,
-            finalHe: 0,
-            finalN2: 0,
-            startPressurePsi: fromDisplayPressure(baseInput.startPressure ?? 0, settings.pressureUnit),
-            goalPressurePsi,
-            resultPressurePsi: goalPressurePsi,
-            addedPressure: 0,
-            startTemperatureF: DEFAULT_START_TEMPERATURE_F,
-            resultTemperatureF: resolvedResultTemperatureF ?? DEFAULT_START_TEMPERATURE_F,
-            topOffMoles: 0,
-            z: 1,
-            warnings: [],
-            errors: ["Start temperature is required for GERG-2008 top-off correction."],
-            model: "gerg2008"
-          }
-        : resolvedResultTemperatureF === undefined
-        ? {
-            success: false,
-            finalO2: 0,
-            finalHe: 0,
-            finalN2: 0,
-            startPressurePsi: fromDisplayPressure(baseInput.startPressure ?? 0, settings.pressureUnit),
-            goalPressurePsi,
-            resultPressurePsi: goalPressurePsi,
-            addedPressure: 0,
-            startTemperatureF: resolvedStartTemperatureF,
-            resultTemperatureF: resolvedStartTemperatureF,
-            topOffMoles: 0,
-            z: 1,
-            warnings: [],
-            errors: ["Result temperature is required for GERG-2008 top-off correction."],
-            model: "gerg2008"
-          }
-        : {
-            ...calculateRealGasTopOff(
-              { pressureUnit: settings.pressureUnit },
-              {
-                ...baseInput,
-                tankSizeCuFt: resolvedTankSizeCuFt,
-                tankRatedPressurePsi: resolvedTankRatedPressurePsi,
-                startTemperatureF: resolvedStartTemperatureF,
-                resultTemperatureF: resolvedResultTemperatureF
-              },
-              topGas
-            ),
-            model: "gerg2008"
-          }
-      : {
-          ...calculateTopOffBlend(
-            { pressureUnit: settings.pressureUnit },
-            baseInput,
-            topGas
-          ),
-          model: "ideal",
-          goalPressurePsi,
-          resultPressurePsi: goalPressurePsi
-        };
+    const outcome = calculateTopOffForModel(settings, baseInput, topGas);
     setResult(outcome);
 
     if (outcome.success) {
@@ -413,20 +455,8 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       return null;
     }
 
-    const simulatedInput: TopOffInput = {
-      ...topOff,
-      startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit),
-      finalPressure: topOff.finalPressure ?? 3000,
-      startO2: topOff.startO2 ?? 32,
-      startHe: topOff.startHe ?? 0
-    };
-
-    return calculateTopOffBlend(
-      { pressureUnit: settings.pressureUnit },
-      simulatedInput,
-      selectedTopGas
-    );
-  }, [adjustedStartPsi, selectedTopGas, settings.pressureUnit, showBleedPreview, topOff]);
+    return calculateTopOffBleedPreview(settings, topOff, selectedTopGas, adjustedStartPsi);
+  }, [adjustedStartPsi, selectedTopGas, settings, showBleedPreview, topOff]);
 
   const trainingMath = useMemo(() => {
     if (!trainingModeEnabled || !result?.success || result.model !== "ideal" || !selectedTopGas) {
@@ -468,7 +498,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
   }, [result, selectedTopGas, settings.pressureUnit, startPressurePsi, topOff.startHe, topOff.startO2, trainingModeEnabled]);
 
   const bleedFormulaMath = useMemo(() => {
-    if (!trainingModeEnabled || !bleedPreview?.success || !selectedTopGas) {
+    if (!trainingModeEnabled || !bleedPreview?.success || bleedPreview.model !== "ideal" || !selectedTopGas) {
       return null;
     }
 
@@ -480,7 +510,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       return null;
     }
 
-    const solvedStartPsi = bleedPreview.finalPressure * (targetO2Percent - topO2Percent) / denominator;
+    const solvedStartPsi = bleedPreview.goalPressurePsi * (targetO2Percent - topO2Percent) / denominator;
     return {
       startO2Percent,
       targetO2Percent,
@@ -731,7 +761,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       )}
 
       {showBleedPreview && bleedPreview && (
-        <AccordionItem title={settings.gasModel === "gerg2008" ? "Bleed-Down What-If (Ideal)" : "Bleed-Down What-If"} defaultOpen={false}>
+        <AccordionItem title={bleedPreview.model === "gerg2008" ? "Bleed-Down What-If (GERG-2008)" : "Bleed-Down What-If"} defaultOpen={false}>
           <div className="field">
             <label>Bleed Amount ({settings.pressureUnit.toUpperCase()})</label>
             <input
@@ -763,8 +793,13 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                     max={100}
                     step={0.01}
                     value={formatResultMixValue(bleedPreview.finalO2)}
-                    onFocus={selectOnFocus}
+                    readOnly={bleedPreview.model !== "ideal"}
+                    onFocus={bleedPreview.model === "ideal" ? selectOnFocus : undefined}
                     onChange={(e) => {
+                      if (bleedPreview.model !== "ideal") {
+                        return;
+                      }
+
                       // Reverse solve: P_final_O2 = (P_start_adj * Start_O2 + P_added * Top_O2) / P_total
                       // We know P_total (finalPressure), Top_O2, Start_O2.
                       // Variable is bleed amount, which determines P_start_adj.
@@ -802,8 +837,13 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                     max={100}
                     step={0.01}
                     value={formatResultMixValue(bleedPreview.finalHe)}
-                    onFocus={selectOnFocus}
+                    readOnly={bleedPreview.model !== "ideal"}
+                    onFocus={bleedPreview.model === "ideal" ? selectOnFocus : undefined}
                     onChange={(e) => {
+                      if (bleedPreview.model !== "ideal") {
+                        return;
+                      }
+
                       const targetHe = Number(e.target.value) / 100;
                       const topHe = selectedTopGas?.he ?? 0;
                       const startHe = topOff.startHe / 100;
@@ -827,7 +867,10 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                 </div>
               </div>
               <div className="result-note">
-                Bleed tank to {formatPressure(adjustedStartPsi, settings.pressureUnit)}, then add {selectedTopGas?.name ?? "chosen gas"}: {formatPressure(bleedPreview.finalPressure, settings.pressureUnit)}
+                Bleed tank to {formatPressure(adjustedStartPsi, settings.pressureUnit)}, then add {selectedTopGas?.name ?? "chosen gas"}: {formatPressure(bleedPreview.resultPressurePsi, settings.pressureUnit)}
+                {bleedPreview.model === "gerg2008" && (
+                  <> at {formatNumber(toDisplayTemperature(bleedPreview.resultTemperatureF, settings.temperatureUnit), 0)} {temperatureLabel} for goal {formatPressure(bleedPreview.goalPressurePsi, settings.pressureUnit)} at {formatNumber(toDisplayTemperature(bleedPreview.startTemperatureF, settings.temperatureUnit), 0)} {temperatureLabel}</>
+                )}
                 <span className="result-step-total"> ({formatSignedPressure(bleedPreview.addedPressure, settings.pressureUnit)})</span>
               </div>
               {bleedFormulaMath && (
@@ -837,8 +880,8 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                 >
                   <ul>
                     <li>PH = PW x (FW - FTMx) / (FH - FTMx)</li>
-                    <li>PW = {formatPressure(bleedPreview.finalPressure, settings.pressureUnit)}, FW = {formatNumber(bleedFormulaMath.targetO2Percent, RESULT_MIX_DECIMALS)}%, FH = {formatNumber(bleedFormulaMath.startO2Percent, 1)}%, FTMx = {formatNumber(bleedFormulaMath.topO2Percent, 1)}%</li>
-                    <li>PH = {formatPressure(bleedPreview.finalPressure, settings.pressureUnit)} x ({formatNumber(bleedFormulaMath.targetO2Percent, RESULT_MIX_DECIMALS)} - {formatNumber(bleedFormulaMath.topO2Percent, 1)}) / ({formatNumber(bleedFormulaMath.startO2Percent, 1)} - {formatNumber(bleedFormulaMath.topO2Percent, 1)}) = {formatPressure(bleedFormulaMath.solvedStartPsi, settings.pressureUnit)}</li>
+                    <li>PW = {formatPressure(bleedPreview.goalPressurePsi, settings.pressureUnit)}, FW = {formatNumber(bleedFormulaMath.targetO2Percent, RESULT_MIX_DECIMALS)}%, FH = {formatNumber(bleedFormulaMath.startO2Percent, 1)}%, FTMx = {formatNumber(bleedFormulaMath.topO2Percent, 1)}%</li>
+                    <li>PH = {formatPressure(bleedPreview.goalPressurePsi, settings.pressureUnit)} x ({formatNumber(bleedFormulaMath.targetO2Percent, RESULT_MIX_DECIMALS)} - {formatNumber(bleedFormulaMath.topO2Percent, 1)}) / ({formatNumber(bleedFormulaMath.startO2Percent, 1)} - {formatNumber(bleedFormulaMath.topO2Percent, 1)}) = {formatPressure(bleedFormulaMath.solvedStartPsi, settings.pressureUnit)}</li>
                     <li>Bleed amount = current pressure - PH = {formatPressure(startPressurePsi, settings.pressureUnit)} - {formatPressure(adjustedStartPsi, settings.pressureUnit)} = {formatPressure(effectiveBleedPsi, settings.pressureUnit)}</li>
                   </ul>
                 </TrainingMathPanel>

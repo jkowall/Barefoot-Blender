@@ -6,7 +6,7 @@ Source code: [github.com/jkowall/Barefoot-Blender](https://github.com/jkowall/Ba
 
 ## Features
 
-- **Standard Blend Planner** – Partial pressure blending with automatic bleed-down solutions, warnings, an interactive sensitivity slider, reverse solvers for required start pressure and helium-free targets, and optional GERG-2008 O2/N2/He corrected stop pressures with measured per-stage temperatures.
+- **Standard Blend Planner** – Partial pressure blending with automatic bleed-down solutions, warnings, an interactive sensitivity slider, reverse solvers for required start pressure and helium-free targets, and default GERG-2008 O2/N2/He corrected stop pressures with measured per-stage temperatures. Ideal partial-pressure math remains available for training and comparison.
 - **Top-Off What-If** – Quick projections for topping a cylinder, including final mix readouts, GERG-2008 Start/Result temperature pressure correction, fill cost, and a bleed/down sensitivity chart tied to the selected bank.
 - **Dynamic Multi-Gas Blending** – Support for 1-4 gas sources with add/remove buttons, per-source bank pressure limits, linear solver for two source gases with Trimix presets, custom O₂/He mixes, target helium support, cost optimization, tank-volume cost basis, and fill order recommendations.
 - **Gas Cost Calculator** – Calculates fill cost with O₂, He, and top-off gas line items using configurable O₂/He/Top-Off pricing, per-fill tank size, and rated pressure.
@@ -105,14 +105,16 @@ Barefoot Blender/
 
 ## Cloudflare Deployment
 
-Deployments are handled manually with Wrangler after a local build:
+Pushing `main` triggers the connected Cloudflare Workers build for the production site. Complete the web and native release-candidate checks in [`docs/mobile-release.md`](docs/mobile-release.md) before pushing.
+
+Wrangler is the manual fallback after a local build:
 
 ```bash
 npm run build
 npx wrangler deploy
 ```
 
-Ensure you are authenticated with Cloudflare (`npx wrangler login`) and that `wrangler.jsonc` points to the correct asset directory.
+For a fallback deployment, ensure you are authenticated with Cloudflare (`npx wrangler login`) and that `wrangler.jsonc` points to the correct asset directory.
 
 ## Persistence & Offline Behavior
 

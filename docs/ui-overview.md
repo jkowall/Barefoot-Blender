@@ -35,7 +35,7 @@ Order of content:
 2. **Top-Off** card – Selected top-off source, goal pressure, and `Calculate` button.
 3. **Result** card – Final O2 and He. When `GERG-2008` is selected, Start Temp appears in the Start card and Result Temp appears here. Changing Result Temp updates the displayed pressure target only; the mix stays fixed.
 4. **Fill Cost** card – Per-fill tank volume, rated pressure, gas volume, and estimated cost.
-5. **Bleed-Down What-If** and **Top-Off Sensitivity** cards – Optional ideal pressure-point projections for drain scenarios and alternate starts.
+5. **Bleed-Down What-If** and **Top-Off Sensitivity** cards – The bleed slider follows the selected gas model; GERG-2008 previews use the same temperature-aware top-off solver as the main result. The alternate-start sensitivity table remains an explicitly labeled ideal pressure-point projection.
 
 ### Multi-Gas Blend
 
@@ -62,11 +62,12 @@ When `Training Mode` is on, the utility cards show the formulas and current subs
 
 Sections:
 1. **Units** – Pressure (PSI/bar) and depth (ft/m).
-2. **Defaults** – Max and contingency PPO₂.
-3. **Equivalent Narcotic Gas** – Toggle for oxygen narcotic behavior.
-4. **Custom Banked Gases** – Editable list with name, O₂ %, He %, and delete/add controls.
-5. **Pricing** – Gas prices and tank defaults used to initialize per-fill tank context.
-6. **About** – Safety warning and native subscription summary.
+2. **Calculation Model** – Defaults new installs to GERG-2008 real-gas corrections for Standard Blend and Top-Off. Ideal partial-pressure math remains selectable for training and comparison, and saved user choices are preserved.
+3. **Defaults** – Max and contingency PPO₂.
+4. **Equivalent Narcotic Gas** – Toggle for oxygen narcotic behavior.
+5. **Custom Banked Gases** – Editable list with name, O₂ %, He %, and delete/add controls.
+6. **Pricing** – Gas prices and tank defaults used to initialize per-fill tank context.
+7. **About** – Safety warning and native subscription summary.
 
 Actions are persisted immediately through the Zustand store; closing the panel hides the overlay without resetting values.
 

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
+  calculateTopOffBleedPreview,
+  calculateTopOffForModel,
   copyTopOffResultToStartInput,
   defaultTopOffResultTemperatureState,
   defaultTopOffStartTemperatureState,
@@ -15,6 +17,98 @@ const topOffOptions = [
   { id: "air", name: "Air", o2: 21, he: 0 },
   { id: "oxygen", name: "Oxygen", o2: 100, he: 0 }
 ];
+
+describe("calculateTopOffForModel", () => {
+  const input = {
+    startO2: 18,
+    startHe: 45,
+    startPressure: 1000,
+    finalPressure: 3000,
+    tankSizeCuFt: 80,
+    tankRatedPressurePsi: 3000,
+    startTemperatureF: 70,
+    resultTemperatureF: 70,
+    topGasId: "air"
+  };
+
+  test("uses GERG-2008 for a bleed preview when GERG mode is selected", () => {
+    const preview = calculateTopOffBleedPreview(
+      {
+        pressureUnit: "psi",
+        gasModel: "gerg2008",
+        defaultTankSizeCuFt: 80,
+        tankRatedPressure: 3000
+      },
+      input,
+      topOffOptions[0],
+      500
+    );
+    const idealPreview = calculateTopOffBleedPreview(
+      {
+        pressureUnit: "psi",
+        gasModel: "ideal",
+        defaultTankSizeCuFt: 80,
+        tankRatedPressure: 3000
+      },
+      input,
+      topOffOptions[0],
+      500
+    );
+
+    expect(preview.success).toBe(true);
+    expect(preview.model).toBe("gerg2008");
+    expect(idealPreview.model).toBe("ideal");
+    expect(preview.finalHe).not.toBeCloseTo(idealPreview.finalHe, 5);
+    if (preview.model === "gerg2008") {
+      expect(preview.topOffMoles).toBeGreaterThan(0);
+    }
+  });
+
+  test("reports a GERG temperature error instead of falling back to ideal math", () => {
+    const result = calculateTopOffForModel(
+      {
+        pressureUnit: "psi",
+        gasModel: "gerg2008",
+        defaultTankSizeCuFt: 80,
+        tankRatedPressure: 3000
+      },
+      {
+        ...input,
+        startTemperatureF: undefined,
+        startTemperatureTouched: true
+      },
+      topOffOptions[0]
+    );
+
+    expect(result.model).toBe("gerg2008");
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain("Start temperature is required for GERG-2008 top-off correction.");
+  });
+
+  test("preserves warnings from the GERG bleed-preview calculation", () => {
+    const result = calculateTopOffBleedPreview(
+      {
+        pressureUnit: "psi",
+        gasModel: "gerg2008",
+        defaultTankSizeCuFt: 80,
+        tankRatedPressure: 3000
+      },
+      {
+        ...input,
+        startTemperatureF: 300,
+        resultTemperatureF: 300
+      },
+      topOffOptions[0],
+      500
+    );
+
+    expect(result.model).toBe("gerg2008");
+    expect(result.success).toBe(true);
+    expect(result.warnings).toContain(
+      "GERG-2008 correction is outside the normal scuba fill temperature range above 400 K."
+    );
+  });
+});
 
 describe("resolveTopOffStartTemperatureF", () => {
   test("defaults start temperature before user edit", () => {

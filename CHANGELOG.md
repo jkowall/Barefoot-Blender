@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.0] - 2026-08-19
+
+### Added
+
+- **Independent GERG Regression Coverage**: Added pinned NIST AGA8 reference vectors, full Trimix blend reconstruction, pressure-density round trips, derivative checks, unit equivalence, tank scaling, temperature-path invariants, and supported-envelope boundaries.
+
+### Changed
+
+- **Real-Gas Default**: New installs now use GERG-2008 temperature-aware O2/N2/He calculations for Standard Blend and Top-Off. Existing saved preferences remain unchanged, and ideal partial-pressure math remains available for training and comparison.
+- **GERG Bleed Preview**: Bleed-Down What-If now follows the selected gas model and uses the same GERG Top-Off solver when real-gas mode is active. The alternate-start sensitivity table remains explicitly ideal-only.
+
+### Fixed
+
+- **Real-Gas Input Safety**: Rejected negative or nonfinite densities, pressures, and cylinder context; preserved hypoxic and high-O2 warnings; and accepted valid 400-bar round trips despite floating-point noise.
+
 ## [0.12.10] - 2026-08-14
 
 ### Fixed

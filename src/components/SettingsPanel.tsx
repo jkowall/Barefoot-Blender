@@ -15,7 +15,7 @@ import { SelectInput } from "./SelectInput";
 const pressureUnits: PressureUnit[] = ["psi", "bar"];
 const depthUnits: DepthUnit[] = ["ft", "m"];
 const temperatureUnits: TemperatureUnit[] = ["f", "c"];
-const gasModels: GasModel[] = ["ideal", "gerg2008"];
+const gasModels: GasModel[] = ["gerg2008", "ideal"];
 
 type SettingsPanelProps = {
   onClose: () => void;
@@ -134,11 +134,13 @@ const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Elemen
               >
                 {gasModels.map((model) => (
                   <option key={model} value={model}>
-                    {model === "ideal" ? "Ideal partial pressure" : "GERG-2008 real gas"}
+                    {model === "ideal" ? "Ideal partial pressure (training)" : "GERG-2008 real gas (default)"}
                   </option>
                 ))}
               </SelectInput>
-              <div className="table-note">GERG-2008 applies O2/N2/He molar corrections in Standard Blend and Top-Off.</div>
+              <div className="table-note">
+                GERG-2008 is the new-user default and applies temperature-aware O2/N2/He molar corrections in Standard Blend and Top-Off. Ideal partial pressure remains available for training and comparison. Always analyze the finished mix.
+              </div>
 
               <div className="section-title" style={{ marginTop: 16 }}>Defaults</div>
               <div className="grid two">

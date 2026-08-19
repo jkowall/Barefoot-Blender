@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { GAS_NAME_MAX_LENGTH } from "../utils/gasNames";
-import { migrateSettingsState, sanitizeCustomGas } from "./settings";
+import { migrateSettingsState, sanitizeCustomGas, useSettingsStore } from "./settings";
+
+describe("settings defaults", () => {
+  test("uses GERG-2008 real-gas calculations for new users", () => {
+    expect(useSettingsStore.getState().gasModel).toBe("gerg2008");
+  });
+});
 
 describe("sanitizeCustomGas", () => {
   test("truncates names at the persistence boundary", () => {
@@ -70,5 +76,13 @@ describe("migrateSettingsState", () => {
     });
 
     expect(migrated.trainingModeEnabled).toBe(true);
+  });
+
+  test("preserves a persisted ideal-gas preference", () => {
+    const migrated = migrateSettingsState({
+      gasModel: "ideal"
+    });
+
+    expect(migrated.gasModel).toBe("ideal");
   });
 });

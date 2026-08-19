@@ -1,6 +1,6 @@
 # Calculation Model
 
-This document details the formulas and decision logic that power Barefoot Blender. The default Standard Blend planner uses ideal gas behavior (partial pressure blending) and operates in PSI internally unless otherwise noted. Standard Blend and Top-Off can optionally show GERG-2008 real-gas corrected pressures for O2/N2/He fills.
+This document details the formulas and decision logic that power Barefoot Blender. New installs default to GERG-2008 real-gas corrected pressures for Standard Blend and Top-Off O2/N2/He fills. Existing users keep their saved gas-model preference, and ideal partial-pressure behavior remains available for training and comparison. Calculations operate in PSI internally unless otherwise noted.
 
 ## 1. Standard Blend Planner
 
@@ -56,6 +56,7 @@ Modules:
 
 Scope:
 - Applies to Standard Blend and Top-Off when the user selects the GERG-2008 gas model.
+- Is selected by default for new installs; changing the setting persists the user's choice.
 - Covers scuba-relevant O2, N2, and He mixtures.
 - Uses the O2/N2/He subset of the NIST AGA8 GERG-2008 implementation. It does not include hydrocarbon or contaminant components from the full natural-gas model.
 - Keeps the ideal partial-pressure plan visible as the base workflow, then adds corrected stop pressures where applicable.
@@ -103,10 +104,12 @@ Top-Off GERG handling:
 5. Recalculate the displayed result pressure from the same final moles at Result Temp.
 6. Editing Result Temp changes only the displayed pressure target. It does not change top-off moles or the final mix.
 7. Fill-cost volume uses the start-temperature goal pressure delta, so changing Result Temp does not alter the cost estimate.
+8. The Bleed-Down What-If slider re-runs the active gas model from the adjusted start pressure. In GERG-2008 mode, ideal-only reverse O2/He pressure formulas are not shown as corrected calculations.
 
 Reference implementation:
 - GERG constants and equations are based on the NIST public AGA8 GERG-2008 source: <https://github.com/usnistgov/AGA8>.
 - Regression tests compare the TypeScript O2/N2/He implementation against NIST C++ reference values for air, trimix, and heliox states.
+- This source relationship does not mean NIST certifies Barefoot Blender or its use for scuba blending. Corrected stops remain estimates, and the finished mix must be analyzed before use.
 
 ## 3. Multi-Gas Nitrox Solver
 
