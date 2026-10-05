@@ -682,11 +682,10 @@ describe("calculateRealGasStandardBlend", () => {
   });
 
   test.each([
-    { label: "residual state", patch: { startPressure: 500, startTemperatureF: -400 }, failedStage: undefined },
-    { label: "settled target", patch: { settledTemperatureF: -400 }, failedStage: undefined },
-    { label: "helium stage", patch: { stageTemperaturesF: { helium: -400, oxygen: 70, topoff: 70 } }, failedStage: "helium" },
-    { label: "oxygen stage", patch: { stageTemperaturesF: { helium: 70, oxygen: -400, topoff: 70 } }, failedStage: "oxygen" }
-  ])("surfaces GERG envelope errors for an invalid $label temperature", ({ patch, failedStage }) => {
+    { label: "residual state", patch: { startPressure: 500, startTemperatureF: -400 } },
+    { label: "settled target", patch: { settledTemperatureF: -400 } },
+    { label: "helium stage", patch: { stageTemperaturesF: { helium: -400, oxygen: 70, topoff: 70 } } }
+  ])("surfaces GERG envelope errors for an invalid $label temperature", ({ patch }) => {
     const corrected = calculateRealGasStandardBlend(
       { pressureUnit: "psi" },
       standardTrimixInput({
@@ -697,7 +696,6 @@ describe("calculateRealGasStandardBlend", () => {
 
     expect(corrected.success).toBe(false);
     expect(corrected.errors).toContain("GERG-2008 correction is limited to temperatures at or above 250 K.");
-    expect(corrected.failedStage).toBe(failedStage);
   });
 
   test.each([
@@ -753,7 +751,6 @@ describe("calculateRealGasStandardBlend", () => {
 
     expect(corrected.success).toBe(false);
     expect(corrected.errors[0]).toContain("Complete the bleed-down step");
-    expect(corrected.failedStage).toBeUndefined();
   });
 });
 

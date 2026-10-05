@@ -1,11 +1,5 @@
 # Changelog
 
-## [1.0.1] - 2026-10-05
-
-### Fixed
-
-- **GERG Bleed-Down Guidance**: Standard Blend no longer shows "needs valid temp" stop rows or a temperature-correction note when GERG-2008 correction stops for a required bleed-down or another pre-solve input error. Only the GERG error is shown, and stage temperature rows remain for stage temperature envelope failures.
-
 ## [1.0.0] - 2026-08-19
 
 ### Added

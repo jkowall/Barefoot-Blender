@@ -36,8 +36,6 @@ export type RealGasBlendResult = {
   targetSettledPressurePsi: number;
   warnings: string[];
   errors: string[];
-  // Set only when moles were solved but a stage state fell outside the GERG envelope.
-  failedStage?: RealGasBlendStep["kind"];
 };
 
 export type RealGasTopOffResult = {
@@ -682,8 +680,7 @@ export const calculateRealGasStandardBlend = (
         finalHotPressurePsi: previousPressurePsi,
         targetSettledPressurePsi: targetPressurePsi,
         warnings,
-        errors: beforeState.errors,
-        failedStage: step.kind
+        errors: beforeState.errors
       };
     }
     if (steps.length === 0) {
@@ -701,8 +698,7 @@ export const calculateRealGasStandardBlend = (
         finalHotPressurePsi: previousPressurePsi,
         targetSettledPressurePsi: targetPressurePsi,
         warnings,
-        errors: state.errors,
-        failedStage: step.kind
+        errors: state.errors
       };
     }
 

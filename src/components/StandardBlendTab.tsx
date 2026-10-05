@@ -254,29 +254,6 @@ export const resolveRealGasStageTemperatureRows = (
   }));
 };
 
-export type RealGasStopDisplay = {
-  rows: RealGasStageTemperatureRow[];
-  footer?: "summary" | "stageTemperature";
-};
-
-export const resolveRealGasStopDisplay = (
-  blendSteps: BlendStep[] | undefined,
-  realGasResult: RealGasBlendResult | null,
-  selectedTopGas: GasSelection | undefined
-): RealGasStopDisplay => {
-  // Failures before moles are solved (bleed-down, invalid inputs, initial/settled envelope) are not
-  // stage temperature problems, so stage rows would point the user at the wrong input.
-  if (!realGasResult || (!realGasResult.success && realGasResult.failedStage === undefined)) {
-    return { rows: [] };
-  }
-
-  const rows = resolveRealGasStageTemperatureRows(blendSteps, realGasResult.steps, selectedTopGas);
-  if (rows.length === 0) {
-    return { rows };
-  }
-  return { rows, footer: realGasResult.success ? "summary" : "stageTemperature" };
-};
-
 const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
   const standardBlend = useSessionStore((state) => state.standardBlend);
   const standardBlendHistory = useSessionStore((state) => state.standardBlendHistory);
@@ -754,9 +731,9 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     settings.pressureUnit === "psi" ? 5 : 0.25
   );
   const showBaseBlendPlan = settings.gasModel !== "gerg2008" || realGasResult?.success !== true;
-  const realGasStopDisplay = resolveRealGasStopDisplay(
+  const realGasStageTemperatureRows = resolveRealGasStageTemperatureRows(
     result?.success ? result.steps : undefined,
-    realGasResult,
+    realGasResult?.steps ?? [],
     selectedTopGas
   );
 
@@ -1105,10 +1082,10 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
               {realGasResult.success && realGasResult.steps.length === 0 && (
                 <div className="table-note">No corrected gas additions required.</div>
               )}
-              {realGasStopDisplay.rows.length > 0 && (
+              {realGasStageTemperatureRows.length > 0 && (
                 <>
                   <ol className="result-list">
-                    {realGasStopDisplay.rows.map((row, index) => {
+                    {realGasStageTemperatureRows.map((row, index) => {
                       const step = row.correctedStep;
                       const descriptor = row.kind === "topoff" ? "Top-off with" : "Add";
                       return (
@@ -1140,12 +1117,11 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                       );
                     })}
                   </ol>
-                  {realGasStopDisplay.footer === "summary" && (
+                  {realGasResult.success ? (
                     <div className="table-note">
                       Initial reference: {formatPressure(realGasResult.startHotPressurePsi, settings.pressureUnit, 1)}. Final stage stop: {formatPressure(realGasResult.finalHotPressurePsi, settings.pressureUnit, 1)} for settled target {formatPressure(realGasResult.targetSettledPressurePsi, settings.pressureUnit, 1)}.
                     </div>
-                  )}
-                  {realGasStopDisplay.footer === "stageTemperature" && (
+                  ) : (
                     <div className="table-note">
                       Correct the temperature input to restore corrected stop pressures.
                     </div>
