@@ -745,32 +745,33 @@ export const calculateRealGasStandardBlend = (
       return removeGasFailure();
     }
     const targetTotal = totalMoles(targetComponents);
-    let scale = targetTotal > MOLE_TOLERANCE
-      ? Math.max(0, (targetTotal - totalMoles(startComponents)) / targetTotal)
-      : 0;
-    // The residual changes the final mix slightly, so refine the scale until the settled pressure
-    // lands on the target. Pressure is nearly proportional to moles, so this converges in a few passes.
-    const targetAbsolutePsi = targetPressurePsi + ATM_PRESSURE_PSI;
-    for (let pass = 0; pass < 8 && scale > 0; pass += 1) {
-      const settled = stateFromComponents(
-        settledTemperatureK,
-        addGasMoles(
-          addGasMoles(addGasMoles(startComponents, vacuumSplit.helium * scale, pureHeliumFractions), vacuumSplit.oxygen * scale, pureOxygenFractions),
-          vacuumSplit.topoff * scale,
-          topFractions
-        ),
-        waterVolumeLiters
+    const residualMoles = totalMoles(startComponents);
+    const withScaledAdditions = (scale: number): ComponentMoles =>
+      addGasMoles(
+        addGasMoles(addGasMoles(startComponents, vacuumSplit.helium * scale, pureHeliumFractions), vacuumSplit.oxygen * scale, pureOxygenFractions),
+        vacuumSplit.topoff * scale,
+        topFractions
       );
-      if (!settled.success) {
+    let scale = targetTotal > MOLE_TOLERANCE ? Math.max(0, (targetTotal - residualMoles) / targetTotal) : 0;
+    // The residual shifts the final mix slightly, so refine the scale until the final mix's density at
+    // the target pressure and settled temperature matches the cylinder contents. Evaluating at the
+    // target pressure keeps every pass inside the GERG envelope; the mix barely moves, so this
+    // converges in a few passes.
+    for (let pass = 0; pass < 8 && scale > 0; pass += 1) {
+      const density = gergDensityFromPressure(
+        settledTemperatureK,
+        gaugePsiToAbsoluteKpa(targetPressurePsi),
+        fractionsFromMoles(withScaledAdditions(scale))
+      );
+      if (!density.success) {
         break;
       }
-      const settledAbsolutePsi = settled.pressurePsi + ATM_PRESSURE_PSI;
-      if (Math.abs(settledAbsolutePsi - targetAbsolutePsi) <= 0.01) {
+      const nextScale = Math.max(0, (density.densityMolPerLiter * waterVolumeLiters - residualMoles) / targetTotal);
+      const converged = Math.abs(nextScale - scale) * targetTotal <= MOLE_TOLERANCE;
+      scale = nextScale;
+      if (converged) {
         break;
       }
-      const addedMoles = scale * targetTotal;
-      const residualMoles = totalMoles(startComponents);
-      scale = Math.max(0, ((residualMoles + addedMoles) * targetAbsolutePsi / settledAbsolutePsi - residualMoles) / targetTotal);
     }
     split = {
       helium: vacuumSplit.helium * scale,
@@ -809,6 +810,14 @@ export const calculateRealGasStandardBlend = (
       he: percentFromFraction(finalFractions.he),
       n2: percentFromFraction(finalFractions.n2)
     };
+    // Safety flags follow the mix the plan actually reaches, not the unreachable target.
+    for (const targetFlag of ["Hypoxic mix (<18% O2).", "High O2 - fire risk (>40% O2)."]) {
+      const index = warnings.indexOf(targetFlag);
+      if (index >= 0) {
+        warnings.splice(index, 1);
+      }
+    }
+    appendMixSafetyWarnings(warnings, residualAdjustedMix.o2);
     const heliumText = residualAdjustedMix.he > 0.005 ? ` / ${residualAdjustedMix.he.toFixed(2)}% He` : "";
     warnings.push(
       `An empty cylinder still holds 1 atm of the start mix, so this plan ends at ${residualAdjustedMix.o2.toFixed(2)}% O2${heliumText} instead of the exact target. Purge the cylinder and set the start mix to the purge gas to reach the target exactly.`

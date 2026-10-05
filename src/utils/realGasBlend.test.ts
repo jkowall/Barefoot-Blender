@@ -686,7 +686,7 @@ describe("calculateRealGasStandardBlend", () => {
     // The residual shifts the mix only slightly and the plan still lands near the target pressure.
     expect(Math.abs((mix?.o2 ?? 0) - targetO2)).toBeLessThan(0.5);
     expect(Math.abs((mix?.he ?? 0) - targetHe)).toBeLessThan(0.5);
-    expect(reconstructed.settledPressurePsi).toBeCloseTo(3000, 0);
+    expect(reconstructed.settledPressurePsi).toBeCloseTo(3000, 1);
     expect(corrected.warnings.some((warning) => warning.startsWith("An empty cylinder still holds 1 atm of the start mix"))).toBe(true);
   });
 
@@ -702,6 +702,43 @@ describe("calculateRealGasStandardBlend", () => {
     expect(corrected.warnings).toContain(
       `An empty cylinder still holds 1 atm of the start mix, so this plan ends at ${corrected.residualAdjustedMix?.o2.toFixed(2)}% O2 instead of the exact target. Purge the cylinder and set the start mix to the purge gas to reach the target exactly.`
     );
+  });
+
+  test.each([
+    { label: "an EAN40 bank over an oxygen residual", startO2: 100, startHe: 0, topGas: { id: "ean40", name: "EAN40", o2: 40, he: 0 }, targetO2: 40, targetHe: 0, flag: "High O2 - fire risk (>40% O2)." },
+    { label: "an 18/45 bank over a 10/70 residual", startO2: 10, startHe: 70, topGas: { id: "tx1845", name: "18/45", o2: 18, he: 45 }, targetO2: 18, targetHe: 45, flag: "Hypoxic mix (<18% O2)." }
+  ])("flags the reached mix, not the target, for $label", ({ startO2, startHe, topGas, targetO2, targetHe, flag }) => {
+    const corrected = calculateRealGasStandardBlend(
+      { pressureUnit: "psi" },
+      standardTrimixInput({ startO2, startHe, targetO2, targetHe, topGasId: topGas.id }),
+      topGas
+    );
+
+    expect(corrected.success).toBe(true);
+    expect(corrected.residualAdjustedMix).toBeDefined();
+    expect(corrected.warnings).toContain(flag);
+  });
+
+  test("refines a residual-adjusted plan near the 400 bar envelope without leaving it", () => {
+    const inputs = standardTrimixInput({ targetO2: 100, targetHe: 0, targetPressure: 5650 });
+    const corrected = calculateRealGasStandardBlend({ pressureUnit: "psi" }, inputs, air);
+
+    expect(corrected.success).toBe(true);
+    expect(corrected.residualAdjustedMix).toBeDefined();
+    expect(reconstructStandardFinalState(inputs, air, corrected).settledPressurePsi).toBeCloseTo(5650, 1);
+  });
+
+  test("still rejects an empty start whose top-off gas cannot make the target even from vacuum", () => {
+    const ean32: GasSelection = { id: "ean32", name: "EAN32", o2: 32, he: 0 };
+    const corrected = calculateRealGasStandardBlend(
+      { pressureUnit: "psi" },
+      standardTrimixInput({ targetO2: 21, targetHe: 0, topGasId: ean32.id }),
+      ean32
+    );
+
+    expect(corrected.success).toBe(false);
+    expect(corrected.errors).toEqual(["GERG-2008 correction requires removing gas or changing the top-off gas."]);
+    expect(corrected.residualAdjustedMix).toBeUndefined();
   });
 
   test("leaves an exact empty-start plan unadjusted", () => {
