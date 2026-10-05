@@ -5,7 +5,7 @@
 ### Fixed
 
 - **GERG Empty-Cylinder Start**: A 0 PSI start is now treated as 1 atm of the start gas already in the cylinder instead of a vacuum, so corrected stop pressures no longer jump between a 0 PSI and a slightly positive start (21/35 into an 80 cu ft tank: helium stop 987 PSI instead of 970). Cylinder volume is now inferred from gauge rated pressure, so GERG-2008 fill volumes match the ideal pressure ratio when Z is 1 and read about 0.5% higher than in 1.1.0 (21/35 helium: 25.4 cu ft). Targets that 1 atm of the start gas makes unreachable, such as heliox or pure oxygen into an empty cylinder with an air start mix, now show an error asking you to set the start mix to the gas left in the cylinder or purge it.
-- **GERG Bleed-Down Message**: When the ideal plan requires bleed-down, the GERG-2008 section shows the bleed-down guidance instead of asking for a valid stage temperature. Stage-temperature rows now appear only for stage-temperature failures.
+- **GERG Bleed-Down Guidance**: Standard Blend no longer shows "needs valid temp" stop rows or a temperature-correction note when GERG-2008 correction stops for a required bleed-down or another pre-solve input error. Only the GERG error is shown, and stage temperature rows remain for stage temperature envelope failures.
 
 ## [1.1.0] - 2026-10-05
 
