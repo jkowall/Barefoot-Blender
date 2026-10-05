@@ -242,7 +242,7 @@ export const buildTopOffFillCostPlan = (
             gas: topGas,
             pressurePsi: result.addedPressure,
             volumeCuFt: realGasMolesToFreeGasCuFt(
-              result.fillCostMoles ?? result.topOffMoles,
+              result.topOffMoles,
               solvedWaterVolumeLiters,
               tankSizeCuFt,
               tankRatedPressurePsi
