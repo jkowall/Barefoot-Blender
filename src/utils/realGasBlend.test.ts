@@ -706,7 +706,8 @@ describe("calculateRealGasStandardBlend", () => {
 
   test.each([
     { label: "an EAN40 bank over an oxygen residual", startO2: 100, startHe: 0, topGas: { id: "ean40", name: "EAN40", o2: 40, he: 0 }, targetO2: 40, targetHe: 0, flag: "High O2 - fire risk (>40% O2)." },
-    { label: "an 18/45 bank over a 10/70 residual", startO2: 10, startHe: 70, topGas: { id: "tx1845", name: "18/45", o2: 18, he: 45 }, targetO2: 18, targetHe: 45, flag: "Hypoxic mix (<18% O2)." }
+    { label: "an 18/45 bank over a 10/70 residual", startO2: 10, startHe: 70, topGas: { id: "tx1845", name: "18/45", o2: 18, he: 45 }, targetO2: 18, targetHe: 45, flag: "Hypoxic mix (<18% O2)." },
+    { label: "an EAN18 bank over a helium residual", startO2: 0, startHe: 100, topGas: { id: "ean18", name: "EAN18", o2: 18, he: 0 }, targetO2: 18, targetHe: 0, flag: "Hypoxic mix (<18% O2)." }
   ])("flags the reached mix, not the target, for $label", ({ startO2, startHe, topGas, targetO2, targetHe, flag }) => {
     const corrected = calculateRealGasStandardBlend(
       { pressureUnit: "psi" },
