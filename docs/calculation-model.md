@@ -76,12 +76,14 @@ Pressure and temperature handling:
 2. Convert Fahrenheit inputs to Kelvin.
 3. Infer cylinder water volume from rated free gas volume:
    ```
-   V_water_L = tank_cu_ft * 28.316846592 * 14.6959488 / (rated_pressure_PSI + 14.6959488)
+   V_water_L = tank_cu_ft * 28.316846592 * 14.6959488 / rated_pressure_PSI
    ```
+   This uses the same gauge-pressure ratio as the ideal tank conversion (section 5): tank size is the free gas between 0 PSI gauge and rated pressure. An aluminum 80 (80 cu ft at 3000 PSI) infers 11.10 L.
 4. Use GERG-2008 density solving to convert start and target states into total moles:
    ```
    n_total = D_mol_per_L * V_water_L
    ```
+   The start state always uses absolute pressure. An empty cylinder at 0 PSI gauge still holds 1 atm absolute of the start mix, so 0 PSI and a small residual such as 0.01 PSI give continuous stops. For a 21/35 fill to 3000 PSI in an 80 cu ft tank at 70 F with an air top-off, the helium stop is 987.0 PSI from 0 PSI.
 5. Convert start and target O2/He/N2 fractions into component mole counts.
 6. Solve the same fill order in mole space:
    - Helium moles from the He component delta
@@ -95,10 +97,11 @@ Supported envelope:
 - Temperature must be at least 250 K.
 - Pressure must not exceed 400 bar absolute.
 - Direct fills are corrected. If the ideal plan requires bleed-down, complete the bleed step first and recalculate from the post-bleed state.
+- From 0 PSI, the 1 atm residual of the start mix counts toward the target. A target with less of a gas than that residual holds, such as heliox or 100% O2 from an air residual, has no exact corrected plan. GERG-2008 reports that the residual blocks the target instead of asking for bleed-down. Set the start mix to the gas left in the cylinder, or purge the cylinder, then recalculate.
 
 Top-Off GERG handling:
 1. Start pressure and goal pressure are interpreted at Start Temp. This intentionally assumes Settle Temp equals Start Temp for the Top-Off workflow.
-2. Convert the starting cylinder state into O2, He, and N2 moles using Start Temp, start pressure, start mix, and tank water volume.
+2. Convert the starting cylinder state into O2, He, and N2 moles using Start Temp, absolute start pressure, start mix, and tank water volume. A 0 PSI start keeps 1 atm of the start mix, so a full bleed in the Bleed-Down What-If still carries that residual into the result mix.
 3. Solve top-off gas moles with GERG pressure-from-density iteration until the cylinder reaches the entered goal pressure at Start Temp.
 4. Compute the final O2, He, and N2 fractions from the final component moles.
 5. Recalculate the displayed result pressure from the same final moles at Result Temp.
@@ -118,14 +121,14 @@ Fill-cost volume:
    free_gas_L = n_added * R * T_ref / P_atm
    cu_ft = free_gas_L / 28.316846592
    ```
-   At 70 F this reduces to `cu_ft = tank_cu_ft * (P2_abs / Z2 - P1_abs / Z1) / (rated_pressure_PSI + 14.6959488)`.
+   At 70 F this reduces to `cu_ft = tank_cu_ft * (P2_abs / Z2 - P1_abs / Z1) / rated_pressure_PSI`.
 3. Standard Blend moles depend only on the start state (Initial Temp) and target state (Settled Temp). Stage temperatures move corrected stop pressures, not the gas quantity, so a hot fill does not change the cost.
-4. Tank size is treated as nominal capacity: water volume times rated pressure, the same inference used for the GERG cylinder volume. With 80 cu ft at 3000 PSI and 70 F, the inferred cylinder holds about 77.4 cu ft of air at rated pressure, close to the 77.4 cu ft real-gas label of an 11.1 L aluminum 80, and filling it with air from 0 PSI adds about 77.0 cu ft because 1 atm of air is already inside. Entering a real-gas label such as 77.4 instead reads about 3.7% low.
+4. Tank size is treated as nominal capacity: the free gas between 0 PSI gauge and rated pressure, the same inference used for the GERG cylinder volume (11.10 L for 80 cu ft at 3000 PSI). Filling that cylinder with air from 0 PSI at 70 F adds about 77.4 cu ft, matching the 77.4 cu ft real-gas label of an 11.1 L aluminum 80. Entering a real-gas label such as 77.4 instead reads about 3.3% low.
 5. Moles scale linearly with cylinder volume while stop pressures do not, so editing tank size rescales the GERG-2008 volumes without recalculating stops.
 6. Real-gas volumes can be lower or higher than ideal. Helium-rich trimix reads lower because the mix Z is well above 1 (21/35 at 3000 PSI and 70 F has Z 1.1064, above pure helium at 1.0979). Mixes richer than about EAN50, such as EAN80 and pure oxygen, read higher because their Z is below 1 at fill pressure (EAN80 at 3000 PSI and 70 F has Z 0.9658).
 7. Standard Blend: when the ideal plan succeeds but GERG-2008 has no solution for the fill (for example, bleed-down is required first), Fill Cost falls back to the ideal pressure ratio and labels the fallback. Top-Off: when the GERG-2008 top-off has no solution, the Result card shows the error and Fill Cost shows no estimate.
-8. An empty (0 PSI) start is priced as 1 atm of the start gas already in the cylinder, so fill-cost volumes do not jump between a 0 PSI and a slightly positive start. The corrected stop pressures still solve an empty start from vacuum. If 1 atm of start gas makes the gas split infeasible (for example, pure oxygen into a cylinder holding air), the vacuum-start quantities are used.
-9. With Z equal to 1, the total added volume reads about 0.5% below the ideal pressure ratio, because the cylinder volume inference uses absolute rated pressure while the ideal ratio uses gauge rated pressure. Individual lines can differ by more or less than 0.5%.
+8. The solver starts an empty (0 PSI) cylinder from 1 atm of the start gas, so corrected stops and fill-cost volumes are both continuous between a 0 PSI and a slightly positive start. When that residual blocks the target (for example, pure oxygen into a cylinder holding air), GERG-2008 has no solution and Fill Cost falls back as described in item 7.
+9. With Z equal to 1, GERG-2008 volumes reduce exactly to the ideal pressure ratio for every start state, because the cylinder volume inference and the ideal ratio both use gauge rated pressure and an empty start holds 1 atm.
 
 Reference implementation:
 - GERG constants and equations are based on the NIST public AGA8 GERG-2008 source: <https://github.com/usnistgov/AGA8>.

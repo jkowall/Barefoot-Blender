@@ -385,7 +385,7 @@ describe("buildStandardBlendFillCostPlan", () => {
 
     expect(plan.basis).toBe("gerg2008");
     expect(estimate.lines.map((line) => line.label)).toEqual(["Oxygen", "Helium", "Air Top-Off"]);
-    expect(estimate.lines[1].volumeCuFt).toBeCloseTo(25.307, 3);
+    expect(estimate.lines[1].volumeCuFt).toBeCloseTo(25.431, 3);
     expect(estimate.lines[1].volumeCuFt).toBeLessThan(28);
   });
 
@@ -409,7 +409,7 @@ describe("buildStandardBlendFillCostPlan", () => {
 
     expect(realGasResult.success).toBe(false);
     expect(plan.basis).toBe("gerg2008");
-    expect(plan.additions[1].volumeCuFt).toBeCloseTo(25.307, 3);
+    expect(plan.additions[1].volumeCuFt).toBeCloseTo(25.431, 3);
   });
 
   test("falls back to labeled ideal volumes when GERG-2008 needs bleed-down first", () => {

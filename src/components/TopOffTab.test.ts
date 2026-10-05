@@ -66,6 +66,23 @@ describe("calculateTopOffForModel", () => {
     }
   });
 
+  test("keeps the 1 atm residual when the GERG bleed preview drains to 0 PSI", () => {
+    const settings = {
+      pressureUnit: "psi" as const,
+      gasModel: "gerg2008" as const,
+      defaultTankSizeCuFt: 80,
+      tankRatedPressure: 3000
+    };
+    const fullBleed = calculateTopOffBleedPreview(settings, input, topOffOptions[0], 0);
+    const nearlyFullBleed = calculateTopOffBleedPreview(settings, input, topOffOptions[0], 0.01);
+
+    expect(fullBleed.success).toBe(true);
+    expect(fullBleed.model).toBe("gerg2008");
+    // 1 atm of the 18/45 residual stays in the cylinder, so the air top-off carries trace helium.
+    expect(fullBleed.finalHe).toBeGreaterThan(0.2);
+    expect(Math.abs(nearlyFullBleed.finalHe - fullBleed.finalHe)).toBeLessThan(1e-3);
+  });
+
   test("reports a GERG temperature error instead of falling back to ideal math", () => {
     const result = calculateTopOffForModel(
       {
@@ -372,7 +389,7 @@ describe("buildTopOffFillCostPlan", () => {
     expect(hotResult.resultPressurePsi).toBeGreaterThan(result.resultPressurePsi);
     expect(hotPlan.basis).toBe("gerg2008");
     expect(plan.basis).toBe("gerg2008");
-    expect(estimate.lines[0].volumeCuFt).toBeCloseTo(63.74, 2);
+    expect(estimate.lines[0].volumeCuFt).toBeCloseTo(64.05, 2);
     expect(hotPlan.additions[0].volumeCuFt).toBeCloseTo(plan.additions[0].volumeCuFt ?? 0, 9);
     expect(buildTopOffFillCostPlan(result, topOffOptions[0], 120, 3000).additions[0].volumeCuFt)
       .toBeCloseTo((plan.additions[0].volumeCuFt ?? 0) * 1.5, 9);
