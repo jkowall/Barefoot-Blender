@@ -679,6 +679,7 @@ describe("calculateRealGasStandardBlend", () => {
     expect(corrected.errors).toEqual([
       "An empty cylinder still holds 1 atm of the start mix, which has more N2 than the target allows. Set the start mix to the gas left in the cylinder, or purge the cylinder, then recalculate."
     ]);
+    expect(corrected.additions).toBeUndefined();
   });
 
   test("rejects an N2-free top gas when the target requires nitrogen", () => {
