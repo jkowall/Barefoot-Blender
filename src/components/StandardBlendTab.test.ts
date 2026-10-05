@@ -413,6 +413,80 @@ describe("resolveRealGasStopDisplay", () => {
     expect(display.footer).toBe("summary");
   });
 
+  test("keeps a row per planned addition when a GERG-only fill fails at its first stage", () => {
+    const display = resolveRealGasStopDisplay(
+      undefined,
+      {
+        success: false,
+        steps: [],
+        startHotPressurePsi: 3000,
+        finalHotPressurePsi: 3000,
+        targetSettledPressurePsi: 3000,
+        additions: [
+          { kind: "helium", gasName: "Helium", moles: 1 },
+          { kind: "oxygen", gasName: "Oxygen", moles: 1 },
+          { kind: "topoff", gasName: "Air", moles: 1 }
+        ],
+        warnings: [],
+        errors: ["GERG-2008 correction is limited to temperatures at or above 250 K."]
+      },
+      air
+    );
+
+    expect(display.rows).toEqual([
+      { kind: "helium", gasName: "Helium", correctedStep: undefined },
+      { kind: "oxygen", gasName: "Oxygen", correctedStep: undefined },
+      { kind: "topoff", gasName: "Air", correctedStep: undefined }
+    ]);
+    expect(display.footer).toBe("stageTemperature");
+  });
+
+  test("keeps editable rows through the real GERG-only refresh path", () => {
+    const inputs = standardInput({
+      startPressure: 3000,
+      targetPressure: 3000,
+      startO2: 32,
+      startHe: 0,
+      targetO2: 32,
+      targetHe: 0,
+      startTemperatureF: 110,
+      stageTemperaturesF: { oxygen: -400, topoff: -400 },
+      stageTemperatureTouched: { oxygen: true, topoff: true }
+    });
+    const idealResult = calculateStandardBlend({ pressureUnit: "psi" }, inputs, air);
+    const realGasResult = calculateRealGasStandardBlend({ pressureUnit: "psi" }, inputs, air);
+    // The refresh path replaces the primary result with the failed GERG result, so no ideal steps remain.
+    const primaryResult = realGasResultToBlendResult(realGasResult);
+
+    expect(idealResult.success).toBe(false);
+    expect(realGasResult.success).toBe(false);
+    expect(realGasResult.steps).toHaveLength(0);
+    expect(realGasResult.additions?.map((addition) => addition.kind)).toEqual(["oxygen", "topoff"]);
+
+    const display = resolveRealGasStopDisplay(primaryResult.success ? primaryResult.steps : undefined, realGasResult, air);
+
+    expect(display.rows.map((row) => row.kind)).toEqual(["oxygen", "topoff"]);
+    expect(display.footer).toBe("stageTemperature");
+  });
+
+  test("orders a GERG-only planned stage between ideal stages", () => {
+    const rows = resolveRealGasStageTemperatureRows(
+      [
+        { kind: "helium", amount: 1000, gasName: "Helium" },
+        { kind: "topoff", amount: 2000, gasName: "Air" }
+      ],
+      [],
+      air,
+      [
+        { kind: "helium", gasName: "Helium", moles: 1 },
+        { kind: "oxygen", gasName: "Oxygen", moles: 0.01 },
+        { kind: "topoff", gasName: "Air", moles: 1 }
+      ]
+    );
+
+    expect(rows.map((row) => row.kind)).toEqual(["helium", "oxygen", "topoff"]);
+  });
+
   test("renders nothing before a GERG result exists", () => {
     expect(resolveRealGasStopDisplay([{ kind: "topoff", amount: 3000, gasName: "Air" }], null, air)).toEqual({ rows: [] });
   });

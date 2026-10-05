@@ -35,6 +35,7 @@ import {
 import {
   calculateRealGasStandardBlend,
   realGasMolesToFreeGasCuFt,
+  type RealGasAddition,
   type RealGasBlendResult,
   type RealGasBlendStep
 } from "../utils/realGasBlend";
@@ -310,7 +311,8 @@ const stageGasName = (kind: StandardBlendStageKind, selectedTopGas: GasSelection
 export const resolveRealGasStageTemperatureRows = (
   blendSteps: BlendStep[] | undefined,
   realGasSteps: RealGasBlendStep[],
-  selectedTopGas: GasSelection | undefined
+  selectedTopGas: GasSelection | undefined,
+  plannedAdditions?: RealGasAddition[]
 ): RealGasStageTemperatureRow[] => {
   const correctedByKind = new Map<StandardBlendStageKind, RealGasBlendStep>(
     realGasSteps.map((step) => [step.kind, step])
@@ -332,11 +334,16 @@ export const resolveRealGasStageTemperatureRows = (
 
   blendSteps?.filter(isGasAddStep).forEach((step) => addRow(step.kind, step.gasName));
   realGasSteps.forEach((step) => addRow(step.kind, step.gasName));
+  // GERG-only fills have no ideal plan, and a failed first stage has no corrected steps, so the
+  // solved additions are the only record of which stage temperatures still need editing.
+  plannedAdditions?.forEach((addition) => addRow(addition.kind, addition.gasName));
 
-  return rows.map((row) => ({
-    ...row,
-    gasName: row.kind === "topoff" ? stageGasName(row.kind, selectedTopGas) : row.gasName
-  }));
+  return rows
+    .sort((a, b) => stageTemperatureOrder.indexOf(a.kind) - stageTemperatureOrder.indexOf(b.kind))
+    .map((row) => ({
+      ...row,
+      gasName: row.kind === "topoff" ? stageGasName(row.kind, selectedTopGas) : row.gasName
+    }));
 };
 
 export type RealGasStopDisplay = {
@@ -355,7 +362,12 @@ export const resolveRealGasStopDisplay = (
     return { rows: [] };
   }
 
-  const rows = resolveRealGasStageTemperatureRows(blendSteps, realGasResult.steps, selectedTopGas);
+  const rows = resolveRealGasStageTemperatureRows(
+    blendSteps,
+    realGasResult.steps,
+    selectedTopGas,
+    realGasResult.additions
+  );
   if (rows.length === 0) {
     return { rows };
   }
