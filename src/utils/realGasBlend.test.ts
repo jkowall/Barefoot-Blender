@@ -685,10 +685,10 @@ describe("calculateRealGasStandardBlend", () => {
   });
 
   test.each([
-    { label: "residual state", patch: { startPressure: 500, startTemperatureF: -400 } },
-    { label: "settled target", patch: { settledTemperatureF: -400 } },
-    { label: "helium stage", patch: { stageTemperaturesF: { helium: -400, oxygen: 70, topoff: 70 } } }
-  ])("surfaces GERG envelope errors for an invalid $label temperature", ({ patch }) => {
+    { label: "residual state", patch: { startPressure: 500, startTemperatureF: -400 }, stageFailure: false },
+    { label: "settled target", patch: { settledTemperatureF: -400 }, stageFailure: false },
+    { label: "helium stage", patch: { stageTemperaturesF: { helium: -400, oxygen: 70, topoff: 70 } }, stageFailure: true }
+  ])("surfaces GERG envelope errors for an invalid $label temperature", ({ patch, stageFailure }) => {
     const corrected = calculateRealGasStandardBlend(
       { pressureUnit: "psi" },
       standardTrimixInput({
@@ -699,6 +699,8 @@ describe("calculateRealGasStandardBlend", () => {
 
     expect(corrected.success).toBe(false);
     expect(corrected.errors).toContain("GERG-2008 correction is limited to temperatures at or above 250 K.");
+    // Standard Blend shows per-stage temperature rows only when moles were solved.
+    expect(corrected.additions !== undefined).toBe(stageFailure);
   });
 
   test.each([
