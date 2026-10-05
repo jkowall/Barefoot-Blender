@@ -35,6 +35,7 @@ import {
 import {
   calculateRealGasStandardBlend,
   realGasMolesToFreeGasCuFt,
+  type RealGasAddition,
   type RealGasBlendResult,
   type RealGasBlendStep
 } from "../utils/realGasBlend";
@@ -310,7 +311,8 @@ const stageGasName = (kind: StandardBlendStageKind, selectedTopGas: GasSelection
 export const resolveRealGasStageTemperatureRows = (
   blendSteps: BlendStep[] | undefined,
   realGasSteps: RealGasBlendStep[],
-  selectedTopGas: GasSelection | undefined
+  selectedTopGas: GasSelection | undefined,
+  plannedAdditions?: RealGasAddition[]
 ): RealGasStageTemperatureRow[] => {
   const correctedByKind = new Map<StandardBlendStageKind, RealGasBlendStep>(
     realGasSteps.map((step) => [step.kind, step])
@@ -332,11 +334,44 @@ export const resolveRealGasStageTemperatureRows = (
 
   blendSteps?.filter(isGasAddStep).forEach((step) => addRow(step.kind, step.gasName));
   realGasSteps.forEach((step) => addRow(step.kind, step.gasName));
+  // GERG-only fills have no ideal plan, and a failed first stage has no corrected steps, so the
+  // solved additions are the only record of which stage temperatures still need editing.
+  plannedAdditions?.forEach((addition) => addRow(addition.kind, addition.gasName));
 
-  return rows.map((row) => ({
-    ...row,
-    gasName: row.kind === "topoff" ? stageGasName(row.kind, selectedTopGas) : row.gasName
-  }));
+  return rows
+    .sort((a, b) => stageTemperatureOrder.indexOf(a.kind) - stageTemperatureOrder.indexOf(b.kind))
+    .map((row) => ({
+      ...row,
+      gasName: row.kind === "topoff" ? stageGasName(row.kind, selectedTopGas) : row.gasName
+    }));
+};
+
+export type RealGasStopDisplay = {
+  rows: RealGasStageTemperatureRow[];
+  footer?: "summary" | "stageTemperature";
+};
+
+export const resolveRealGasStopDisplay = (
+  blendSteps: BlendStep[] | undefined,
+  realGasResult: RealGasBlendResult | null,
+  selectedTopGas: GasSelection | undefined
+): RealGasStopDisplay => {
+  // additions is set once moles are solved, so a failure without it (bleed-down, invalid inputs,
+  // initial/settled envelope) is not a stage temperature problem and stage rows would mislead.
+  if (!realGasResult || (!realGasResult.success && realGasResult.additions === undefined)) {
+    return { rows: [] };
+  }
+
+  const rows = resolveRealGasStageTemperatureRows(
+    blendSteps,
+    realGasResult.steps,
+    selectedTopGas,
+    realGasResult.additions
+  );
+  if (rows.length === 0) {
+    return { rows };
+  }
+  return { rows, footer: realGasResult.success ? "summary" : "stageTemperature" };
 };
 
 const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
@@ -802,9 +837,9 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     settings.pressureUnit === "psi" ? 5 : 0.25
   );
   const showBaseBlendPlan = settings.gasModel !== "gerg2008" || realGasResult?.success !== true;
-  const realGasStageTemperatureRows = resolveRealGasStageTemperatureRows(
+  const realGasStopDisplay = resolveRealGasStopDisplay(
     result?.success ? result.steps : undefined,
-    realGasResult?.steps ?? [],
+    realGasResult,
     selectedTopGas
   );
 
@@ -1153,10 +1188,10 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
               {realGasResult.success && realGasResult.steps.length === 0 && (
                 <div className="table-note">No corrected gas additions required.</div>
               )}
-              {realGasStageTemperatureRows.length > 0 && (
+              {realGasStopDisplay.rows.length > 0 && (
                 <>
                   <ol className="result-list">
-                    {realGasStageTemperatureRows.map((row, index) => {
+                    {realGasStopDisplay.rows.map((row, index) => {
                       const step = row.correctedStep;
                       const descriptor = row.kind === "topoff" ? "Top-off with" : "Add";
                       return (
@@ -1188,12 +1223,13 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                       );
                     })}
                   </ol>
-                  {realGasResult.success ? (
+                  {realGasStopDisplay.footer === "summary" && (
                     <div className="table-note">
                       Initial reference: {formatPressure(realGasResult.startHotPressurePsi, settings.pressureUnit, 1)}
                       {realGasResult.startZ !== undefined && <> (Z {formatNumber(realGasResult.startZ, 4)})</>}. Final stage stop: {formatPressure(realGasResult.finalHotPressurePsi, settings.pressureUnit, 1)} for settled target {formatPressure(realGasResult.targetSettledPressurePsi, settings.pressureUnit, 1)}.
                     </div>
-                  ) : (
+                  )}
+                  {realGasStopDisplay.footer === "stageTemperature" && (
                     <div className="table-note">
                       Correct the temperature input to restore corrected stop pressures.
                     </div>
