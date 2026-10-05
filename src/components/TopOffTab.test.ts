@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
+import { calculateFillCostEstimate } from "../utils/calculations";
 import {
+  buildTopOffFillCostPlan,
   calculateTopOffBleedPreview,
   calculateTopOffForModel,
   copyTopOffResultToStartInput,
@@ -326,5 +328,63 @@ describe("copyTopOffResultToStartInput", () => {
     expect(copied.startO2).toBe(84.38);
     expect(copied.startHe).toBe(15.62);
     expect((copied.startO2 ?? 0) + (copied.startHe ?? 0)).toBeLessThanOrEqual(100);
+  });
+});
+
+describe("buildTopOffFillCostPlan", () => {
+  const input = {
+    startO2: 32,
+    startHe: 0,
+    startPressure: 500,
+    finalPressure: 3000,
+    tankSizeCuFt: 80,
+    tankRatedPressurePsi: 3000,
+    startTemperatureF: 70,
+    resultTemperatureF: 70,
+    topGasId: "air"
+  };
+  const settingsFor = (gasModel: "ideal" | "gerg2008") => ({
+    pressureUnit: "psi" as const,
+    gasModel,
+    defaultTankSizeCuFt: 80,
+    tankRatedPressure: 3000
+  });
+  const costSettings = {
+    tankSizeCuFt: 80,
+    tankRatedPressure: 3000,
+    pricePerCuFtO2: 1.0,
+    pricePerCuFtHe: 3.5,
+    pricePerCuFtTopOff: 0.1
+  };
+
+  test("prices solved top-off moles in GERG mode, unaffected by Result Temp", () => {
+    const result = calculateTopOffForModel(settingsFor("gerg2008"), input, topOffOptions[0]);
+    const hotResult = calculateTopOffForModel(
+      settingsFor("gerg2008"),
+      { ...input, resultTemperatureF: 95, resultTemperatureTouched: true },
+      topOffOptions[0]
+    );
+    const plan = buildTopOffFillCostPlan(result, topOffOptions[0], 80, 3000);
+    const hotPlan = buildTopOffFillCostPlan(hotResult, topOffOptions[0], 80, 3000);
+    const estimate = calculateFillCostEstimate(plan.additions, costSettings);
+
+    expect(hotResult.model === "gerg2008" && hotResult.resultTemperatureF).toBe(95);
+    expect(hotResult.resultPressurePsi).toBeGreaterThan(result.resultPressurePsi);
+    expect(hotPlan.basis).toBe("gerg2008");
+    expect(plan.basis).toBe("gerg2008");
+    expect(estimate.lines[0].volumeCuFt).toBeCloseTo(63.74, 2);
+    expect(hotPlan.additions[0].volumeCuFt).toBeCloseTo(plan.additions[0].volumeCuFt ?? 0, 9);
+    expect(buildTopOffFillCostPlan(result, topOffOptions[0], 120, 3000).additions[0].volumeCuFt)
+      .toBeCloseTo((plan.additions[0].volumeCuFt ?? 0) * 1.5, 9);
+  });
+
+  test("keeps the pressure-ratio volume in ideal mode", () => {
+    const result = calculateTopOffForModel(settingsFor("ideal"), input, topOffOptions[0]);
+    const plan = buildTopOffFillCostPlan(result, topOffOptions[0], 80, 3000);
+    const estimate = calculateFillCostEstimate(plan.additions, costSettings);
+
+    expect(plan.basis).toBe("ideal");
+    expect(plan.additions[0].volumeCuFt).toBeUndefined();
+    expect(estimate.lines[0].volumeCuFt).toBeCloseTo(66.667, 3);
   });
 });

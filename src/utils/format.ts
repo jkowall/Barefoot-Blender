@@ -1,4 +1,6 @@
-import type { DepthUnit, PressureUnit } from "../state/settings";
+import type { DepthUnit, PressureUnit, TemperatureUnit } from "../state/settings";
+import type { FillCostBasis } from "./calculations";
+import { FREE_GAS_REFERENCE_TEMPERATURE_F, temperatureUnitLabel, toDisplayTemperature } from "./temperature";
 import { toDisplayDepth, toDisplayPressure } from "./units";
 export { GAS_NAME_MAX_LENGTH, sanitizeGasName } from "./gasNames";
 
@@ -36,3 +38,14 @@ export const formatGasCostDetail = (
   unitPrice: number,
   cost: number
 ): string => `${formatGasVolume(volumeCuFt, volumeLiters)} × $${unitPrice.toFixed(2)} = $${cost.toFixed(2)}`;
+
+export const formatFillCostBasis = (basis: FillCostBasis, temperatureUnit: TemperatureUnit): string => {
+  if (basis === "gerg2008") {
+    const referenceTemperature = formatNumber(toDisplayTemperature(FREE_GAS_REFERENCE_TEMPERATURE_F, temperatureUnit), 1);
+    return `Volumes: GERG-2008 real gas (Z-corrected), free gas at 1 atm and ${referenceTemperature} ${temperatureUnitLabel(temperatureUnit)}.`;
+  }
+  if (basis === "idealFallback") {
+    return "Volumes: ideal pressure ratio. GERG-2008 volumes are unavailable for this fill.";
+  }
+  return "Volumes: ideal pressure ratio of tank size to rated pressure.";
+};

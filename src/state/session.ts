@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { FillCostBasis } from "../utils/calculations";
 
 export type StandardBlendStageKind = "helium" | "oxygen" | "topoff";
 export type StandardBlendStageTemperaturesF = Partial<Record<StandardBlendStageKind, number>>;
@@ -97,6 +98,7 @@ export type StandardBlendHistoryEntry = {
   stageTemperaturesF?: StandardBlendStageTemperaturesF;
   stageTemperatureTouched?: StandardBlendStageTemperatureTouched;
   estimatedCost?: number;
+  estimatedCostBasis?: FillCostBasis;
   steps: {
     kind: "bleed" | "helium" | "oxygen" | "topoff";
     amountPsi: number;

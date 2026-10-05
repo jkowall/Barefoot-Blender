@@ -3,6 +3,8 @@ import type { TemperatureUnit } from "../state/settings";
 export const DEFAULT_START_TEMPERATURE_F = 70;
 export const DEFAULT_FILL_TEMPERATURE_F = 90;
 export const DEFAULT_SETTLED_TEMPERATURE_F = 70;
+// Free-gas volumes are reported at 70 F and 1 atm, the US compressed-gas (CGA) reference.
+export const FREE_GAS_REFERENCE_TEMPERATURE_F = 70;
 
 export const fahrenheitToCelsius = (valueF: number): number => (valueF - 32) * (5 / 9);
 
