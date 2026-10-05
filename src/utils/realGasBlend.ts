@@ -3,6 +3,8 @@ import type { StandardBlendInput, TopOffInput } from "../state/session";
 import type { GasSelection } from "./calculations";
 import {
   ATM_PRESSURE_PSI,
+  KPA_PER_PSI,
+  R_GERG,
   absoluteKpaToGaugePsi,
   gasFractionsFromPercents,
   gaugePsiToAbsoluteKpa,
@@ -14,6 +16,7 @@ import {
 import {
   DEFAULT_SETTLED_TEMPERATURE_F,
   DEFAULT_START_TEMPERATURE_F,
+  FREE_GAS_REFERENCE_TEMPERATURE_F,
   fahrenheitToKelvin
 } from "./temperature";
 import { fromDisplayPressure } from "./units";
@@ -28,12 +31,24 @@ export type RealGasBlendStep = {
   z: number;
 };
 
+export type RealGasAddition = {
+  kind: RealGasBlendStep["kind"];
+  gasName: string;
+  moles: number;
+};
+
 export type RealGasBlendResult = {
   success: boolean;
   steps: RealGasBlendStep[];
   startHotPressurePsi: number;
   finalHotPressurePsi: number;
   targetSettledPressurePsi: number;
+  // Gas moles added, for fill-cost volumes. Set once the fill is solved, even if a stage temperature
+  // is out of range. An empty (0 psig) start counts the 1 atm of start gas a real cylinder holds.
+  additions?: RealGasAddition[];
+  waterVolumeLiters?: number;
+  // Z of the cylinder contents before the first addition, at the first stage temperature.
+  startZ?: number;
   warnings: string[];
   errors: string[];
 };
@@ -50,7 +65,13 @@ export type RealGasTopOffResult = {
   startTemperatureF: number;
   resultTemperatureF: number;
   topOffMoles: number;
+  // Top-off moles added, for fill-cost volume. An empty (0 psig) start counts 1 atm of start gas.
+  fillCostMoles?: number;
   z: number;
+  // Z of the start state at Start Temp, and of the final mix at goal pressure and Start Temp.
+  startZ?: number;
+  goalZ?: number;
+  waterVolumeLiters?: number;
   warnings: string[];
   errors: string[];
 };
@@ -74,6 +95,11 @@ type StepPlan = {
 
 const CUFT_TO_LITERS = 28.316846592;
 const MOLE_TOLERANCE = 1e-8;
+const ATM_PRESSURE_KPA = ATM_PRESSURE_PSI * KPA_PER_PSI;
+
+// Ideal free-gas liters per mole at 1 atm and the free-gas reference temperature.
+export const FREE_GAS_LITERS_PER_MOLE =
+  R_GERG * fahrenheitToKelvin(FREE_GAS_REFERENCE_TEMPERATURE_F) / ATM_PRESSURE_KPA;
 
 const pureOxygenFractions: GergGasFractions = { o2: 1, he: 0, n2: 0 };
 const pureHeliumFractions: GergGasFractions = { o2: 0, he: 1, n2: 0 };
@@ -104,7 +130,7 @@ const fractionsFromMoles = (components: ComponentMoles): GergGasFractions => {
   });
 };
 
-const tankWaterVolumeLiters = (tankSizeCuFt: number, tankRatedPressurePsi: number): number => {
+export const tankWaterVolumeLiters = (tankSizeCuFt: number, tankRatedPressurePsi: number): number => {
   if (
     !Number.isFinite(tankSizeCuFt) ||
     !Number.isFinite(tankRatedPressurePsi) ||
@@ -116,6 +142,64 @@ const tankWaterVolumeLiters = (tankSizeCuFt: number, tankRatedPressurePsi: numbe
   const freeGasLiters = tankSizeCuFt * CUFT_TO_LITERS;
   const waterVolumeLiters = freeGasLiters * ATM_PRESSURE_PSI / (tankRatedPressurePsi + ATM_PRESSURE_PSI);
   return Number.isFinite(waterVolumeLiters) ? waterVolumeLiters : 0;
+};
+
+/**
+ * Convert solved gas moles to free-gas cu ft at 1 atm and 70 F.
+ * Moles scale linearly with cylinder volume while stop pressures do not, so moles solved for one
+ * tank context are rescaled to the current tank context instead of re-running the solver.
+ */
+export const realGasMolesToFreeGasCuFt = (
+  moles: number,
+  solvedWaterVolumeLiters: number,
+  tankSizeCuFt: number,
+  tankRatedPressurePsi: number
+): number => {
+  const liveWaterVolumeLiters = tankWaterVolumeLiters(tankSizeCuFt, tankRatedPressurePsi);
+  if (
+    !Number.isFinite(moles) ||
+    !Number.isFinite(solvedWaterVolumeLiters) ||
+    moles <= 0 ||
+    solvedWaterVolumeLiters <= 0 ||
+    liveWaterVolumeLiters <= 0
+  ) {
+    return 0;
+  }
+  return moles * (liveWaterVolumeLiters / solvedWaterVolumeLiters) * FREE_GAS_LITERS_PER_MOLE / CUFT_TO_LITERS;
+};
+
+type AdditionMoles = {
+  helium: number;
+  oxygen: number;
+  topoff: number;
+};
+
+// Split component deltas into helium, oxygen, and top-off gas moles. Null when the top-off gas has
+// no nitrogen but the target needs more.
+const splitAdditionMoles = (delta: ComponentMoles, topFractions: GergGasFractions): AdditionMoles | null => {
+  if (topFractions.n2 > MOLE_TOLERANCE) {
+    const topoff = delta.n2 / topFractions.n2;
+    return {
+      topoff,
+      helium: delta.he - topFractions.he * topoff,
+      oxygen: delta.o2 - topFractions.o2 * topoff
+    };
+  }
+  if (delta.n2 > MOLE_TOLERANCE) {
+    return null;
+  }
+  return { topoff: 0, helium: delta.he, oxygen: delta.o2 };
+};
+
+// Moles of start gas in a 0 psig cylinder (1 atm absolute). The stop-pressure solvers treat an
+// empty start as a vacuum; fill-cost volumes count this gas so they match a real cylinder.
+const emptyCylinderMoles = (
+  temperatureK: number,
+  fractions: GergGasFractions,
+  waterVolumeLiters: number
+): number | null => {
+  const density = gergDensityFromPressure(temperatureK, gaugePsiToAbsoluteKpa(0), fractions);
+  return density.success ? density.densityMolPerLiter * waterVolumeLiters : null;
 };
 
 const stateFromComponents = (
@@ -295,6 +379,7 @@ export const calculateRealGasTopOff = (
   }
 
   let startComponents: ComponentMoles = { o2: 0, he: 0, n2: 0 };
+  let startZ = 1;
   if (startPressurePsi > MOLE_TOLERANCE) {
     const startDensity = gergDensityFromPressure(startTemperatureK, gaugePsiToAbsoluteKpa(startPressurePsi), startFractions);
     warnings.push(...startDensity.warnings);
@@ -309,6 +394,7 @@ export const calculateRealGasTopOff = (
       );
     }
     startComponents = componentMolesFromTotal(startDensity.densityMolPerLiter * waterVolumeLiters, startFractions);
+    startZ = startDensity.z;
   }
 
   if (Math.abs(goalPressurePsi - startPressurePsi) <= MOLE_TOLERANCE) {
@@ -338,7 +424,11 @@ export const calculateRealGasTopOff = (
       startTemperatureF,
       resultTemperatureF,
       topOffMoles: 0,
+      fillCostMoles: 0,
       z: resultState.z,
+      startZ,
+      goalZ: startZ,
+      waterVolumeLiters,
       warnings: [...new Set(warnings)],
       errors: []
     };
@@ -442,6 +532,10 @@ export const calculateRealGasTopOff = (
 
   const finalFractions = fractionsFromMoles(finalStartTemperatureState.components);
   const finalO2 = percentFromFraction(finalFractions.o2);
+  const emptyStartMoles = startPressurePsi > MOLE_TOLERANCE
+    ? 0
+    : emptyCylinderMoles(startTemperatureK, startFractions, waterVolumeLiters) ?? 0;
+  const fillCostMoles = Math.max(0, topOffMoles - emptyStartMoles);
   const finalHe = percentFromFraction(finalFractions.he);
   const finalN2 = percentFromFraction(finalFractions.n2);
   appendMixSafetyWarnings(warnings, finalO2);
@@ -458,10 +552,48 @@ export const calculateRealGasTopOff = (
     startTemperatureF,
     resultTemperatureF,
     topOffMoles,
+    fillCostMoles,
     z: resultState.z,
+    startZ,
+    goalZ: finalStartTemperatureState.z,
+    waterVolumeLiters,
     warnings: [...new Set(warnings)],
     errors: []
   };
+};
+
+// Fill-cost moles for each addition. A 0 psig start is re-split from 1 atm of start gas; if that
+// split is infeasible (for example the residual gas already exceeds a target component), the planned
+// vacuum-start moles are used.
+const fillCostAdditions = (
+  plannedSteps: StepPlan[],
+  startPressurePsi: number,
+  startTemperatureK: number,
+  startFractions: GergGasFractions,
+  targetComponents: ComponentMoles,
+  topFractions: GergGasFractions,
+  waterVolumeLiters: number
+): RealGasAddition[] => {
+  const planned = plannedSteps.map((step) => ({ kind: step.kind, gasName: step.gasName, moles: step.moles }));
+  if (startPressurePsi > MOLE_TOLERANCE) {
+    return planned;
+  }
+
+  const emptyStartMoles = emptyCylinderMoles(startTemperatureK, startFractions, waterVolumeLiters);
+  if (emptyStartMoles === null) {
+    return planned;
+  }
+  const residual = componentMolesFromTotal(emptyStartMoles, startFractions);
+  const split = splitAdditionMoles({
+    o2: targetComponents.o2 - residual.o2,
+    he: targetComponents.he - residual.he,
+    n2: targetComponents.n2 - residual.n2
+  }, topFractions);
+  if (!split || split.helium < -MOLE_TOLERANCE || split.oxygen < -MOLE_TOLERANCE || split.topoff < -MOLE_TOLERANCE) {
+    return planned;
+  }
+
+  return planned.map((addition) => ({ ...addition, moles: Math.max(0, split[addition.kind]) }));
 };
 
 export const calculateRealGasStandardBlend = (
@@ -615,30 +747,19 @@ export const calculateRealGasStandardBlend = (
     };
   }
 
-  let topoffMoles: number;
-  let heliumMoles: number;
-  let oxygenMoles: number;
-
-  if (topFractions.n2 > MOLE_TOLERANCE) {
-    topoffMoles = delta.n2 / topFractions.n2;
-    heliumMoles = delta.he - topFractions.he * topoffMoles;
-    oxygenMoles = delta.o2 - topFractions.o2 * topoffMoles;
-  } else {
-    if (delta.n2 > MOLE_TOLERANCE) {
-      return {
-        success: false,
-        steps: [],
-        startHotPressurePsi: startPressurePsi,
-        finalHotPressurePsi: targetPressurePsi,
-        targetSettledPressurePsi: targetPressurePsi,
-        warnings,
-        errors: ["Selected top-off gas has no nitrogen and cannot reach the target N2 fraction."]
-      };
-    }
-    topoffMoles = 0;
-    heliumMoles = delta.he;
-    oxygenMoles = delta.o2;
+  const split = splitAdditionMoles(delta, topFractions);
+  if (!split) {
+    return {
+      success: false,
+      steps: [],
+      startHotPressurePsi: startPressurePsi,
+      finalHotPressurePsi: targetPressurePsi,
+      targetSettledPressurePsi: targetPressurePsi,
+      warnings,
+      errors: ["Selected top-off gas has no nitrogen and cannot reach the target N2 fraction."]
+    };
   }
+  const { topoff: topoffMoles, helium: heliumMoles, oxygen: oxygenMoles } = split;
 
   if (topoffMoles < -MOLE_TOLERANCE || heliumMoles < -MOLE_TOLERANCE || oxygenMoles < -MOLE_TOLERANCE) {
     return {
@@ -662,8 +783,18 @@ export const calculateRealGasStandardBlend = (
   if (topoffMoles > MOLE_TOLERANCE) {
     plannedSteps.push({ kind: "topoff", gasName: topGas.name, moles: topoffMoles, fractions: topFractions });
   }
+  const additions = fillCostAdditions(
+    plannedSteps,
+    startPressurePsi,
+    startTemperatureK,
+    startFractions,
+    targetComponents,
+    topFractions,
+    waterVolumeLiters
+  );
 
   let runningComponents = startComponents;
+  let startZ: number | undefined;
   let startHotPressurePsi = startPressurePsi;
   let previousPressurePsi = startPressurePsi;
   const steps: RealGasBlendStep[] = [];
@@ -679,12 +810,16 @@ export const calculateRealGasStandardBlend = (
         startHotPressurePsi,
         finalHotPressurePsi: previousPressurePsi,
         targetSettledPressurePsi: targetPressurePsi,
+        additions,
+        waterVolumeLiters,
+        startZ,
         warnings,
         errors: beforeState.errors
       };
     }
     if (steps.length === 0) {
       startHotPressurePsi = beforeState.pressurePsi;
+      startZ = beforeState.z;
     }
 
     const nextComponents = addGasMoles(runningComponents, step.moles, step.fractions);
@@ -697,6 +832,9 @@ export const calculateRealGasStandardBlend = (
         startHotPressurePsi,
         finalHotPressurePsi: previousPressurePsi,
         targetSettledPressurePsi: targetPressurePsi,
+        additions,
+        waterVolumeLiters,
+        startZ,
         warnings,
         errors: state.errors
       };
@@ -721,6 +859,9 @@ export const calculateRealGasStandardBlend = (
     startHotPressurePsi,
     finalHotPressurePsi: previousPressurePsi,
     targetSettledPressurePsi: targetPressurePsi,
+    additions,
+    waterVolumeLiters,
+    startZ,
     warnings: [...new Set(warnings)],
     errors
   };

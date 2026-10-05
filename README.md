@@ -7,9 +7,9 @@ Source code: [github.com/jkowall/Barefoot-Blender](https://github.com/jkowall/Ba
 ## Features
 
 - **Standard Blend Planner** – Partial pressure blending with automatic bleed-down solutions, warnings, an interactive sensitivity slider, reverse solvers for required start pressure and helium-free targets, and default GERG-2008 O2/N2/He corrected stop pressures with measured per-stage temperatures. Ideal partial-pressure math remains available for training and comparison.
-- **Top-Off What-If** – Quick projections for topping a cylinder, including final mix readouts, GERG-2008 Start/Result temperature pressure correction, fill cost, and a bleed/down sensitivity chart tied to the selected bank.
+- **Top-Off What-If** – Quick projections for topping a cylinder, including final mix readouts, GERG-2008 Start/Result temperature pressure correction with start and stop Z factors, fill cost, and a bleed/down sensitivity chart tied to the selected bank.
 - **Dynamic Multi-Gas Blending** – Support for 1-4 gas sources with add/remove buttons, per-source bank pressure limits, linear solver for two source gases with Trimix presets, custom O₂/He mixes, target helium support, cost optimization, tank-volume cost basis, and fill order recommendations.
-- **Gas Cost Calculator** – Calculates fill cost with O₂, He, and top-off gas line items using configurable O₂/He/Top-Off pricing, per-fill tank size, and rated pressure.
+- **Gas Cost Calculator** – Calculates fill cost with O₂, He, and top-off gas line items using configurable O₂/He/Top-Off pricing, per-fill tank size, and rated pressure. In GERG-2008 mode, Standard Blend and Top-Off gas volumes are real-gas (Z-corrected) quantities from the solved moles.
 - **Tank Conversion** – Converts PSI, cubic feet, and free gas liters using the active tank volume and rated pressure.
 - **Blend History + Recreate** – Stores successful Standard Blend plans locally with quick recreate/remove/clear actions.
 - **Dive Utilities** – MOD, EAD, Best Mix, END, and density calculators that honor global PPO₂ and narcotic settings.

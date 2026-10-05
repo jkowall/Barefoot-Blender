@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   formatDepth,
+  formatFillCostBasis,
   formatGasCostDetail,
   formatGasVolume,
   formatNumber,
@@ -122,5 +123,17 @@ describe("sanitizeGasName", () => {
 
   test("handles empty strings", () => {
     expect(sanitizeGasName("")).toBe("");
+  });
+});
+
+describe("formatFillCostBasis", () => {
+  test("labels GERG-2008 volumes with the free-gas reference in the display unit", () => {
+    expect(formatFillCostBasis("gerg2008", "f")).toBe("Volumes: GERG-2008 real gas (Z-corrected), free gas at 1 atm and 70 F.");
+    expect(formatFillCostBasis("gerg2008", "c")).toBe("Volumes: GERG-2008 real gas (Z-corrected), free gas at 1 atm and 21.1 C.");
+  });
+
+  test("labels ideal and fallback volumes", () => {
+    expect(formatFillCostBasis("idealFallback", "f")).toBe("Volumes: ideal pressure ratio. GERG-2008 volumes are unavailable for this fill.");
+    expect(formatFillCostBasis("ideal", "f")).toBe("Volumes: ideal pressure ratio of tank size to rated pressure.");
   });
 });

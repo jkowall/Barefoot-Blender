@@ -103,8 +103,29 @@ Top-Off GERG handling:
 4. Compute the final O2, He, and N2 fractions from the final component moles.
 5. Recalculate the displayed result pressure from the same final moles at Result Temp.
 6. Editing Result Temp changes only the displayed pressure target. It does not change top-off moles or the final mix.
-7. Fill-cost volume uses the start-temperature goal pressure delta, so changing Result Temp does not alter the cost estimate.
+7. Fill-cost volume uses the solved top-off moles at Start Temp (see Fill-cost volume below), so changing Result Temp does not alter the cost estimate.
 8. The Bleed-Down What-If slider re-runs the active gas model from the adjusted start pressure. In GERG-2008 mode, ideal-only reverse O2/He pressure formulas are not shown as corrected calculations.
+9. The Result card shows the stop Z at Result Temp, the start Z at Start Temp, and, when Result Temp differs from Start Temp, the goal Z at Start Temp.
+
+Fill-cost volume:
+1. In GERG-2008 mode, Standard Blend and Top-Off price the solved gas moles instead of a pressure ratio. Each added gas uses its own solved moles, so for one addition at a single temperature:
+   ```
+   n_added = V_water / (R * T) * (P2_abs / Z2 - P1_abs / Z1)
+   ```
+   where Z1 and Z2 are the compressibility of the whole cylinder mix before and after the addition, not the compressibility of the added gas.
+2. Moles convert to free gas at 1 atm and 70 F (the US compressed-gas reference):
+   ```
+   free_gas_L = n_added * R * T_ref / P_atm
+   cu_ft = free_gas_L / 28.316846592
+   ```
+   At 70 F this reduces to `cu_ft = tank_cu_ft * (P2_abs / Z2 - P1_abs / Z1) / (rated_pressure_PSI + 14.6959488)`.
+3. Standard Blend moles depend only on the start state (Initial Temp) and target state (Settled Temp). Stage temperatures move corrected stop pressures, not the gas quantity, so a hot fill does not change the cost.
+4. Tank size is treated as nominal capacity: water volume times rated pressure, the same inference used for the GERG cylinder volume. With 80 cu ft at 3000 PSI and 70 F, the inferred cylinder holds about 77.4 cu ft of air at rated pressure, close to the 77.4 cu ft real-gas label of an 11.1 L aluminum 80, and filling it with air from 0 PSI adds about 77.0 cu ft because 1 atm of air is already inside. Entering a real-gas label such as 77.4 instead reads about 3.7% low.
+5. Moles scale linearly with cylinder volume while stop pressures do not, so editing tank size rescales the GERG-2008 volumes without recalculating stops.
+6. Real-gas volumes can be lower or higher than ideal. Helium-rich trimix reads lower because the mix Z is well above 1 (21/35 at 3000 PSI and 70 F has Z 1.1064, above pure helium at 1.0979). Mixes richer than about EAN50, such as EAN80 and pure oxygen, read higher because their Z is below 1 at fill pressure (EAN80 at 3000 PSI and 70 F has Z 0.9658).
+7. Standard Blend: when the ideal plan succeeds but GERG-2008 has no solution for the fill (for example, bleed-down is required first), Fill Cost falls back to the ideal pressure ratio and labels the fallback. Top-Off: when the GERG-2008 top-off has no solution, the Result card shows the error and Fill Cost shows no estimate.
+8. An empty (0 PSI) start is priced as 1 atm of the start gas already in the cylinder, so fill-cost volumes do not jump between a 0 PSI and a slightly positive start. The corrected stop pressures still solve an empty start from vacuum. If 1 atm of start gas makes the gas split infeasible (for example, pure oxygen into a cylinder holding air), the vacuum-start quantities are used.
+9. With Z equal to 1, the total added volume reads about 0.5% below the ideal pressure ratio, because the cylinder volume inference uses absolute rated pressure while the ideal ratio uses gauge rated pressure. Individual lines can differ by more or less than 0.5%.
 
 Reference implementation:
 - GERG constants and equations are based on the NIST public AGA8 GERG-2008 source: <https://github.com/usnistgov/AGA8>.
@@ -174,7 +195,7 @@ Density_depth = Density_surface · Ambient
 
 ### Tank Volume and Cost
 
-Tank volume calculations use the rated free gas volume and rated pressure:
+Ideal mode, Multi-Gas, Utilities Tank Conversion, and the GERG-2008 fallback use the rated free gas volume and rated pressure. GERG-2008 Standard Blend and Top-Off fill costs use solved real-gas moles instead (see Fill-cost volume in section 2):
 
 ```
 PSI_per_cu_ft = rated_pressure_PSI / rated_volume_cu_ft

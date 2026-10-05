@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  buildStandardBlendFillCostPlan,
   realGasResultToBlendResult,
   selectStandardBlendResult,
   resolveRealGasStageTemperatureRows,
@@ -10,7 +11,9 @@ import {
   stageTemperaturesForEdit,
   updateStageTemperatureState
 } from "./StandardBlendTab";
-import type { RealGasBlendResult } from "../utils/realGasBlend";
+import type { StandardBlendInput } from "../state/session";
+import { calculateFillCostEstimate, calculateStandardBlend, summarizeBlendVolumes } from "../utils/calculations";
+import { calculateRealGasStandardBlend, type RealGasBlendResult } from "../utils/realGasBlend";
 
 describe("realGasResultToBlendResult", () => {
   test("replaces a failed GERG primary result with current errors and no stale steps", () => {
@@ -341,5 +344,92 @@ describe("resolveHistoryStageTemperatureTouched", () => {
     expect(resolveHistoryStageTemperatureTouched({ stageTemperaturesF: undefined, stageTemperatureTouched: { topoff: true } })).toEqual({
       topoff: true
     });
+  });
+});
+
+describe("buildStandardBlendFillCostPlan", () => {
+  const air = { id: "air", name: "Air", o2: 21, he: 0 };
+  const costSettings = {
+    tankSizeCuFt: 80,
+    tankRatedPressure: 3000,
+    pricePerCuFtO2: 1.0,
+    pricePerCuFtHe: 3.5,
+    pricePerCuFtTopOff: 0.1
+  };
+  const trimixInput = (overrides: Partial<StandardBlendInput> = {}): StandardBlendInput => ({
+    startPressure: 0,
+    targetPressure: 3000,
+    startO2: 21,
+    startHe: 0,
+    targetO2: 21,
+    targetHe: 35,
+    tankSizeCuFt: 80,
+    tankRatedPressurePsi: 3000,
+    startTemperatureF: 70,
+    settledTemperatureF: 70,
+    stageTemperaturesF: { helium: 70, oxygen: 70, topoff: 70 },
+    stageTemperatureTouched: {},
+    topGasId: "air",
+    ...overrides
+  });
+  const plansFor = (input: StandardBlendInput) => {
+    const idealVolumes = summarizeBlendVolumes(calculateStandardBlend({ pressureUnit: "psi" }, input, air));
+    const realGasResult = calculateRealGasStandardBlend({ pressureUnit: "psi" }, input, air);
+    return { idealVolumes, realGasResult };
+  };
+
+  test("prices GERG-2008 moles as real-gas volumes in GERG mode", () => {
+    const { idealVolumes, realGasResult } = plansFor(trimixInput());
+    const plan = buildStandardBlendFillCostPlan(idealVolumes, realGasResult, "gerg2008", air, 80, 3000);
+    const estimate = calculateFillCostEstimate(plan.additions, costSettings);
+
+    expect(plan.basis).toBe("gerg2008");
+    expect(estimate.lines.map((line) => line.label)).toEqual(["Oxygen", "Helium", "Air Top-Off"]);
+    expect(estimate.lines[1].volumeCuFt).toBeCloseTo(25.307, 3);
+    expect(estimate.lines[1].volumeCuFt).toBeLessThan(28);
+  });
+
+  test("keeps the ideal pressure ratio in ideal mode", () => {
+    const { idealVolumes, realGasResult } = plansFor(trimixInput());
+    const plan = buildStandardBlendFillCostPlan(idealVolumes, realGasResult, "ideal", air, 80, 3000);
+    const estimate = calculateFillCostEstimate(plan.additions, costSettings);
+
+    expect(plan.basis).toBe("ideal");
+    expect(plan.additions.every((addition) => addition.volumeCuFt === undefined)).toBe(true);
+    expect(estimate.lines[1].volumeCuFt).toBeCloseTo(28, 6);
+  });
+
+  test("still uses GERG-2008 volumes when a stage temperature is out of range", () => {
+    const input = trimixInput({
+      stageTemperaturesF: { helium: 70, oxygen: -40, topoff: 70 },
+      stageTemperatureTouched: { oxygen: true }
+    });
+    const { idealVolumes, realGasResult } = plansFor(input);
+    const plan = buildStandardBlendFillCostPlan(idealVolumes, realGasResult, "gerg2008", air, 80, 3000);
+
+    expect(realGasResult.success).toBe(false);
+    expect(plan.basis).toBe("gerg2008");
+    expect(plan.additions[1].volumeCuFt).toBeCloseTo(25.307, 3);
+  });
+
+  test("falls back to labeled ideal volumes when GERG-2008 needs bleed-down first", () => {
+    const input = trimixInput({ startPressure: 2000, startO2: 18, startHe: 45, targetO2: 32, targetHe: 0 });
+    const { idealVolumes, realGasResult } = plansFor(input);
+    const fallback = buildStandardBlendFillCostPlan(idealVolumes, realGasResult, "gerg2008", air, 80, 3000);
+    const ideal = buildStandardBlendFillCostPlan(idealVolumes, realGasResult, "ideal", air, 80, 3000);
+    const missing = buildStandardBlendFillCostPlan(idealVolumes, null, "gerg2008", air, 80, 3000);
+
+    expect(fallback.basis).toBe("idealFallback");
+    expect(missing.basis).toBe("idealFallback");
+    expect(calculateFillCostEstimate(fallback.additions, costSettings).totalCost)
+      .toBeCloseTo(calculateFillCostEstimate(ideal.additions, costSettings).totalCost, 9);
+  });
+
+  test("rescales GERG-2008 volumes when the tank context changes after calculation", () => {
+    const { idealVolumes, realGasResult } = plansFor(trimixInput());
+    const base = buildStandardBlendFillCostPlan(idealVolumes, realGasResult, "gerg2008", air, 80, 3000);
+    const larger = buildStandardBlendFillCostPlan(idealVolumes, realGasResult, "gerg2008", air, 120, 3000);
+
+    expect(larger.additions[1].volumeCuFt).toBeCloseTo((base.additions[1].volumeCuFt ?? 0) * 1.5, 9);
   });
 });
