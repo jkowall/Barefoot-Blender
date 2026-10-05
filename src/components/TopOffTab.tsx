@@ -5,14 +5,23 @@ import {
   calculateFillCostEstimate,
   calculateTopOffBlend,
   projectTopOffChart,
+  type FillCostAddition,
+  type FillCostBasis,
   type GasSelection,
   type TopOffResult,
   type TopOffProjectionRow,
   clampPercent,
   clampPressure
 } from "../utils/calculations";
-import { formatGasCostDetail, formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
-import { calculateRealGasTopOff, type RealGasTopOffResult } from "../utils/realGasBlend";
+import {
+  formatFillCostBasis,
+  formatGasCostDetail,
+  formatNumber,
+  formatPercentage,
+  formatPressure,
+  formatSignedPressure
+} from "../utils/format";
+import { calculateRealGasTopOff, realGasMolesToFreeGasCuFt, type RealGasTopOffResult } from "../utils/realGasBlend";
 import {
   DEFAULT_START_TEMPERATURE_F,
   fromDisplayTemperature,
@@ -31,7 +40,7 @@ type Props = {
   trainingModeEnabled: boolean;
 };
 
-type TopOffDisplayResult =
+export type TopOffDisplayResult =
   | (TopOffResult & {
       model: "ideal";
       goalPressurePsi: number;
@@ -204,6 +213,47 @@ export const calculateTopOffForModel = (
     ),
     model: "gerg2008"
   };
+};
+
+export type TopOffFillCostPlan = {
+  additions: FillCostAddition[];
+  basis: FillCostBasis;
+};
+
+/**
+ * GERG-2008 Top-Off prices the solved top-off moles (V * (P2/Z2 - P1/Z1) / RT at Start Temp).
+ * Ideal Top-Off keeps the pressure-ratio conversion of the added pressure.
+ */
+export const buildTopOffFillCostPlan = (
+  result: TopOffDisplayResult,
+  topGas: GasSelection,
+  tankSizeCuFt: number,
+  tankRatedPressurePsi: number
+): TopOffFillCostPlan => {
+  const label = `${topGas.name} Top-Off`;
+  if (result.model === "gerg2008") {
+    const solvedWaterVolumeLiters = result.waterVolumeLiters ?? 0;
+    if (result.success && solvedWaterVolumeLiters > 0) {
+      return {
+        basis: "gerg2008",
+        additions: [
+          {
+            label,
+            gas: topGas,
+            pressurePsi: result.addedPressure,
+            volumeCuFt: realGasMolesToFreeGasCuFt(
+              result.fillCostMoles ?? result.topOffMoles,
+              solvedWaterVolumeLiters,
+              tankSizeCuFt,
+              tankRatedPressurePsi
+            )
+          }
+        ]
+      };
+    }
+    return { basis: "idealFallback", additions: [{ label, gas: topGas, pressurePsi: result.addedPressure }] };
+  }
+  return { basis: "ideal", additions: [{ label, gas: topGas, pressurePsi: result.addedPressure }] };
 };
 
 export const calculateTopOffBleedPreview = (
@@ -419,19 +469,21 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
 
   const showBleedPreview = Boolean(result?.success && startPressurePsi > 0);
 
-  const fillCost = useMemo(() => {
+  const fillCostPlan = useMemo(() => {
     if (!result?.success || !selectedTopGas) {
       return null;
     }
 
+    return buildTopOffFillCostPlan(result, selectedTopGas, tankSizeCuFt, tankRatedPressurePsi);
+  }, [result, selectedTopGas, tankRatedPressurePsi, tankSizeCuFt]);
+
+  const fillCost = useMemo(() => {
+    if (!fillCostPlan) {
+      return null;
+    }
+
     return calculateFillCostEstimate(
-      [
-        {
-          label: `${selectedTopGas.name} Top-Off`,
-          gas: selectedTopGas,
-          pressurePsi: result.addedPressure
-        }
-      ],
+      fillCostPlan.additions,
       {
         pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
         pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
@@ -441,8 +493,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       }
     );
   }, [
-    result,
-    selectedTopGas,
+    fillCostPlan,
     settings.pricePerCuFtHe,
     settings.pricePerCuFtO2,
     settings.pricePerCuFtTopOff,
@@ -625,6 +676,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                     <>
                       Stop at {formatPressure(result.resultPressurePsi, settings.pressureUnit, 1)}
                       {" "}at {formatNumber(toDisplayTemperature(result.resultTemperatureF, settings.temperatureUnit), 0)} {temperatureLabel}
+                      {" "}(Z {formatNumber(result.z, 4)})
                       {" "}for goal {formatPressure(result.goalPressurePsi, settings.pressureUnit, 1)}
                       {" "}at {formatNumber(toDisplayTemperature(result.startTemperatureF, settings.temperatureUnit), 0)} {temperatureLabel}.
                     </>
@@ -632,6 +684,18 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                 : <>Add {selectedTopGas?.name ?? "chosen gas"}: {formatPressure(result.resultPressurePsi, settings.pressureUnit)}</>}
               {result.model === "ideal" && (
                 <span className="result-step-total"> ({formatSignedPressure(result.addedPressure, settings.pressureUnit)})</span>
+              )}
+            </div>
+          )}
+          {result.success && result.model === "gerg2008" && result.startZ !== undefined && (
+            <div className="table-note">
+              Start Z {formatNumber(result.startZ, 4)} at {formatPressure(result.startPressurePsi, settings.pressureUnit, 1)}
+              {" "}and {formatNumber(toDisplayTemperature(result.startTemperatureF, settings.temperatureUnit), 0)} {temperatureLabel}.
+              {result.goalZ !== undefined && result.resultTemperatureF !== result.startTemperatureF && (
+                <>
+                  {" "}Goal Z {formatNumber(result.goalZ, 4)} at {formatPressure(result.goalPressurePsi, settings.pressureUnit, 1)}
+                  {" "}and {formatNumber(toDisplayTemperature(result.startTemperatureF, settings.temperatureUnit), 0)} {temperatureLabel}.
+                </>
               )}
             </div>
           )}
@@ -654,7 +718,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
             </div>
           ))}
           {result.model === "gerg2008" && trainingModeEnabled && (
-            <div className="table-note">GERG-2008 Topoff solves gas moles at Start Temp. Result Temp changes the displayed stop pressure, not the calculated mix.</div>
+            <div className="table-note">GERG-2008 Topoff solves gas moles at Start Temp. Result Temp changes the displayed stop pressure, not the calculated mix or fill-cost volume.</div>
           )}
           {trainingMath && (
             <TrainingMathPanel
@@ -750,6 +814,9 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                 ))}
               </div>
               <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
+              {fillCostPlan && fillCostPlan.basis !== "ideal" && (
+                <div className="table-note">{formatFillCostBasis(fillCostPlan.basis, settings.temperatureUnit)}</div>
+              )}
               <div className="cost-total">
                 <strong>Total: {"$"}{fillCost.totalCost.toFixed(2)}</strong>
               </div>

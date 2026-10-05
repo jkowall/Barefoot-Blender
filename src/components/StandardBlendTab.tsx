@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent } from "react";
-import type { SettingsSnapshot } from "../state/settings";
+import type { GasModel, SettingsSnapshot } from "../state/settings";
 import {
   useSessionStore,
   type StandardBlendInput,
@@ -12,6 +12,10 @@ import {
   calculateStandardBlend,
   type BlendResult,
   type BlendStep,
+  type BlendVolumes,
+  type CostSettings,
+  type FillCostAddition,
+  type FillCostBasis,
   type GasSelection,
   summarizeBlendVolumes,
   solveRequiredStartPressure,
@@ -20,8 +24,20 @@ import {
   clampPercent,
   clampPressure
 } from "../utils/calculations";
-import { formatGasCostDetail, formatNumber, formatPercentage, formatPressure, formatSignedPressure } from "../utils/format";
-import { calculateRealGasStandardBlend, type RealGasBlendResult, type RealGasBlendStep } from "../utils/realGasBlend";
+import {
+  formatFillCostBasis,
+  formatGasCostDetail,
+  formatNumber,
+  formatPercentage,
+  formatPressure,
+  formatSignedPressure
+} from "../utils/format";
+import {
+  calculateRealGasStandardBlend,
+  realGasMolesToFreeGasCuFt,
+  type RealGasBlendResult,
+  type RealGasBlendStep
+} from "../utils/realGasBlend";
 import {
   DEFAULT_SETTLED_TEMPERATURE_F,
   DEFAULT_START_TEMPERATURE_F,
@@ -66,6 +82,75 @@ export const realGasResultToBlendResult = (realGasResult: RealGasBlendResult): B
     errors: []
   };
 };
+
+export type StandardBlendFillCostPlan = {
+  additions: FillCostAddition[];
+  basis: FillCostBasis;
+};
+
+const oxygenGas: GasSelection = { id: "oxygen", name: "Oxygen", o2: 100, he: 0 };
+const heliumGas: GasSelection = { id: "helium", name: "Helium", o2: 0, he: 100 };
+
+/**
+ * Choose the fill-cost gas quantities. GERG-2008 mode prices the solved real-gas moles
+ * (V * (P2/Z2 - P1/Z1) / RT per addition); ideal mode, or GERG mode without a GERG solution,
+ * keeps the pressure-ratio conversion.
+ */
+export const buildStandardBlendFillCostPlan = (
+  idealVolumes: BlendVolumes,
+  realGasResult: RealGasBlendResult | null,
+  gasModel: GasModel,
+  topGas: GasSelection,
+  tankSizeCuFt: number | undefined,
+  tankRatedPressurePsi: number | undefined
+): StandardBlendFillCostPlan => {
+  const entries: { kind: keyof BlendVolumes; label: string; gas: GasSelection }[] = [
+    { kind: "oxygen", label: "Oxygen", gas: oxygenGas },
+    { kind: "helium", label: "Helium", gas: heliumGas },
+    { kind: "topoff", label: `${topGas.name} Top-Off`, gas: topGas }
+  ];
+
+  const additions = realGasResult?.additions;
+  const solvedWaterVolumeLiters = realGasResult?.waterVolumeLiters ?? 0;
+  if (gasModel === "gerg2008" && additions !== undefined && solvedWaterVolumeLiters > 0) {
+    return {
+      basis: "gerg2008",
+      additions: entries.map(({ kind, label, gas }) => {
+        const moles = additions
+          .filter((addition) => addition.kind === kind)
+          .reduce((sum, addition) => sum + addition.moles, 0);
+        return {
+          label,
+          gas,
+          pressurePsi: realGasResult?.steps.find((step) => step.kind === kind)?.pressureChangePsi ?? 0,
+          volumeCuFt: realGasMolesToFreeGasCuFt(
+            moles,
+            solvedWaterVolumeLiters,
+            tankSizeCuFt ?? 80,
+            tankRatedPressurePsi ?? 3000
+          )
+        };
+      })
+    };
+  }
+
+  return {
+    basis: gasModel === "gerg2008" ? "idealFallback" : "ideal",
+    additions: entries.map(({ kind, label, gas }) => ({ label, gas, pressurePsi: idealVolumes[kind] }))
+  };
+};
+
+const fillCostSettings = (
+  settings: Pick<SettingsSnapshot, "pricePerCuFtO2" | "pricePerCuFtHe" | "pricePerCuFtTopOff">,
+  tankSizeCuFt: number | undefined,
+  tankRatedPressurePsi: number | undefined
+): CostSettings => ({
+  pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
+  pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
+  pricePerCuFtTopOff: settings.pricePerCuFtTopOff ?? 0.1,
+  tankSizeCuFt,
+  tankRatedPressure: tankRatedPressurePsi
+});
 
 export type StandardBlendResultSelection = {
   result: BlendResult;
@@ -310,40 +395,40 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     return summarizeBlendVolumes(result);
   }, [result]);
 
-  const fillCost = useMemo(() => {
+  const fillCostPlan = useMemo(() => {
     if (!baseVolumes || !selectedTopGas) {
       return null;
     }
 
+    return buildStandardBlendFillCostPlan(
+      baseVolumes,
+      realGasResult,
+      settings.gasModel,
+      selectedTopGas,
+      tankSizeCuFt,
+      tankRatedPressurePsi
+    );
+  }, [baseVolumes, realGasResult, selectedTopGas, settings.gasModel, tankRatedPressurePsi, tankSizeCuFt]);
+
+  const fillCost = useMemo(() => {
+    if (!fillCostPlan) {
+      return null;
+    }
+
     return calculateFillCostEstimate(
-      [
+      fillCostPlan.additions,
+      fillCostSettings(
         {
-          label: "Oxygen",
-          gas: { id: "oxygen", name: "Oxygen", o2: 100, he: 0 },
-          pressurePsi: baseVolumes.oxygen
+          pricePerCuFtO2: settings.pricePerCuFtO2,
+          pricePerCuFtHe: settings.pricePerCuFtHe,
+          pricePerCuFtTopOff: settings.pricePerCuFtTopOff
         },
-        {
-          label: "Helium",
-          gas: { id: "helium", name: "Helium", o2: 0, he: 100 },
-          pressurePsi: baseVolumes.helium
-        },
-        {
-          label: `${selectedTopGas.name} Top-Off`,
-          gas: selectedTopGas,
-          pressurePsi: baseVolumes.topoff
-        }
-      ],
-      {
-        pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
-        pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
-        pricePerCuFtTopOff: settings.pricePerCuFtTopOff ?? 0.1,
         tankSizeCuFt,
-        tankRatedPressure: tankRatedPressurePsi
-      }
+        tankRatedPressurePsi
+      )
     );
   }, [
-    baseVolumes,
-    selectedTopGas,
+    fillCostPlan,
     settings.pricePerCuFtTopOff,
     settings.pricePerCuFtHe,
     settings.pricePerCuFtO2,
@@ -495,32 +580,17 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     const effectiveResult = selection.result;
 
     if (effectiveResult.success && effectiveResult.steps.length > 0) {
-      const volumes = summarizeBlendVolumes(effectiveResult);
+      const costPlan = buildStandardBlendFillCostPlan(
+        summarizeBlendVolumes(effectiveResult),
+        correctedResult,
+        settings.gasModel,
+        selectedTopGas,
+        tankSizeCuFt,
+        tankRatedPressurePsi
+      );
       const estimate = calculateFillCostEstimate(
-        [
-          {
-            label: "Oxygen",
-            gas: { id: "oxygen", name: "Oxygen", o2: 100, he: 0 },
-            pressurePsi: volumes.oxygen
-          },
-          {
-            label: "Helium",
-            gas: { id: "helium", name: "Helium", o2: 0, he: 100 },
-            pressurePsi: volumes.helium
-          },
-          {
-            label: `${selectedTopGas.name} Top-Off`,
-            gas: selectedTopGas,
-            pressurePsi: volumes.topoff
-          }
-        ],
-        {
-          pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
-          pricePerCuFtHe: settings.pricePerCuFtHe ?? 3.5,
-          pricePerCuFtTopOff: settings.pricePerCuFtTopOff ?? 0.1,
-          tankSizeCuFt,
-          tankRatedPressure: tankRatedPressurePsi
-        }
+        costPlan.additions,
+        fillCostSettings(settings, tankSizeCuFt, tankRatedPressurePsi)
       );
 
       const historyEntry: StandardBlendHistoryEntry = {
@@ -542,6 +612,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
         stageTemperaturesF: resolvedInput.stageTemperaturesF,
         stageTemperatureTouched,
         estimatedCost: estimate.totalCost,
+        estimatedCostBasis: costPlan.basis,
         steps: effectiveResult.steps.map((step) => ({
           kind: step.kind,
           amountPsi: step.amount,
@@ -1119,7 +1190,8 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                   </ol>
                   {realGasResult.success ? (
                     <div className="table-note">
-                      Initial reference: {formatPressure(realGasResult.startHotPressurePsi, settings.pressureUnit, 1)}. Final stage stop: {formatPressure(realGasResult.finalHotPressurePsi, settings.pressureUnit, 1)} for settled target {formatPressure(realGasResult.targetSettledPressurePsi, settings.pressureUnit, 1)}.
+                      Initial reference: {formatPressure(realGasResult.startHotPressurePsi, settings.pressureUnit, 1)}
+                      {realGasResult.startZ !== undefined && <> (Z {formatNumber(realGasResult.startZ, 4)})</>}. Final stage stop: {formatPressure(realGasResult.finalHotPressurePsi, settings.pressureUnit, 1)} for settled target {formatPressure(realGasResult.targetSettledPressurePsi, settings.pressureUnit, 1)}.
                     </div>
                   ) : (
                     <div className="table-note">
@@ -1158,6 +1230,9 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                   </div>
                 ))}
               </div>
+              {fillCostPlan && fillCostPlan.basis !== "ideal" && (
+                <div className="table-note">{formatFillCostBasis(fillCostPlan.basis, settings.temperatureUnit)}</div>
+              )}
               <div className="cost-total">
                 <strong>Total: {"$"}{fillCost.totalCost.toFixed(2)}</strong>
               </div>
@@ -1189,7 +1264,10 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                     {formatPressure(entry.startPressurePsi, settings.pressureUnit)}
                   </div>
                   {entry.estimatedCost !== undefined && (
-                    <div className="table-note">Estimated Cost: {"$"}{entry.estimatedCost.toFixed(2)}</div>
+                    <div className="table-note">
+                      Estimated Cost: {"$"}{entry.estimatedCost.toFixed(2)}
+                      {entry.estimatedCostBasis === "gerg2008" && " (GERG-2008)"}
+                    </div>
                   )}
                   <div className="table-note">
                     Steps: {entry.steps

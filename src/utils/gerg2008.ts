@@ -60,7 +60,7 @@ export const PSI_PER_KPA = 1 / KPA_PER_PSI;
 export const GERG_MIN_TEMPERATURE_K = 250;
 export const GERG_MAX_PRESSURE_KPA = 40000;
 
-const R_GERG = 8.314472;
+export const R_GERG = 8.314472;
 const EPSILON = 1e-12;
 const DENSITY_TOLERANCE = 1e-7;
 // Allow only one millipascal of floating-point noise at the 400 bar boundary.

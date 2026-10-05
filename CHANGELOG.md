@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0] - 2026-10-05
+
+### Changed
+
+- **Real-Gas Fill Volumes**: In GERG-2008 mode, Standard Blend and Top-Off fill-cost gas volumes now come from the solved real-gas moles (the cylinder mix's `P2/Z2 - P1/Z1`, at 1 atm and 70 F) instead of the ideal pressure ratio. Helium-rich trimix reads lower (21/35 into an 80 cu ft tank: helium 25.3 cu ft instead of 28.0), and mixes richer than about EAN50, such as EAN80 and pure oxygen, read higher. Ideal mode is unchanged, and Standard Blend labels an ideal fallback when GERG-2008 cannot solve the fill.
+
+### Added
+
+- **Top-Off Z Factors**: The GERG-2008 Top-Off result shows Z at the stop, the start Z, and the goal Z when Result Temp differs from Start Temp. The Standard Blend corrected-stop reference line now shows the starting Z.
+
+### Fixed
+
+- **GERG-Only Fill Cost Basis**: When the GERG-2008 plan replaces an ideal no-op plan, Fill Cost now prices real-gas moles instead of converting corrected stop pressures with the ideal ratio.
+
 ## [1.0.0] - 2026-08-19
 
 ### Added

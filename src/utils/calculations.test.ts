@@ -822,6 +822,30 @@ describe("calculateTopOffBlend", () => {
 });
 
 describe("calculateFillCostEstimate", () => {
+  test("prices a precomputed real-gas volume instead of the pressure ratio", () => {
+    const result = calculateFillCostEstimate(
+      [
+        { label: "Helium", gas: { id: "helium", name: "Helium", o2: 0, he: 100 }, pressurePsi: 1050, volumeCuFt: 25.3 },
+        { label: "Oxygen", gas: oxygen, pressurePsi: 0, volumeCuFt: 6.7 },
+        { label: "Air Top-Off", gas: air, pressurePsi: 1500, volumeCuFt: 0 }
+      ],
+      {
+        tankSizeCuFt: 80,
+        tankRatedPressure: 3000,
+        pricePerCuFtO2: 1.0,
+        pricePerCuFtHe: 3.5,
+        pricePerCuFtTopOff: 0.1
+      }
+    );
+
+    expect(result.lines.map((line) => line.label)).toEqual(["Helium", "Oxygen"]);
+    expect(result.lines[0].volumeCuFt).toBeCloseTo(25.3, 9);
+    expect(result.lines[0].volumeLiters).toBeCloseTo(cuFtToLiters(25.3), 9);
+    expect(result.lines[0].cost).toBeCloseTo(88.55, 6);
+    expect(result.lines[1].cost).toBeCloseTo(6.7, 6);
+    expect(result.totalCost).toBeCloseTo(95.25, 6);
+  });
+
   test("includes top-off gas pricing component", () => {
     const result = calculateFillCostEstimate(
       [

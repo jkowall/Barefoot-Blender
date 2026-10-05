@@ -12,8 +12,11 @@ import {
   type GergGasFractions
 } from "./gerg2008";
 import {
+  FREE_GAS_LITERS_PER_MOLE,
   calculateRealGasStandardBlend,
   calculateRealGasTopOff,
+  realGasMolesToFreeGasCuFt,
+  tankWaterVolumeLiters,
   type RealGasBlendResult,
   type RealGasTopOffResult
 } from "./realGasBlend";
@@ -1062,5 +1065,240 @@ describe("calculateRealGasTopOff", () => {
 
     expect(corrected.success).toBe(false);
     expect(corrected.errors).toContain("GERG-2008 correction is limited to temperatures at or above 250 K.");
+  });
+});
+
+describe("real-gas fill volumes", () => {
+  const standardInput = (overrides: Partial<StandardBlendInput> = {}): StandardBlendInput =>
+    standardTrimixInput(overrides);
+
+  const additionMoles = (result: RealGasBlendResult, kind: "helium" | "oxygen" | "topoff"): number =>
+    result.additions?.find((addition) => addition.kind === kind)?.moles ?? 0;
+
+  const additionCuFt = (
+    result: RealGasBlendResult,
+    kind: "helium" | "oxygen" | "topoff",
+    tankSizeCuFt = 80,
+    tankRatedPressurePsi = 3000
+  ): number => realGasMolesToFreeGasCuFt(
+    additionMoles(result, kind),
+    result.waterVolumeLiters ?? 0,
+    tankSizeCuFt,
+    tankRatedPressurePsi
+  );
+
+  const topOffCuFt = (result: RealGasTopOffResult): number =>
+    realGasMolesToFreeGasCuFt(result.fillCostMoles ?? 0, result.waterVolumeLiters ?? 0, 80, 3000);
+
+  test("reports free gas at 70 F and 1 atm", () => {
+    expect(FREE_GAS_LITERS_PER_MOLE).toBeCloseTo(24.1463, 4);
+  });
+
+  test("each addition equals tank size * (P2/Z2 - P1/Z1) / (rated + 1 atm) at one temperature", () => {
+    const result = calculateRealGasStandardBlend(
+      { pressureUnit: "psi" },
+      standardInput({ startPressure: 500, startO2: 21, startHe: 0, targetO2: 21, targetHe: 35 }),
+      air
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.steps.map((step) => step.kind)).toEqual(["helium", "oxygen", "topoff"]);
+    let previousAbsolutePsi = result.startHotPressurePsi + ATM_PRESSURE_PSI;
+    let previousZ = result.startZ ?? 0;
+    for (const step of result.steps) {
+      const stopAbsolutePsi = step.stopPressurePsi + ATM_PRESSURE_PSI;
+      const expectedCuFt = 80 * (stopAbsolutePsi / step.z - previousAbsolutePsi / previousZ) / (3000 + ATM_PRESSURE_PSI);
+      expect(additionCuFt(result, step.kind)).toBeCloseTo(expectedCuFt, 6);
+      previousAbsolutePsi = stopAbsolutePsi;
+      previousZ = step.z;
+    }
+  });
+
+  test.each([
+    { targetO2: 21, targetHe: 35, helium: 25.307, oxygen: 6.727, topoff: 39.881 },
+    { targetO2: 18, targetHe: 45, helium: 32.228 },
+    { targetO2: 10, targetHe: 70, helium: 49.79 },
+    { targetO2: 32, targetHe: 0, helium: 0, oxygen: 10.909, topoff: 67.046 },
+    { targetO2: 100, targetHe: 0, helium: 0, oxygen: 84.906, topoff: 0 }
+  ])("pins empty-start AL80 volumes for $targetO2/$targetHe", ({ targetO2, targetHe, helium, oxygen, topoff }) => {
+    const result = calculateRealGasStandardBlend({ pressureUnit: "psi" }, standardInput({ targetO2, targetHe }), air);
+
+    expect(result.success).toBe(true);
+    expect(additionCuFt(result, "helium")).toBeCloseTo(helium, 3);
+    if (oxygen !== undefined) {
+      expect(additionCuFt(result, "oxygen")).toBeCloseTo(oxygen, 3);
+    }
+    if (topoff !== undefined) {
+      expect(additionCuFt(result, "topoff")).toBeCloseTo(topoff, 3);
+    }
+  });
+
+  test("counts the 1 atm of start gas in an empty cylinder", () => {
+    const empty = calculateRealGasStandardBlend({ pressureUnit: "psi" }, standardInput({ targetO2: 21, targetHe: 35 }), air);
+    const barelyPressurized = calculateRealGasStandardBlend(
+      { pressureUnit: "psi" },
+      standardInput({ startPressure: 1e-6, targetO2: 21, targetHe: 35 }),
+      air
+    );
+
+    expect(empty.steps[0]?.stopPressurePsi).toBeCloseTo(970.3, 1);
+    for (const kind of ["helium", "oxygen", "topoff"] as const) {
+      expect(additionCuFt(empty, kind)).toBeCloseTo(additionCuFt(barelyPressurized, kind), 6);
+    }
+    const fullAirFill = calculateRealGasStandardBlend(
+      { pressureUnit: "psi" },
+      standardInput({ targetO2: 21, targetHe: 0 }),
+      air
+    );
+    expect(additionCuFt(fullAirFill, "topoff")).toBeCloseTo(76.99, 2);
+  });
+
+  test("falls back to vacuum-start moles when 1 atm of start gas makes the split infeasible", () => {
+    const result = calculateRealGasStandardBlend({ pressureUnit: "psi" }, standardInput({ targetO2: 100, targetHe: 0 }), air);
+
+    expect(result.success).toBe(true);
+    expect(additionCuFt(result, "oxygen")).toBeCloseTo(84.906, 3);
+  });
+
+  test("counts the 1 atm of start gas in an empty Top-Off cylinder", () => {
+    const input = trimixTopOffInput({ startO2: 21, startHe: 0, finalPressure: 300, resultTemperatureF: 70 });
+    const empty = calculateRealGasTopOff({ pressureUnit: "psi" }, { ...input, startPressure: 0 }, air);
+    const barelyPressurized = calculateRealGasTopOff({ pressureUnit: "psi" }, { ...input, startPressure: 1e-6 }, air);
+    const emptyCuFt = realGasMolesToFreeGasCuFt(empty.fillCostMoles ?? 0, empty.waterVolumeLiters ?? 0, 80, 3000);
+    const barelyPressurizedCuFt = realGasMolesToFreeGasCuFt(
+      barelyPressurized.fillCostMoles ?? 0,
+      barelyPressurized.waterVolumeLiters ?? 0,
+      80,
+      3000
+    );
+
+    expect(empty.fillCostMoles).toBeLessThan(empty.topOffMoles);
+    expect(barelyPressurized.fillCostMoles).toBeCloseTo(barelyPressurized.topOffMoles, 9);
+    expect(emptyCuFt).toBeCloseTo(barelyPressurizedCuFt, 2);
+    expect(emptyCuFt).toBeCloseTo(8.0, 1);
+  });
+
+  test("uses the cylinder Z for a pure helium top-up", () => {
+    const result = calculateRealGasStandardBlend(
+      { pressureUnit: "psi" },
+      standardInput({ startPressure: 500, startO2: 0, startHe: 100, targetO2: 0, targetHe: 100 }),
+      air
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.startZ).toBeCloseTo(1.0173, 4);
+    expect(result.steps[result.steps.length - 1]?.z).toBeCloseTo(1.0979, 4);
+    expect(additionCuFt(result, "helium")).toBeCloseTo(59.4426, 3);
+    expect(additionCuFt(result, "topoff")).toBe(0);
+  });
+
+  test("keeps planned moles independent of stage temperatures", () => {
+    const base = calculateRealGasStandardBlend({ pressureUnit: "psi" }, standardInput(), air);
+    const hotStages = calculateRealGasStandardBlend(
+      { pressureUnit: "psi" },
+      standardInput({
+        stageTemperaturesF: { helium: 90, oxygen: 95, topoff: 100 },
+        stageTemperatureTouched: { helium: true, oxygen: true, topoff: true }
+      }),
+      air
+    );
+
+    expect(hotStages.success).toBe(true);
+    expect(hotStages.steps[hotStages.steps.length - 1]?.stopPressurePsi)
+      .toBeGreaterThan(base.steps[base.steps.length - 1]?.stopPressurePsi ?? 0);
+    expect(hotStages.additions).toEqual(base.additions);
+  });
+
+  test("changes planned moles with initial and settled temperatures", () => {
+    const base = calculateRealGasStandardBlend({ pressureUnit: "psi" }, standardInput(), air);
+    const hotSettled = calculateRealGasStandardBlend({ pressureUnit: "psi" }, standardInput({ settledTemperatureF: 90 }), air);
+    const partialStart = standardInput({ startPressure: 500, startO2: 18, startHe: 45 });
+    const coolStart = calculateRealGasStandardBlend({ pressureUnit: "psi" }, partialStart, air);
+    const hotStart = calculateRealGasStandardBlend(
+      { pressureUnit: "psi" },
+      { ...partialStart, startTemperatureF: 90 },
+      air
+    );
+
+    expect(additionMoles(hotSettled, "helium")).toBeLessThan(additionMoles(base, "helium"));
+    expect(additionMoles(hotStart, "helium")).toBeGreaterThan(additionMoles(coolStart, "helium"));
+  });
+
+  test("keeps planned moles when a stage temperature is outside the GERG envelope", () => {
+    const base = calculateRealGasStandardBlend({ pressureUnit: "psi" }, standardInput(), air);
+    const coldStage = calculateRealGasStandardBlend(
+      { pressureUnit: "psi" },
+      standardInput({
+        stageTemperaturesF: { helium: 70, oxygen: -40, topoff: 70 },
+        stageTemperatureTouched: { oxygen: true }
+      }),
+      air
+    );
+
+    expect(coldStage.success).toBe(false);
+    expect(coldStage.additions).toEqual(base.additions);
+    expect(coldStage.waterVolumeLiters).toBeCloseTo(base.waterVolumeLiters ?? 0, 9);
+  });
+
+  test("omits planned moles when the fill needs bleed-down first", () => {
+    const result = calculateRealGasStandardBlend(
+      { pressureUnit: "psi" },
+      standardInput({ startPressure: 2000, startO2: 18, startHe: 45, targetO2: 32, targetHe: 0 }),
+      air
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.additions).toBeUndefined();
+  });
+
+  test("rescales solved moles to the live tank context", () => {
+    const result = calculateRealGasStandardBlend({ pressureUnit: "psi" }, standardInput(), air);
+    const larger = calculateRealGasStandardBlend({ pressureUnit: "psi" }, standardInput({ tankSizeCuFt: 120 }), air);
+
+    expect(result.waterVolumeLiters).toBeCloseTo(tankWaterVolumeLiters(80, 3000), 9);
+    expect(additionCuFt(result, "helium", 120, 3000)).toBeCloseTo(additionCuFt(result, "helium") * 1.5, 9);
+    expect(additionCuFt(larger, "helium", 120, 3000)).toBeCloseTo(additionCuFt(result, "helium", 120, 3000), 9);
+    expect(realGasMolesToFreeGasCuFt(10, 0, 80, 3000)).toBe(0);
+    expect(realGasMolesToFreeGasCuFt(-1, 11, 80, 3000)).toBe(0);
+  });
+
+  test("reports Top-Off start and goal Z with the solved top-off volume", () => {
+    const input = trimixTopOffInput({ startPressure: 500, startO2: 32, startHe: 0, resultTemperatureF: 70 });
+    const result = calculateRealGasTopOff({ pressureUnit: "psi" }, input, air);
+
+    expect(result.success).toBe(true);
+    expect(result.startZ).toBeCloseTo(0.9889, 4);
+    expect(result.goalZ).toBeCloseTo(1.0316, 4);
+    expect(result.z).toBeCloseTo(result.goalZ ?? 0, 6);
+    expect(topOffCuFt(result)).toBeCloseTo(63.74, 2);
+
+    const expectedCuFt = 80 * (
+      (result.goalPressurePsi + ATM_PRESSURE_PSI) / (result.goalZ ?? 1) -
+      (result.startPressurePsi + ATM_PRESSURE_PSI) / (result.startZ ?? 1)
+    ) / (3000 + ATM_PRESSURE_PSI);
+    expect(topOffCuFt(result)).toBeCloseTo(expectedCuFt, 2);
+  });
+
+  test("keeps Top-Off volume fixed when only Result Temp changes", () => {
+    const input = trimixTopOffInput({ startPressure: 500, startO2: 32, startHe: 0, resultTemperatureF: 70 });
+    const base = calculateRealGasTopOff({ pressureUnit: "psi" }, input, air);
+    const hotResult = calculateRealGasTopOff({ pressureUnit: "psi" }, { ...input, resultTemperatureF: 95 }, air);
+    const hotStart = calculateRealGasTopOff({ pressureUnit: "psi" }, { ...input, startTemperatureF: 90, resultTemperatureF: 90 }, air);
+
+    expect(hotResult.resultPressurePsi).toBeGreaterThan(base.resultPressurePsi);
+    expect(hotResult.goalZ).toBeCloseTo(base.goalZ ?? 0, 9);
+    expect(topOffCuFt(hotResult)).toBeCloseTo(topOffCuFt(base), 9);
+    expect(topOffCuFt(hotStart)).toBeCloseTo(60.79, 2);
+  });
+
+  test("reports an empty Top-Off start as Z 1", () => {
+    const result = calculateRealGasTopOff(
+      { pressureUnit: "psi" },
+      trimixTopOffInput({ startPressure: 0, startO2: 21, startHe: 0, resultTemperatureF: 70 }),
+      air
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.startZ).toBe(1);
   });
 });

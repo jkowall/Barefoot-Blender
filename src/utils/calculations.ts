@@ -1279,6 +1279,17 @@ export type FillCostEstimate = {
   totalCost: number;
 };
 
+// "ideal" = pressure ratio in ideal mode; "gerg2008" = real-gas moles; "idealFallback" = GERG mode without a GERG solution.
+export type FillCostBasis = "ideal" | "gerg2008" | "idealFallback";
+
+export type FillCostAddition = {
+  label: string;
+  gas: GasSelection;
+  pressurePsi: number;
+  // Precomputed free-gas volume. When set, it replaces the pressure-ratio conversion.
+  volumeCuFt?: number;
+};
+
 /**
  * Calculate the cost of gas additions based on PSI values and tank specifications.
  * Formula: cuFt = (psi / tankRatedPressure) * tankSizeCuFt
@@ -1366,7 +1377,7 @@ const calculateGasUnitPrice = (gas: GasSelection, costSettings: CostSettings): n
 };
 
 export const calculateFillCostEstimate = (
-  additions: { label: string; gas: GasSelection; pressurePsi: number }[],
+  additions: FillCostAddition[],
   costSettings: CostSettings
 ): FillCostEstimate => {
   const tankSizeCuFt = costSettings.tankSizeCuFt ?? 80;
@@ -1377,9 +1388,9 @@ export const calculateFillCostEstimate = (
   }
 
   const lines: FillCostLine[] = additions
-    .filter((entry) => entry.pressurePsi > tolerance)
+    .filter((entry) => (entry.volumeCuFt === undefined ? entry.pressurePsi : entry.volumeCuFt) > tolerance)
     .map((entry) => {
-      const volumeCuFt = pressureToCuFt(entry.pressurePsi, tankSizeCuFt, tankRatedPressure);
+      const volumeCuFt = entry.volumeCuFt ?? pressureToCuFt(entry.pressurePsi, tankSizeCuFt, tankRatedPressure);
       const volumeLiters = cuFtToLiters(volumeCuFt);
       const unitPrice = calculateGasUnitPrice(entry.gas, costSettings);
       const cost = volumeCuFt * unitPrice;

@@ -24,17 +24,17 @@ This quick-reference outlines the visual flow and interaction model for Barefoot
 
 Order of content:
 1. **Start Tank** card – Inputs for starting mix and pressure (unit-aware). Blur events clamp values into valid ranges.
-2. **Tank Context** card – Per-fill tank volume, rated pressure, derived PSI/cu ft, and free gas liters.
-3. **Target Blend** card – Desired mix and pressure inputs.
-4. **Top-Off Gas** card – Selector for Air/O₂/He plus custom banked gases; includes the `Calculate` button.
-5. **Blend Plan** card – Appears after calculation. Shows ordered steps, bleed instructions, warnings, errors, and fill cost by PSI, cu ft, and free gas liters. When `GERG-2008` is selected, the corrected stops become the primary visible fill plan and include initial, settled, and per-stage temperature inputs for measured cylinder temperatures. Stage temperatures default to the initial temperature and propagate to following unedited stops when changed. When `Training Mode` is on, it shows the hand-fill worksheet: pressure-percent points, helium first, oxygen add, top-off, and the pressure check.
+2. **Target Blend** card – Desired mix and pressure inputs.
+3. **Top-Off Gas** card – Selector for Air/O₂/He plus custom banked gases; includes the `Calculate` button.
+4. **Blend Plan** card – Appears after calculation. Shows ordered steps, bleed instructions, warnings, and errors. When `GERG-2008` is selected, the corrected stops become the primary visible fill plan and include initial, settled, and per-stage temperature inputs for measured cylinder temperatures. Each corrected stop shows its pressure change and Z, and the initial reference line shows the starting Z. Stage temperatures default to the initial temperature and propagate to following unedited stops when changed. When `Training Mode` is on, it shows the hand-fill worksheet: pressure-percent points, helium first, oxygen add, top-off, and the pressure check.
+5. **Cost Calculation** card – Per-fill tank volume and rated pressure, then fill cost by cu ft and free gas liters. In `GERG-2008` mode the volumes come from solved real-gas moles and a note states the basis (free gas at 1 atm and 70 F); if GERG-2008 cannot solve the fill, the note says the ideal pressure ratio is used instead.
 
 ### Top-Off What-If
 
 1. **Start Tank** card – Current mix and pressure.
 2. **Top-Off** card – Selected top-off source, goal pressure, and `Calculate` button.
-3. **Result** card – Final O2 and He. When `GERG-2008` is selected, Start Temp appears in the Start card and Result Temp appears here. Changing Result Temp updates the displayed pressure target only; the mix stays fixed.
-4. **Fill Cost** card – Per-fill tank volume, rated pressure, gas volume, and estimated cost.
+3. **Result** card – Final O2 and He. When `GERG-2008` is selected, Start Temp appears in the Start card and Result Temp appears here. Changing Result Temp updates the displayed pressure target only; the mix and fill cost stay fixed. The stop line shows Z, and a note shows the start Z (plus the goal Z when Result Temp differs from Start Temp).
+4. **Fill Cost** card – Per-fill tank volume, rated pressure, gas volume, and estimated cost. In `GERG-2008` mode the volume comes from solved real-gas moles and a note states the basis.
 5. **Bleed-Down What-If** and **Top-Off Sensitivity** cards – The bleed slider follows the selected gas model; GERG-2008 previews use the same temperature-aware top-off solver as the main result. The alternate-start sensitivity table remains an explicitly labeled ideal pressure-point projection.
 
 ### Multi-Gas Blend
