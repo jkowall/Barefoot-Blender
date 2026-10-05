@@ -1,11 +1,19 @@
 # Changelog
 
+## [1.1.2] - 2026-10-05
+
+### Fixed
+
+- **GERG Empty-Cylinder Plans**: When the 1 atm left in an empty (0 PSI) cylinder makes the exact target unreachable, GERG-2008 now gives a corrected plan and states the mix it actually reaches instead of returning an error (1.1.1 regression). Examples are heliox or pure oxygen over an air residual (pure oxygen ends near 99.6% O2) and a bank top-off that matches the target over a different residual. Purge the cylinder and set the start mix to the purge gas to reach the target exactly.
+- **GERG Bleed-Down Guidance**: Standard Blend no longer shows "needs valid temp" stop rows or a temperature-correction note when GERG-2008 correction stops for a required bleed-down or another pre-solve input error. Only the GERG error is shown, and stage temperature rows remain for stage temperature envelope failures.
+
 ## [1.1.1] - 2026-10-05
+
+Released to the web only; the native apps go from 1.1.0 to 1.1.2.
 
 ### Fixed
 
 - **GERG Empty-Cylinder Start**: A 0 PSI start is now treated as 1 atm of the start gas already in the cylinder instead of a vacuum, so corrected stop pressures no longer jump between a 0 PSI and a slightly positive start (21/35 into an 80 cu ft tank: helium stop 987 PSI instead of 970). Cylinder volume is now inferred from gauge rated pressure, so GERG-2008 fill volumes match the ideal pressure ratio when Z is 1 and read about 0.5% higher than in 1.1.0 (21/35 helium: 25.4 cu ft). Targets that 1 atm of the start gas makes unreachable, such as heliox or pure oxygen into an empty cylinder with an air start mix, now show an error asking you to set the start mix to the gas left in the cylinder or purge it.
-- **GERG Bleed-Down Guidance**: Standard Blend no longer shows "needs valid temp" stop rows or a temperature-correction note when GERG-2008 correction stops for a required bleed-down or another pre-solve input error. Only the GERG error is shown, and stage temperature rows remain for stage temperature envelope failures.
 
 ## [1.1.0] - 2026-10-05
 

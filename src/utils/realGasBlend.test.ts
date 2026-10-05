@@ -667,18 +667,61 @@ describe("calculateRealGasStandardBlend", () => {
 
   test.each([
     { label: "heliox", topGas: { id: "oxygen", name: "Oxygen", o2: 100, he: 0 }, targetO2: 50, targetHe: 50 },
-    { label: "pure oxygen", topGas: air, targetO2: 100, targetHe: 0 }
-  ])("explains that a 0 PSI air residual blocks an N2-free $label target", ({ topGas, targetO2, targetHe }) => {
+    { label: "pure oxygen", topGas: air, targetO2: 100, targetHe: 0 },
+    { label: "EAN32 bank top-off over an EAN36 residual", topGas: { id: "ean32", name: "EAN32", o2: 32, he: 0 }, targetO2: 32, targetHe: 0, startO2: 36 },
+    { label: "10/50 bank top-off over an air residual", topGas: { id: "tx1050", name: "10/50", o2: 10, he: 50 }, targetO2: 10, targetHe: 50 },
+    { label: "air top-off to 21/0 over an EAN32 residual", topGas: air, targetO2: 21, targetHe: 0, startO2: 32 }
+  ])("plans a 0 PSI $label fill the residual blocks and reports the mix it reaches", ({ topGas, targetO2, targetHe, startO2 }) => {
+    const inputs = standardTrimixInput({ targetO2, targetHe, startO2: startO2 ?? 21, startHe: 0, topGasId: topGas.id });
+    const corrected = calculateRealGasStandardBlend({ pressureUnit: "psi" }, inputs, topGas);
+
+    expect(corrected.success).toBe(true);
+    expect(corrected.errors).toEqual([]);
+    expect(corrected.additions?.length).toBeGreaterThan(0);
+    const mix = corrected.residualAdjustedMix;
+    expect(mix).toBeDefined();
+    const reconstructed = reconstructStandardFinalState(inputs, topGas, corrected);
+    expect(reconstructed.fractions.o2 * 100).toBeCloseTo(mix?.o2 ?? 0, 9);
+    expect(reconstructed.fractions.he * 100).toBeCloseTo(mix?.he ?? 0, 9);
+    // The residual shifts the mix only slightly and the plan still lands near the target pressure.
+    expect(Math.abs((mix?.o2 ?? 0) - targetO2)).toBeLessThan(0.5);
+    expect(Math.abs((mix?.he ?? 0) - targetHe)).toBeLessThan(0.5);
+    expect(reconstructed.settledPressurePsi).toBeCloseTo(3000, 0);
+    expect(corrected.warnings.some((warning) => warning.startsWith("An empty cylinder still holds 1 atm of the start mix"))).toBe(true);
+  });
+
+  test("ends a pure oxygen fill over 1 atm of air near 99.6% O2", () => {
     const corrected = calculateRealGasStandardBlend(
       { pressureUnit: "psi" },
-      standardTrimixInput({ targetO2, targetHe, topGasId: topGas.id }),
-      topGas
+      standardTrimixInput({ targetO2: 100, targetHe: 0 }),
+      air
     );
 
+    expect(corrected.residualAdjustedMix?.o2).toBeCloseTo(99.62, 1);
+    expect(corrected.residualAdjustedMix?.n2).toBeCloseTo(0.38, 1);
+    expect(corrected.warnings).toContain(
+      `An empty cylinder still holds 1 atm of the start mix, so this plan ends at ${corrected.residualAdjustedMix?.o2.toFixed(2)}% O2 instead of the exact target. Purge the cylinder and set the start mix to the purge gas to reach the target exactly.`
+    );
+  });
+
+  test("leaves an exact empty-start plan unadjusted", () => {
+    const corrected = calculateRealGasStandardBlend({ pressureUnit: "psi" }, standardTrimixInput({ targetO2: 21, targetHe: 35 }), air);
+
+    expect(corrected.success).toBe(true);
+    expect(corrected.residualAdjustedMix).toBeUndefined();
+    expect(corrected.warnings.some((warning) => warning.startsWith("An empty cylinder"))).toBe(false);
+  });
+
+  test.each([
+    { label: "bleed-down", patch: { startPressure: 500, startO2: 18, startHe: 45, targetO2: 32, targetHe: 0 }, topGas: air, error: "GERG-2008 correction currently supports direct fills only. Complete the bleed-down step, then recalculate from the post-bleed state." },
+    { label: "split", patch: { startPressure: 500, startO2: 36, startHe: 0, targetO2: 32, targetHe: 0, topGasId: "ean32" }, topGas: { id: "ean32", name: "EAN32", o2: 32, he: 0 }, error: "GERG-2008 correction requires removing gas or changing the top-off gas." }
+  ])("still rejects a $label failure above 0 PSI", ({ patch, topGas, error }) => {
+    const corrected = calculateRealGasStandardBlend({ pressureUnit: "psi" }, standardTrimixInput(patch), topGas);
+
     expect(corrected.success).toBe(false);
-    expect(corrected.errors).toEqual([
-      "An empty cylinder still holds 1 atm of the start mix, which has more N2 than the target allows. Set the start mix to the gas left in the cylinder, or purge the cylinder, then recalculate."
-    ]);
+    expect(corrected.errors).toEqual([error]);
+    expect(corrected.additions).toBeUndefined();
+    expect(corrected.residualAdjustedMix).toBeUndefined();
   });
 
   test("rejects an N2-free top gas when the target requires nitrogen", () => {
@@ -1238,7 +1281,7 @@ describe("real-gas fill volumes", () => {
     expect(additionCuFt(fullAirFill, "topoff")).toBeCloseTo(77.37, 2);
   });
 
-  test("prices pure oxygen from an oxygen residual and omits moles when an air residual blocks it", () => {
+  test("prices pure oxygen the same over an oxygen or an air residual", () => {
     const oxygenResidual = calculateRealGasStandardBlend(
       { pressureUnit: "psi" },
       standardInput({ startO2: 100, startHe: 0, targetO2: 100, targetHe: 0 }),
@@ -1249,8 +1292,10 @@ describe("real-gas fill volumes", () => {
     expect(oxygenResidual.success).toBe(true);
     expect(additionCuFt(oxygenResidual, "oxygen")).toBeCloseTo(84.930, 3);
     expect(additionCuFt(oxygenResidual, "topoff")).toBe(0);
-    expect(airResidual.success).toBe(false);
-    expect(airResidual.additions).toBeUndefined();
+    expect(airResidual.success).toBe(true);
+    expect(airResidual.residualAdjustedMix).toBeDefined();
+    expect(additionCuFt(airResidual, "oxygen")).toBeCloseTo(additionCuFt(oxygenResidual, "oxygen"), 1);
+    expect(additionCuFt(airResidual, "topoff")).toBe(0);
   });
 
   test("prices an empty Top-Off cylinder from the 1 atm of start gas the solver starts from", () => {
