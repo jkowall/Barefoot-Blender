@@ -49,6 +49,9 @@ export type RealGasBlendResult = {
   waterVolumeLiters?: number;
   // Z of the cylinder contents before the first addition, at the first stage temperature.
   startZ?: number;
+  // Set when the 1 atm left in an empty (0 psig) cylinder makes the exact target unreachable: the mix
+  // (percent) this plan actually ends at.
+  residualAdjustedMix?: { o2: number; he: number; n2: number };
   warnings: string[];
   errors: string[];
 };
@@ -686,13 +689,9 @@ export const calculateRealGasStandardBlend = (
     n2: targetComponents.n2 - startComponents.n2
   };
 
-  if (delta.o2 < -MOLE_TOLERANCE || delta.he < -MOLE_TOLERANCE || delta.n2 < -MOLE_TOLERANCE) {
-    // At 0 gauge the excess is the 1 atm residual, which bleed-down cannot remove.
-    const excessGases = [
-      delta.o2 < -MOLE_TOLERANCE ? "O2" : undefined,
-      delta.he < -MOLE_TOLERANCE ? "He" : undefined,
-      delta.n2 < -MOLE_TOLERANCE ? "N2" : undefined
-    ].filter((gas) => gas !== undefined);
+  const emptyStart = startPressurePsi <= MOLE_TOLERANCE;
+  const needsGasRemoved = delta.o2 < -MOLE_TOLERANCE || delta.he < -MOLE_TOLERANCE || delta.n2 < -MOLE_TOLERANCE;
+  if (needsGasRemoved && !emptyStart) {
     return {
       success: false,
       steps: [],
@@ -700,39 +699,88 @@ export const calculateRealGasStandardBlend = (
       finalHotPressurePsi: targetPressurePsi,
       targetSettledPressurePsi: targetPressurePsi,
       warnings,
-      errors: [
-        startPressurePsi <= MOLE_TOLERANCE
-          ? `An empty cylinder still holds 1 atm of the start mix, which has more ${excessGases.join(" and ")} than the target allows. Set the start mix to the gas left in the cylinder, or purge the cylinder, then recalculate.`
-          : "GERG-2008 correction currently supports direct fills only. Complete the bleed-down step, then recalculate from the post-bleed state."
-      ]
+      errors: ["GERG-2008 correction currently supports direct fills only. Complete the bleed-down step, then recalculate from the post-bleed state."]
     };
   }
 
-  const split = splitAdditionMoles(delta, topFractions);
-  if (!split) {
-    return {
-      success: false,
-      steps: [],
-      startHotPressurePsi: startPressurePsi,
-      finalHotPressurePsi: targetPressurePsi,
-      targetSettledPressurePsi: targetPressurePsi,
-      warnings,
-      errors: ["Selected top-off gas has no nitrogen and cannot reach the target N2 fraction."]
+  const noNitrogenFailure = (): RealGasBlendResult => ({
+    success: false,
+    steps: [],
+    startHotPressurePsi: startPressurePsi,
+    finalHotPressurePsi: targetPressurePsi,
+    targetSettledPressurePsi: targetPressurePsi,
+    warnings,
+    errors: ["Selected top-off gas has no nitrogen and cannot reach the target N2 fraction."]
+  });
+  const removeGasFailure = (): RealGasBlendResult => ({
+    success: false,
+    steps: [],
+    startHotPressurePsi: startPressurePsi,
+    finalHotPressurePsi: targetPressurePsi,
+    targetSettledPressurePsi: targetPressurePsi,
+    warnings,
+    errors: ["GERG-2008 correction requires removing gas or changing the top-off gas."]
+  });
+  const isInfeasible = (moles: AdditionMoles): boolean =>
+    moles.topoff < -MOLE_TOLERANCE || moles.helium < -MOLE_TOLERANCE || moles.oxygen < -MOLE_TOLERANCE;
+
+  let split = needsGasRemoved ? null : splitAdditionMoles(delta, topFractions);
+  if (!needsGasRemoved && !split) {
+    return noNitrogenFailure();
+  }
+
+  let residualAdjusted = false;
+  if (!split || isInfeasible(split)) {
+    if (!emptyStart) {
+      return removeGasFailure();
+    }
+    // The 1 atm left in an empty cylinder cannot be bled off, so the exact target is out of reach.
+    // Plan the gases as if the cylinder were empty, scaled so the total moles still match the target,
+    // and report the mix this plan actually ends at.
+    const vacuumSplit = splitAdditionMoles(targetComponents, topFractions);
+    if (!vacuumSplit) {
+      return noNitrogenFailure();
+    }
+    if (isInfeasible(vacuumSplit)) {
+      return removeGasFailure();
+    }
+    const targetTotal = totalMoles(targetComponents);
+    const residualMoles = totalMoles(startComponents);
+    const withScaledAdditions = (scale: number): ComponentMoles =>
+      addGasMoles(
+        addGasMoles(addGasMoles(startComponents, vacuumSplit.helium * scale, pureHeliumFractions), vacuumSplit.oxygen * scale, pureOxygenFractions),
+        vacuumSplit.topoff * scale,
+        topFractions
+      );
+    let scale = targetTotal > MOLE_TOLERANCE ? Math.max(0, (targetTotal - residualMoles) / targetTotal) : 0;
+    // The residual shifts the final mix slightly, so refine the scale until the final mix's density at
+    // the target pressure and settled temperature matches the cylinder contents. Evaluating at the
+    // target pressure keeps every pass inside the GERG envelope; the mix barely moves, so this
+    // converges in a few passes.
+    for (let pass = 0; pass < 8 && scale > 0; pass += 1) {
+      const density = gergDensityFromPressure(
+        settledTemperatureK,
+        gaugePsiToAbsoluteKpa(targetPressurePsi),
+        fractionsFromMoles(withScaledAdditions(scale))
+      );
+      if (!density.success) {
+        break;
+      }
+      const nextScale = Math.max(0, (density.densityMolPerLiter * waterVolumeLiters - residualMoles) / targetTotal);
+      const converged = Math.abs(nextScale - scale) * targetTotal <= MOLE_TOLERANCE;
+      scale = nextScale;
+      if (converged) {
+        break;
+      }
+    }
+    split = {
+      helium: vacuumSplit.helium * scale,
+      oxygen: vacuumSplit.oxygen * scale,
+      topoff: vacuumSplit.topoff * scale
     };
+    residualAdjusted = true;
   }
   const { topoff: topoffMoles, helium: heliumMoles, oxygen: oxygenMoles } = split;
-
-  if (topoffMoles < -MOLE_TOLERANCE || heliumMoles < -MOLE_TOLERANCE || oxygenMoles < -MOLE_TOLERANCE) {
-    return {
-      success: false,
-      steps: [],
-      startHotPressurePsi: startPressurePsi,
-      finalHotPressurePsi: targetPressurePsi,
-      targetSettledPressurePsi: targetPressurePsi,
-      warnings,
-      errors: ["GERG-2008 correction requires removing gas or changing the top-off gas."]
-    };
-  }
 
   const plannedSteps: StepPlan[] = [];
   if (heliumMoles > MOLE_TOLERANCE) {
@@ -749,6 +797,32 @@ export const calculateRealGasStandardBlend = (
     gasName: step.gasName,
     moles: step.moles
   }));
+
+  let residualAdjustedMix: RealGasBlendResult["residualAdjustedMix"];
+  if (residualAdjusted) {
+    const finalComponents = plannedSteps.reduce(
+      (components, step) => addGasMoles(components, step.moles, step.fractions),
+      startComponents
+    );
+    const finalFractions = fractionsFromMoles(finalComponents);
+    residualAdjustedMix = {
+      o2: percentFromFraction(finalFractions.o2),
+      he: percentFromFraction(finalFractions.he),
+      n2: percentFromFraction(finalFractions.n2)
+    };
+    // Safety flags follow the mix the plan actually reaches, not the unreachable target.
+    for (const targetFlag of ["Hypoxic mix (<18% O2).", "High O2 - fire risk (>40% O2)."]) {
+      const index = warnings.indexOf(targetFlag);
+      if (index >= 0) {
+        warnings.splice(index, 1);
+      }
+    }
+    appendMixSafetyWarnings(warnings, residualAdjustedMix.o2);
+    const heliumText = residualAdjustedMix.he > 0.005 ? ` / ${residualAdjustedMix.he.toFixed(2)}% He` : "";
+    warnings.push(
+      `An empty cylinder still holds 1 atm of the start mix, so this plan ends at ${residualAdjustedMix.o2.toFixed(2)}% O2${heliumText} instead of the exact target. Purge the cylinder and set the start mix to the purge gas to reach the target exactly.`
+    );
+  }
 
   let runningComponents = startComponents;
   let startZ: number | undefined;
@@ -770,6 +844,7 @@ export const calculateRealGasStandardBlend = (
         additions,
         waterVolumeLiters,
         startZ,
+        residualAdjustedMix,
         warnings,
         errors: beforeState.errors
       };
@@ -792,6 +867,7 @@ export const calculateRealGasStandardBlend = (
         additions,
         waterVolumeLiters,
         startZ,
+        residualAdjustedMix,
         warnings,
         errors: state.errors
       };
@@ -819,6 +895,7 @@ export const calculateRealGasStandardBlend = (
     additions,
     waterVolumeLiters,
     startZ,
+    residualAdjustedMix,
     warnings: [...new Set(warnings)],
     errors
   };

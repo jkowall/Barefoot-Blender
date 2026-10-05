@@ -370,14 +370,16 @@ describe("resolveRealGasStopDisplay", () => {
     expect(display).toEqual({ rows: [] });
   });
 
-  test("shows only the GERG error when empty-cylinder start gas blocks the target", () => {
+  test("shows corrected stops and the residual warning when empty-cylinder start gas blocks the exact target", () => {
     const { idealResult, realGasResult, display } = resolveFor(standardInput({ targetO2: 100, targetHe: 0 }));
 
     expect(idealResult.success).toBe(true);
-    expect(idealResult.steps.some((step) => step.kind !== "bleed")).toBe(true);
-    expect(realGasResult.success).toBe(false);
-    expect(realGasResult.errors[0]).toContain("purge the cylinder");
-    expect(display).toEqual({ rows: [] });
+    expect(realGasResult.success).toBe(true);
+    expect(realGasResult.residualAdjustedMix?.o2).toBeCloseTo(99.62, 1);
+    expect(realGasResult.warnings.some((warning) => warning.includes("Purge the cylinder"))).toBe(true);
+    expect(display.rows.map((row) => row.kind)).toEqual(["oxygen"]);
+    expect(display.rows[0]?.correctedStep?.kind).toBe("oxygen");
+    expect(display.footer).toBe("summary");
   });
 
   test("shows only the GERG error when the settled temperature is out of range", () => {

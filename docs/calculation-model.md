@@ -83,7 +83,7 @@ Pressure and temperature handling:
    ```
    n_total = D_mol_per_L * V_water_L
    ```
-   The start state always uses absolute pressure. An empty cylinder at 0 PSI gauge still holds 1 atm absolute of the start mix, so 0 PSI and a small residual such as 0.01 PSI give continuous stops. For a 21/35 fill to 3000 PSI in an 80 cu ft tank at 70 F with an air top-off, the helium stop is 987.0 PSI from 0 PSI.
+   The start state always uses absolute pressure. An empty cylinder at 0 PSI gauge still holds 1 atm absolute of the start mix, so when the exact target is reachable, 0 PSI and a small residual such as 0.01 PSI give continuous stops. For a 21/35 fill to 3000 PSI in an 80 cu ft tank at 70 F with an air top-off, the helium stop is 987.0 PSI from 0 PSI.
 5. Convert start and target O2/He/N2 fractions into component mole counts.
 6. Solve the same fill order in mole space:
    - Helium moles from the He component delta
@@ -97,7 +97,7 @@ Supported envelope:
 - Temperature must be at least 250 K.
 - Pressure must not exceed 400 bar absolute.
 - Direct fills are corrected. If the ideal plan requires bleed-down, complete the bleed step first and recalculate from the post-bleed state.
-- From 0 PSI, the 1 atm residual of the start mix counts toward the target. A target with less of a gas than that residual holds, such as heliox or 100% O2 from an air residual, has no exact corrected plan. GERG-2008 reports that the residual blocks the target instead of asking for bleed-down. Set the start mix to the gas left in the cylinder, or purge the cylinder, then recalculate.
+- From 0 PSI, the 1 atm residual of the start mix counts toward the target. When that residual makes the exact target unreachable (for example heliox or 100% O2 over an air residual, or a bank top-off that matches the target over a different residual), bleed-down cannot help, so GERG-2008 still plans the fill: it splits the gases as if the cylinder were empty, scales the additions so the settled pressure lands on the target, and warns with the mix the plan actually reaches (100% O2 over 1 atm of air ends near 99.6% O2). Hypoxic and high-O2 flags follow that reached mix. Purge the cylinder and set the start mix to the purge gas to reach the target exactly. Above 0 PSI, the same cases still ask for bleed-down or a different top-off gas.
 
 Top-Off GERG handling:
 1. Start pressure and goal pressure are interpreted at Start Temp. This intentionally assumes Settle Temp equals Start Temp for the Top-Off workflow.
@@ -127,8 +127,8 @@ Fill-cost volume:
 5. Moles scale linearly with cylinder volume while stop pressures do not, so editing tank size rescales the GERG-2008 volumes without recalculating stops.
 6. Real-gas volumes can be lower or higher than ideal. Helium-rich trimix reads lower because the mix Z is well above 1 (21/35 at 3000 PSI and 70 F has Z 1.1064, above pure helium at 1.0979). Mixes richer than about EAN50, such as EAN80 and pure oxygen, read higher because their Z is below 1 at fill pressure (EAN80 at 3000 PSI and 70 F has Z 0.9658).
 7. Standard Blend: when the ideal plan succeeds but GERG-2008 has no solution for the fill (for example, bleed-down is required first), Fill Cost falls back to the ideal pressure ratio and labels the fallback. Top-Off: when the GERG-2008 top-off has no solution, the Result card shows the error and Fill Cost shows no estimate.
-8. The solver starts an empty (0 PSI) cylinder from 1 atm of the start gas, so corrected stops and fill-cost volumes are both continuous between a 0 PSI and a slightly positive start. When that residual blocks the target (for example, pure oxygen into a cylinder holding air), GERG-2008 has no solution and Fill Cost falls back as described in item 7.
-9. With Z equal to 1, GERG-2008 volumes reduce exactly to the ideal pressure ratio for every start state, because the cylinder volume inference and the ideal ratio both use gauge rated pressure and an empty start holds 1 atm.
+8. The solver starts an empty (0 PSI) cylinder from 1 atm of the start gas, so when the exact target is reachable, corrected stops and fill-cost volumes are both continuous between a 0 PSI and a slightly positive start. When that residual blocks the exact target, only an exactly empty start gets the residual-adjusted plan described above, which prices the gas it actually adds; a slightly positive start in the same case returns the bleed-down or top-off-gas error, and bleeding to 0 PSI and recalculating gives the adjusted plan.
+9. With Z equal to 1, the total added GERG-2008 volume (and the single Top-Off line) reduces exactly to the ideal pressure ratio for every start state, because the cylinder volume inference and the ideal ratio both use gauge rated pressure and an empty start holds 1 atm. In exact plans, individual Standard Blend lines can still differ slightly, because GERG-2008 splits the gases by absolute partial pressure while the ideal plan uses gauge partial pressure; each line shifts by about tank_cu_ft * (target_fraction - start_fraction) * 14.6959488 / rated_pressure_PSI before the top-off split. Residual-adjusted empty-start plans split the target as if the cylinder were empty and scale every line by the same factor, so with Z equal to 1 each of their lines equals the ideal line.
 
 Reference implementation:
 - GERG constants and equations are based on the NIST public AGA8 GERG-2008 source: <https://github.com/usnistgov/AGA8>.
