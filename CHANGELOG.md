@@ -4,7 +4,7 @@
 
 ### Changed
 
-- **Stricter Style Policy**: The production Content-Security-Policy header now sets `style-src 'self'` without `'unsafe-inline'`. The privacy, terms, and support pages load their shared styles from `public/legal.css` instead of inline `<style>` blocks. The iOS and Android apps, which only see the CSP meta tag in `index.html`, now get the same policy as the website with no inline scripts or styles. Only the local dev server relaxes it.
+- **Stricter Content Security Policy**: The production Content-Security-Policy header now sets `style-src 'self'` without `'unsafe-inline'`. The privacy, terms, and support pages load their shared styles from `public/legal.css` instead of inline `<style>` blocks. The iOS and Android apps, which only see the CSP meta tag in `index.html`, now get the same policy as the website with no inline scripts or styles. Only the local dev server relaxes it.
 - **Dependencies**: Upgraded React, React DOM, and their type packages to 19.3.0, vite-plugin-pwa from 1.3.0 to 2.0.0 (major version), and Capacitor core, CLI, iOS, and Android to 8.5.2.
 
 ### Fixed
