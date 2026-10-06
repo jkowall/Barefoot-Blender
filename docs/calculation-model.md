@@ -153,6 +153,16 @@ P₁·O₂₁ + P₂·O₂₂ = P_target·O₂_target
 - Requires the source gases to have different O₂% values (denominator non-zero).
 - Returns volumes to add from each source.
 
+### N-Gas Bleed-Down Search
+
+Module: `solveNGasBlend`
+
+When no 1-, 2-, or 3-source plan reaches the target from the current start pressure, the solver looks for the highest start pressure (smallest bleed) that works:
+- Bank caps (`maxPressurePsi`) can make the workable start range an interval that excludes 0. Draining too far leaves more to add than a capped bank can supply. So the search does not assume that draining further always stays feasible.
+- Scan start pressures from the current pressure down to 0: at least 32 points, no more than about 10 PSI apart. Bisect between the highest workable point and the failing point above it to 0.001 PSI.
+- Also run a plain bisection over the full range, which can land in a workable window narrower than the scan step, and keep whichever result drains less.
+- The plan gets a leading `Bleed Tank` step, a `Bleed to ...` cost line, and the "Bleed-down required to achieve target mix." warning.
+
 ## 4. Utility Calculators
 
 ### Maximum Operating Depth (MOD)

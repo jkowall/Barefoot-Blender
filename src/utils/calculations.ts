@@ -946,6 +946,12 @@ const MULTI_GAS_HE_TOLERANCE = 5;
 const MULTI_GAS_O2_STEP = 0.1;
 const MULTI_GAS_HE_STEP = 0.5;
 const MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI = 0.5;
+// Bleed-down search: scan 32 to 1001 start pressures (0 through the current
+// pressure, ~10 psi apart below 10,000 psi), then bisect the bracket to 0.001 psi.
+const MULTI_GAS_BLEED_SCAN_MIN_INTERVALS = 31;
+const MULTI_GAS_BLEED_SCAN_MAX_INTERVALS = 1000;
+const MULTI_GAS_BLEED_SCAN_STEP_PSI = 10;
+const MULTI_GAS_BLEED_SEARCH_PRECISION_PSI = 0.001;
 const MULTI_GAS_SIMILAR_BLEND_WARNING =
   "Exact target cannot be made; showing closest blend within +/-1% O2 / +/-5% He.";
 
@@ -2143,37 +2149,68 @@ export const solveNGasBlend = (
 
   // If no solution and bleed-down might help (target He < start He, or composition requires it)
   if (alternatives.length === 0 && startPressurePsi > tolerance) {
-    // Binary search for the maximum starting pressure (minimum bleed) that allows a solution
-    let low = 0;
-    let high = startPressurePsi;
-    let bestStartPressure = 0;
-    let bestAlternatives: BlendAlternative[] = [];
-
-    // 20 iterations is enough for < 1 PSI precision at 10000 PSI
-    for (let i = 0; i < 20; i++) {
-      if (high - low < tolerance) break;
-      const mid = (low + high) / 2;
-      const attemptAlts = generateBlendAlternatives(
+    // Find the maximum starting pressure (minimum bleed) that allows a solution.
+    // Bank caps can make the feasible range an interval that excludes 0 (drain too
+    // far and a capped bank cannot supply the difference), so scan down from the
+    // current pressure for the highest feasible point before bisecting.
+    type BleedCandidate = { startPressurePsi: number; alternatives: BlendAlternative[] };
+    const tryStartPressure = (pressurePsi: number) =>
+      generateBlendAlternatives(
         targetPressurePsi,
         targetO2,
         targetHe,
-        mid,
+        pressurePsi,
         startO2,
         startHe,
         availableGases,
         costSettings
       );
-
-      if (attemptAlts.length > 0) {
-        bestStartPressure = mid;
-        bestAlternatives = attemptAlts;
-        low = mid; // Try to bleed less
-      } else {
-        high = mid; // Must bleed more
+    // Bisect toward the highest feasible start pressure below `high`; `best` is a
+    // known feasible point at `low`, if any.
+    const bisectHighestFeasible = (low: number, high: number, best: BleedCandidate | null) => {
+      while (high - low > MULTI_GAS_BLEED_SEARCH_PRECISION_PSI) {
+        const mid = (low + high) / 2;
+        if (mid <= low || mid >= high) break; // Float spacing exceeds the precision
+        const attemptAlts = tryStartPressure(mid);
+        if (attemptAlts.length > 0) {
+          best = { startPressurePsi: mid, alternatives: attemptAlts };
+          low = mid; // Try to bleed less
+        } else {
+          high = mid; // Must bleed more
+        }
       }
+      return best;
+    };
+
+    const scanIntervals = Math.min(
+      MULTI_GAS_BLEED_SCAN_MAX_INTERVALS,
+      Math.max(MULTI_GAS_BLEED_SCAN_MIN_INTERVALS, Math.ceil(startPressurePsi / MULTI_GAS_BLEED_SCAN_STEP_PSI))
+    );
+    let scanned: BleedCandidate | null = null;
+    let infeasibleAbove = startPressurePsi;
+    // The current start pressure already failed, so begin one step below it.
+    for (let i = scanIntervals - 1; i >= 0; i--) {
+      const scanPressure = (startPressurePsi * i) / scanIntervals;
+      const attemptAlts = tryStartPressure(scanPressure);
+      if (attemptAlts.length > 0) {
+        scanned = bisectHighestFeasible(scanPressure, infeasibleAbove, {
+          startPressurePsi: scanPressure,
+          alternatives: attemptAlts
+        });
+        break;
+      }
+      infeasibleAbove = scanPressure;
     }
 
-    if (bestAlternatives.length > 0) {
+    // Plain bisection over the full range can still land in a feasible window
+    // narrower than the scan step, so keep whichever search drains less.
+    const bisected = bisectHighestFeasible(0, startPressurePsi, null);
+    const best = scanned && (!bisected || scanned.startPressurePsi >= bisected.startPressurePsi)
+      ? scanned
+      : bisected;
+
+    if (best) {
+      const { startPressurePsi: bestStartPressure, alternatives: bestAlternatives } = best;
       warnings.push("Bleed-down required to achieve target mix.");
 
       // Add bleed step to each alternative
