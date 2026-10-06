@@ -130,8 +130,6 @@ const CAP_TOLERANCE_PSI = 0.01;
 const BLEED_SCAN_POINTS = 32;
 const CAPPED_BLEED_SCAN_POINTS = 64;
 const BLEED_PRESSURE_TOLERANCE_PSI = 0.01;
-// Margin on the closest-blend window's corner mole spread, which bounds any mix inside the window.
-const CLOSEST_WINDOW_SLACK_MARGIN = 1.5;
 // Gap left on each side of a cut in a bleed range (kept amount, ideal-equivalent PSI), so each piece
 // keeps one set of stages.
 const RANGE_CUT_OFFSET = BLEED_PRESSURE_TOLERANCE_PSI / 2;
@@ -190,9 +188,8 @@ type RealizeOptions = {
   // Reject options whose reached mix is further than this from the target (percentage points).
   mixTolerance?: { o2: number; he: number };
   // Options are closest blends, whose mix (and so moles at the target pressure) differs from the
-  // target's. The bank-limit prefilter then discounts each amount by the most that difference can
-  // remove, so a small top-up sized for the target's moles is not rejected.
-  closestWindow?: boolean;
+  // target's, so size each one for the moles its own reached mix holds at the target pressure.
+  sizeForReachedMix?: boolean;
 };
 
 type RealizeOutcome = {
@@ -469,6 +466,24 @@ export const calculateRealGasMultiGasBlend = (
     return failure("gerg", waterVolumeLiters, warnings, targetDensity.errors);
   }
   const targetMoles = targetDensity.densityMolPerLiter * waterVolumeLiters;
+  // Moles a mix holds at the target pressure and Settled Temp. A closest blend reaches a mix other
+  // than the target's, so it is sized for that mix's moles, not the target's.
+  const targetMolesByMix = new Map<string, number>();
+  const targetMolesFor = (o2: number, he: number): number => {
+    const key = `${o2.toFixed(6)}/${he.toFixed(6)}`;
+    const cached = targetMolesByMix.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const density = gergDensityFromPressure(
+      settledTemperatureK,
+      gaugePsiToAbsoluteKpa(targetPressurePsi),
+      gasFractionsFromPercents(o2, he)
+    );
+    const moles = density.success ? density.densityMolPerLiter * waterVolumeLiters : targetMoles;
+    targetMolesByMix.set(key, moles);
+    return moles;
+  };
 
   // A cylinder at 0 gauge still holds 1 atm absolute of the start mix, so 0 gauge is not a vacuum.
   const startStateAt = (pressurePsi: number): StartState | { errors: string[]; warnings: string[] } => {
@@ -559,7 +574,8 @@ export const calculateRealGasMultiGasBlend = (
     }
     const addedMoles = additions.reduce((sum, addition) => sum + addition.moles, 0);
     const startMoles = totalMoles(start.components);
-    const initialScale = addedMoles > MOLE_TOLERANCE ? Math.max(0, (targetMoles - startMoles) / addedMoles) : 1;
+    const plannedMoles = options.sizeForReachedMix ? targetMolesFor(candidate.finalO2, candidate.finalHe) : targetMoles;
+    const initialScale = addedMoles > MOLE_TOLERANCE ? Math.max(0, (plannedMoles - startMoles) / addedMoles) : 1;
 
     const simulateAt = (scale: number) => {
       const ordered = orderBlendStepsForFill(
@@ -694,27 +710,6 @@ export const calculateRealGasMultiGasBlend = (
     };
   };
 
-  // How far any mix in the closest-blend window (+/-1 O2, +/-5 He) can be from the target in moles at
-  // the target pressure: from the window's corners, with margin, since moles change smoothly with mix.
-  const closestWindowMolesSlack = (() => {
-    let worst = 0;
-    for (const o2 of [input.targetO2 - MULTI_GAS_O2_TOLERANCE, input.targetO2 + MULTI_GAS_O2_TOLERANCE]) {
-      for (const he of [input.targetHe - MULTI_GAS_HE_TOLERANCE, input.targetHe + MULTI_GAS_HE_TOLERANCE]) {
-        const cornerO2 = Math.min(100, Math.max(0, o2));
-        const cornerHe = Math.min(100 - cornerO2, Math.max(0, he));
-        const density = gergDensityFromPressure(
-          settledTemperatureK,
-          gaugePsiToAbsoluteKpa(targetPressurePsi),
-          gasFractionsFromPercents(cornerO2, cornerHe)
-        );
-        if (density.success) {
-          worst = Math.max(worst, Math.abs(density.densityMolPerLiter * waterVolumeLiters - targetMoles));
-        }
-      }
-    }
-    return worst * CLOSEST_WINDOW_SLACK_MARGIN;
-  })();
-
   const realize = (
     candidates: BlendAlternative[],
     start: StartState,
@@ -732,14 +727,12 @@ export const calculateRealGasMultiGasBlend = (
       // Compare the amounts after the same scaling the realization applies: residual-adjusted options
       // are planned for an empty cylinder and shrink by the moles already in it.
       const addedAmount = candidate.steps.reduce((sum, step) => sum + Math.max(0, step.amount), 0);
-      const neededMoles = targetMoles - totalMoles(start.components);
+      const plannedMoles = options.sizeForReachedMix ? targetMolesFor(candidate.finalO2, candidate.finalHe) : targetMoles;
+      const neededMoles = plannedMoles - totalMoles(start.components);
       const amountScale = addedAmount > 0 ? Math.max(0, neededMoles * psiPerMole / addedAmount) : 1;
-      const windowFactor = options.closestWindow
-        ? (neededMoles > 0 ? Math.max(0, 1 - closestWindowMolesSlack / neededMoles) : 0)
-        : 1;
       const capMiss = candidate.steps.some((step) => {
         const cap = sourceById.get(step.gas.id)?.maxPressurePsi;
-        return cap !== undefined && step.amount * amountScale * windowFactor > cap * CAP_PREFILTER_FACTOR + CAP_TOLERANCE_PSI;
+        return cap !== undefined && step.amount * amountScale > cap * CAP_PREFILTER_FACTOR + CAP_TOLERANCE_PSI;
       });
       if (options.enforceCaps && capMiss) {
         outcome.capRejected += 1;
@@ -777,7 +770,7 @@ export const calculateRealGasMultiGasBlend = (
   const closestOptions: RealizeOptions = {
     enforceCaps: true,
     mixTolerance: { o2: MULTI_GAS_O2_TOLERANCE + PERCENT_TOLERANCE, he: MULTI_GAS_HE_TOLERANCE + PERCENT_TOLERANCE },
-    closestWindow: true
+    sizeForReachedMix: true
   };
 
   let capRejected = 0;
@@ -1183,7 +1176,8 @@ export const calculateRealGasMultiGasBlend = (
         input.startHe,
         uncappedSources,
         costContext,
-        Number.POSITIVE_INFINITY
+        Number.POSITIVE_INFINITY,
+        (o2, he) => targetMolesFor(o2, he) * psiPerMole
       ),
       start,
       maxAlternatives,
