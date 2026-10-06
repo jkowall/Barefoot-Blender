@@ -132,6 +132,9 @@ const CAPPED_BLEED_SCAN_POINTS = 64;
 const BLEED_PRESSURE_TOLERANCE_PSI = 0.01;
 // Margin on the closest-blend window's corner mole spread, which bounds any mix inside the window.
 const CLOSEST_WINDOW_SLACK_MARGIN = 1.5;
+// Gap left on each side of a cut in a bleed range (kept amount, ideal-equivalent PSI), so each piece
+// keeps one set of stages.
+const RANGE_CUT_OFFSET = BLEED_PRESSURE_TOLERANCE_PSI / 2;
 // Points tried inward from an unevaluable end of a bleed range before giving up on it.
 const ENDPOINT_SEARCH_POINTS = 16;
 const PERCENT_TOLERANCE = 1e-6;
@@ -974,9 +977,9 @@ export const calculateRealGasMultiGasBlend = (
       .sort((a, b) => b.maxRetained - a.maxRetained);
     const bestRetained = (): number => (bleedTo ? totalMoles(bleedTo.components) * psiPerMole : -1);
     for (const line of lines) {
-      let low = Math.max(line.minRetained, residualAmount);
-      let high = Math.min(line.maxRetained, startAmount - BLEED_PRESSURE_TOLERANCE_PSI);
-      if (low > high || high <= bestRetained()) {
+      const lineLow = Math.max(line.minRetained, residualAmount);
+      const lineHigh = Math.min(line.maxRetained, startAmount - BLEED_PRESSURE_TOLERANCE_PSI);
+      if (lineLow > lineHigh || lineHigh <= bestRetained()) {
         continue;
       }
       const limits = line.sources.flatMap((gas) => {
@@ -1044,53 +1047,80 @@ export const calculateRealGasMultiGasBlend = (
         return null;
       };
 
-      const top = evaluableFrom(high, low);
-      if (!top) {
-        continue;
-      }
-      const atHigh = top.rises;
-      high = top.retained;
-      if (!limits.some((limit) => exceeds(atHigh, limit))) {
-        if (high > bestRetained()) {
-          tryDrainTo(high);
+      // The highest kept amount in [low, high] that meets every limit, or null.
+      const searchRange = (rangeLow: number, rangeHigh: number): number | null => {
+        let low = rangeLow;
+        let high = rangeHigh;
+        const top = evaluableFrom(high, low);
+        if (!top) {
+          return null;
         }
-        continue;
-      }
-      const bottom = high > low ? evaluableFrom(low, high) : null;
-      if (!bottom) {
-        continue;
-      }
-      const atLow = bottom.rises;
-      low = bottom.retained;
-      const upperLimits = limits.filter(
-        (limit) => (atHigh.get(limit.id) ?? 0) > (atLow.get(limit.id) ?? 0) + RISE_DIRECTION_TOLERANCE_PSI
-      );
-      const otherLimits = limits.filter((limit) => !upperLimits.includes(limit));
-      const meetsUpperLimits = (rises: Map<string, number>): boolean =>
-        upperLimits.every((limit) => !exceeds(rises, limit));
-      if (!meetsUpperLimits(atLow)) {
-        continue;
-      }
-      let feasibleRetained = low;
-      let feasibleRises = atLow;
-      if (meetsUpperLimits(atHigh)) {
-        feasibleRetained = high;
-        feasibleRises = atHigh;
-      } else {
-        let infeasibleRetained = high;
-        while (infeasibleRetained - feasibleRetained > BLEED_PRESSURE_TOLERANCE_PSI) {
-          const mid = (feasibleRetained + infeasibleRetained) / 2;
-          const atMid = risesAt(mid);
-          if (atMid && meetsUpperLimits(atMid)) {
-            feasibleRetained = mid;
-            feasibleRises = atMid;
-          } else {
-            infeasibleRetained = mid;
+        const atHigh = top.rises;
+        high = top.retained;
+        if (!limits.some((limit) => exceeds(atHigh, limit))) {
+          return high;
+        }
+        const bottom = high > low ? evaluableFrom(low, high) : null;
+        if (!bottom) {
+          return null;
+        }
+        const atLow = bottom.rises;
+        low = bottom.retained;
+        const upperLimits = limits.filter(
+          (limit) => (atHigh.get(limit.id) ?? 0) > (atLow.get(limit.id) ?? 0) + RISE_DIRECTION_TOLERANCE_PSI
+        );
+        const otherLimits = limits.filter((limit) => !upperLimits.includes(limit));
+        const meetsUpperLimits = (rises: Map<string, number>): boolean =>
+          upperLimits.every((limit) => !exceeds(rises, limit));
+        if (!meetsUpperLimits(atLow)) {
+          return null;
+        }
+        let feasibleRetained = low;
+        let feasibleRises = atLow;
+        if (meetsUpperLimits(atHigh)) {
+          feasibleRetained = high;
+          feasibleRises = atHigh;
+        } else {
+          let infeasibleRetained = high;
+          while (infeasibleRetained - feasibleRetained > BLEED_PRESSURE_TOLERANCE_PSI) {
+            const mid = (feasibleRetained + infeasibleRetained) / 2;
+            const atMid = risesAt(mid);
+            if (atMid && meetsUpperLimits(atMid)) {
+              feasibleRetained = mid;
+              feasibleRises = atMid;
+            } else {
+              infeasibleRetained = mid;
+            }
           }
         }
-      }
-      if (!otherLimits.some((limit) => exceeds(feasibleRises, limit)) && feasibleRetained > bestRetained()) {
-        tryDrainTo(feasibleRetained);
+        return otherLimits.some((limit) => exceeds(feasibleRises, limit)) ? null : feasibleRetained;
+      };
+
+      // Where a source's amount crosses the smallest meterable addition its stage appears or drops
+      // out, and the next stage's inherited temperature changes with it, so rises can jump there.
+      // Split the range at those kept amounts and search the pieces from the top down; within a piece
+      // the same stages run at the same temperatures.
+      const cuts = line.offsets
+        .flatMap((offset, index) => {
+          const slope = line.slopes[index];
+          if (Math.abs(slope) <= LINEAR_SINGULAR_TOLERANCE) {
+            return [];
+          }
+          const retained = (offset - MIN_ADDITION_PSI) / slope;
+          return retained > lineLow && retained < lineHigh ? [retained] : [];
+        })
+        .sort((a, b) => b - a);
+      const edges = [lineHigh, ...cuts, lineLow];
+      for (let piece = 0; piece + 1 < edges.length; piece += 1) {
+        const pieceHigh = piece === 0 ? edges[0] : edges[piece] - RANGE_CUT_OFFSET;
+        const pieceLow = piece + 2 === edges.length ? edges[piece + 1] : edges[piece + 1] + RANGE_CUT_OFFSET;
+        if (pieceLow > pieceHigh || pieceHigh <= bestRetained()) {
+          continue;
+        }
+        const found = searchRange(pieceLow, pieceHigh);
+        if (found !== null && found > bestRetained()) {
+          tryDrainTo(found);
+        }
       }
     }
 

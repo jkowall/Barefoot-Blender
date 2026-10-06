@@ -1242,6 +1242,25 @@ describe("calculateRealGasMultiGasBlend ninth review cases", () => {
     expect(plan.finalHe).toBeCloseTo(75, 6);
   });
 
+  test("splits a bleed range where a tiny stage drops out and the next inherits another temperature", () => {
+    // Near the top of the range Oxygen's amount is too small to meter, so Air inherits 70 F instead of
+    // Oxygen's 0 F and rises about 846 psi; just below, the 0 F Oxygen stage keeps Air under 697.37.
+    const input = multiGasInput({
+      startPressure: 2000,
+      startO2: 40,
+      startHe: 0,
+      sources: [helium, { ...oxygen, stageTemperatureF: 0, maxPressurePsi: 1 }, { ...air, maxPressurePsi: 697.37 }]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+    expect(result.match).toBe("bleed");
+    expect(result.bleedToPsi ?? 0).toBeGreaterThan(1000);
+    expect(result.bleedToPsi ?? 0).toBeLessThan(1030);
+    const plan = result.alternatives[0];
+    expect(plan.steps.find((step) => step.sourceId === oxygen.id)?.pressureChangePsi ?? 0).toBeLessThanOrEqual(1.01);
+    expect(plan.steps.find((step) => step.sourceId === air.id)?.pressureChangePsi ?? 0).toBeLessThanOrEqual(697.38);
+    expectExactReplay(input, plan);
+  });
+
   test("finds a bleed inside a range whose top end breaks the envelope", () => {
     // At the top of the range Oxygen's amount reaches zero, so Air inherits Helium's 200 F and passes
     // 400 bar; a little lower, Air inherits Oxygen's 70 F and the fill works.
