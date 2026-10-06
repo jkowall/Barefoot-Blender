@@ -1,13 +1,26 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import packageJson from "./package.json";
+
+// The dev server injects inline scripts (React Refresh preamble) and <style> tags for HMR,
+// which the production CSP in index.html blocks. Relax it for `vite` dev only; builds keep it strict.
+const relaxCspForDevServer = (): Plugin => ({
+  name: "relax-csp-for-dev-server",
+  apply: "serve",
+  transformIndexHtml: (html) =>
+    html
+      .replace("script-src 'self';", "script-src 'self' 'unsafe-inline';")
+      .replace("style-src 'self';", "style-src 'self' 'unsafe-inline';")
+      .replace("connect-src 'self';", "connect-src 'self' ws: wss:;")
+});
 
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version)
   },
   plugins: [
+    relaxCspForDevServer(),
     react(),
     VitePWA({
       registerType: "autoUpdate",
