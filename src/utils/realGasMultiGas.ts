@@ -118,6 +118,8 @@ export const BANK_LIMITS_EXCLUDE_ALL_WARNING =
   "Bank limits exclude every listed option; a fill that takes partial amounts from more sources may still exist.";
 export const BLEED_REQUIRED_WARNING = "Bleed-down required to achieve target mix.";
 export const START_MATCHES_TARGET_ERROR = "Start tank already matches the target mix and pressure.";
+export const TARGET_BELOW_RESIDUAL_ERROR =
+  "The target needs less gas than an empty cylinder holds at Start Temp (1 atm of the start mix). Raise the target pressure or check the temperatures.";
 
 const CAP_TOLERANCE_PSI = 0.01;
 const BLEED_SCAN_POINTS = 32;
@@ -132,6 +134,8 @@ const EXACT_MIX_TOLERANCE_PERCENT = 0.01;
 const BLEED_SEARCH_MIX_TOLERANCE_PERCENT = 0.001;
 // Additions smaller than this (ideal-equivalent PSI) cannot be metered and are dropped.
 const MIN_ADDITION_PSI = 0.05;
+// Every plan must settle at the target pressure within this tolerance at Settled Temp.
+const SETTLED_PRESSURE_TOLERANCE_PSI = 0.05;
 // A source's real-gas rise stays well within twice its ideal-equivalent amount across the supported
 // envelope (Z and stage temperature each move it by tens of percent), so options above twice a bank
 // limit are rejected before the GERG-2008 pass.
@@ -197,6 +201,89 @@ const failure = (
 const isValidTemperatureF = (temperatureF: number): boolean => {
   const kelvin = fahrenheitToKelvin(temperatureF);
   return Number.isFinite(kelvin) && kelvin >= GERG_MIN_TEMPERATURE_K;
+};
+
+const LINEAR_SINGULAR_TOLERANCE = 1e-9;
+// Allowed mismatch in the equation a 1-source solve does not use, as a fraction of the target amount.
+const LINEAR_CONSISTENCY_TOLERANCE = 1e-5;
+
+/**
+ * Start amounts to keep (in the same units as targetAmount) at which the start mix plus one or two
+ * sources makes the target exactly. With one or two sources such a fill after a bleed exists at a
+ * single drain-to point, which a pressure scan can step over, so these points are solved directly.
+ * Mixes are percentages. Candidates are not range-checked against the cylinder contents.
+ */
+export const isolatedBleedStartAmounts = (
+  targetAmount: number,
+  target: { o2: number; he: number },
+  start: { o2: number; he: number },
+  sources: GasSelection[]
+): number[] => {
+  const t = { o2: target.o2 / 100, he: target.he / 100 };
+  const s = { o2: start.o2 / 100, he: start.he / 100 };
+  const amounts: number[] = [];
+  const accept = (retained: number, additions: number[]): void => {
+    if (retained >= -MOLE_TOLERANCE && additions.every((amount) => amount >= -MOLE_TOLERANCE)) {
+      amounts.push(Math.max(0, retained));
+    }
+  };
+
+  for (const source of sources) {
+    const g = { o2: source.o2 / 100, he: source.he / 100 };
+    // retained + added = target; solve with the O2 balance, or the He balance when O2 cannot separate
+    // the start mix from the source, then check the other balance.
+    const useO2 = Math.abs(s.o2 - g.o2) > LINEAR_SINGULAR_TOLERANCE;
+    const denominator = useO2 ? s.o2 - g.o2 : s.he - g.he;
+    if (Math.abs(denominator) <= LINEAR_SINGULAR_TOLERANCE) {
+      continue;
+    }
+    const retained = targetAmount * (useO2 ? t.o2 - g.o2 : t.he - g.he) / denominator;
+    const added = targetAmount - retained;
+    const otherResidual = useO2
+      ? retained * s.he + added * g.he - targetAmount * t.he
+      : retained * s.o2 + added * g.o2 - targetAmount * t.o2;
+    if (Math.abs(otherResidual) <= LINEAR_CONSISTENCY_TOLERANCE * targetAmount) {
+      accept(retained, [added]);
+    }
+  }
+
+  for (let i = 0; i < sources.length; i += 1) {
+    for (let j = i + 1; j < sources.length; j += 1) {
+      const a = { o2: sources[i].o2 / 100, he: sources[i].he / 100 };
+      const b = { o2: sources[j].o2 / 100, he: sources[j].he / 100 };
+      // [1 1 1; s.o2 a.o2 b.o2; s.he a.he b.he] [retained; x1; x2] = target * [1; t.o2; t.he]
+      const det = (a.o2 * b.he - b.o2 * a.he) - (s.o2 * b.he - b.o2 * s.he) + (s.o2 * a.he - a.o2 * s.he);
+      if (Math.abs(det) <= LINEAR_SINGULAR_TOLERANCE) {
+        continue;
+      }
+      const r1 = targetAmount;
+      const r2 = targetAmount * t.o2;
+      const r3 = targetAmount * t.he;
+      const retained = (r1 * (a.o2 * b.he - b.o2 * a.he) - (r2 * b.he - b.o2 * r3) + (r2 * a.he - a.o2 * r3)) / det;
+      const x1 = ((s.o2 * r3 - r2 * s.he) - r1 * (s.o2 * b.he - b.o2 * s.he) + (r2 * b.he - b.o2 * r3)) / det;
+      const x2 = ((a.o2 * r3 - r2 * a.he) - (s.o2 * r3 - r2 * s.he) + r1 * (s.o2 * a.he - a.o2 * s.he)) / det;
+      accept(retained, [x1, x2]);
+    }
+  }
+
+  return amounts;
+};
+
+// True when the added gases alone (ignoring the cylinder's start contents) make the target mix.
+const additionsMakeTarget = (
+  steps: { gas: GasSelection; amount: number }[],
+  target: { targetO2: number; targetHe: number }
+): boolean => {
+  const total = steps.reduce((sum, step) => sum + step.amount, 0);
+  if (total <= 0) {
+    return false;
+  }
+  const o2 = steps.reduce((sum, step) => sum + step.amount * step.gas.o2, 0) / total;
+  const he = steps.reduce((sum, step) => sum + step.amount * step.gas.he, 0) / total;
+  return (
+    Math.abs(o2 - target.targetO2) <= EXACT_MIX_TOLERANCE_PERCENT &&
+    Math.abs(he - target.targetHe) <= EXACT_MIX_TOLERANCE_PERCENT
+  );
 };
 
 /**
@@ -297,6 +384,13 @@ export const calculateRealGasMultiGasBlend = (
   }
   const fullStartMoles = totalMoles(fullStart.components);
 
+  // The 1 atm left in a cylinder at 0 gauge cannot be bled off, so a target holding fewer moles than
+  // that residual cannot be reached by any plan.
+  const residualStart = startStateAt(0);
+  if ("components" in residualStart && targetMoles < totalMoles(residualStart.components) - MOLE_TOLERANCE) {
+    return failure("input", waterVolumeLiters, warnings, [TARGET_BELOW_RESIDUAL_ERROR]);
+  }
+
   const sameMix =
     Math.abs(input.startO2 - input.targetO2) <= PERCENT_TOLERANCE &&
     Math.abs(input.startHe - input.targetHe) <= PERCENT_TOLERANCE;
@@ -339,7 +433,7 @@ export const calculateRealGasMultiGasBlend = (
     options: RealizeOptions
   ):
     | { alternative: RealGasMultiGasAlternative; warnings: string[] }
-    | { rejected: "cap" | "mix" }
+    | { rejected: "cap" | "mix" | "pressure" }
     | { rejected: "gerg"; errors: string[] } => {
     const additions = candidate.steps
       .filter((step) => step.amount >= MIN_ADDITION_PSI)
@@ -418,6 +512,12 @@ export const calculateRealGasMultiGasBlend = (
       return { rejected: "mix" };
     }
     const settled = stateFromComponents(settledTemperatureK, simulation.finalComponents, waterVolumeLiters);
+    if (!settled.success) {
+      return { rejected: "gerg", errors: settled.errors };
+    }
+    if (Math.abs(settled.pressurePsi - targetPressurePsi) > SETTLED_PRESSURE_TOLERANCE_PSI) {
+      return { rejected: "pressure" };
+    }
     const steps: RealGasMultiGasStep[] = simulation.steps.map((stage, index) => ({
       kind: "add",
       sourceId: stage.key,
@@ -450,7 +550,7 @@ export const calculateRealGasMultiGasBlend = (
         startHotPressurePsi: simulation.startHotPressurePsi,
         startZ: simulation.startZ,
         finalHotPressurePsi: simulation.finalHotPressurePsi,
-        settledPressurePsi: settled.success ? settled.pressurePsi : targetPressurePsi,
+        settledPressurePsi: settled.pressurePsi,
         estimatedCost: costBreakdown.reduce((sum, line) => sum + line.cost, 0),
         costBreakdown,
         sourceIds: steps.map((step) => step.sourceId ?? "").sort(),
@@ -605,6 +705,34 @@ export const calculateRealGasMultiGasBlend = (
         : highestFeasibleBelow(uncappedTop.pressurePsi, true, CAPPED_BLEED_SCAN_POINTS);
     }
 
+    // One- and two-source fills after a bleed work only at a single drain-to pressure, so solve those
+    // points directly and keep whichever verified point drains least.
+    const residualMoles = "components" in residualStart ? totalMoles(residualStart.components) : 0;
+    const isolatedAmounts = isolatedBleedStartAmounts(
+      targetMoles * psiPerMole,
+      { o2: input.targetO2, he: input.targetHe },
+      { o2: input.startO2, he: input.startHe },
+      uncappedSources
+    );
+    for (const retainedAmount of isolatedAmounts) {
+      const retainedMoles = retainedAmount / psiPerMole;
+      if (retainedMoles < residualMoles - MOLE_TOLERANCE || retainedMoles >= fullStartMoles - MOLE_TOLERANCE) {
+        continue;
+      }
+      const drained = stateFromComponents(
+        startTemperatureK,
+        componentMolesFromTotal(retainedMoles, startFractions),
+        waterVolumeLiters
+      );
+      if (!drained.success || drained.pressurePsi <= (bleedTo?.pressurePsi ?? -1)) {
+        continue;
+      }
+      const verified = feasibleAt(drained.pressurePsi, true);
+      if (verified) {
+        bleedTo = verified;
+      }
+    }
+
     if (bleedTo) {
       const bleedOutcome = realize(enumerate(totalMoles(bleedTo.components)), bleedTo, maxAlternatives, exactOptions);
       const bled = track(bleedOutcome);
@@ -632,10 +760,12 @@ export const calculateRealGasMultiGasBlend = (
   };
 
   // 3. Residual-adjusted plan. The 1 atm left in a cylinder at 0 gauge cannot be bled off, so plan the
-  // gases as if the cylinder were empty, scaled so the settled pressure still matches the target.
-  const residualStart = startStateAt(0);
+  // gases as if the cylinder were empty, scaled so the settled pressure still matches the target. Only
+  // options whose gases alone make the target qualify: the ideal optimizer also accepts a single source
+  // within 0.5 points, and purging would not make such a source reach the target either.
   if ("components" in residualStart) {
-    const residualOutcome = realize(enumerate(0), residualStart, maxAlternatives, approximateOptions);
+    const vacuumCandidates = enumerate(0).filter((candidate) => additionsMakeTarget(candidate.steps, input));
+    const residualOutcome = realize(vacuumCandidates, residualStart, maxAlternatives, approximateOptions);
     const residual = track(residualOutcome);
     if (residual.length > 0) {
       const startWasAboveZero = startPressurePsi > MOLE_TOLERANCE;
@@ -649,19 +779,26 @@ export const calculateRealGasMultiGasBlend = (
     }
   }
 
-  // 4. Closest blend within +/-1% O2 and +/-5% He, from the current start.
-  const closestCandidates = findSimilarNGasAlternatives(
-    targetMoles * psiPerMole,
-    input.targetO2,
-    input.targetHe,
-    fullStartMoles * psiPerMole,
-    input.startO2,
-    input.startHe,
-    uncappedSources,
-    costContext,
-    Number.POSITIVE_INFINITY
-  );
-  const closestOutcome = realize(closestCandidates, fullStart, maxAlternatives, approximateOptions);
+  // 4. Closest blend within +/-1% O2 and +/-5% He, from the current start, or else after draining to
+  // 0 gauge when the start contents keep every nearby mix out of reach.
+  const closestFrom = (start: StartState): RealizeOutcome =>
+    realize(
+      findSimilarNGasAlternatives(
+        targetMoles * psiPerMole,
+        input.targetO2,
+        input.targetHe,
+        totalMoles(start.components) * psiPerMole,
+        input.startO2,
+        input.startHe,
+        uncappedSources,
+        costContext,
+        Number.POSITIVE_INFINITY
+      ),
+      start,
+      maxAlternatives,
+      approximateOptions
+    );
+  const closestOutcome = closestFrom(fullStart);
   const closest = track(closestOutcome);
   if (closest.length > 0) {
     return success(
@@ -669,6 +806,18 @@ export const calculateRealGasMultiGasBlend = (
       closest.map((alternative) => markReachedMix(alternative, false)),
       [MULTI_GAS_SIMILAR_BLEND_WARNING, ...closestOutcome.warnings]
     );
+  }
+  if (startPressurePsi > MOLE_TOLERANCE && "components" in residualStart) {
+    const drainedOutcome = closestFrom(residualStart);
+    const drained = track(drainedOutcome);
+    if (drained.length > 0) {
+      return success(
+        "closest",
+        withBleed(drained.map((alternative) => markReachedMix(alternative, false)), residualStart),
+        [BLEED_REQUIRED_WARNING, MULTI_GAS_SIMILAR_BLEND_WARNING, ...drainedOutcome.warnings],
+        0
+      );
+    }
   }
 
   if (gergErrors.length > 0 && capRejected === 0) {

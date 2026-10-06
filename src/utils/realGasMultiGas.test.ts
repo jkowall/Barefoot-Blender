@@ -17,7 +17,9 @@ import {
   BANK_LIMITS_EXCLUDE_ALL_WARNING,
   BLEED_REQUIRED_WARNING,
   START_MATCHES_TARGET_ERROR,
+  TARGET_BELOW_RESIDUAL_ERROR,
   calculateRealGasMultiGasBlend,
+  isolatedBleedStartAmounts,
   resolveMultiGasStageTemperaturesF,
   type RealGasMultiGasAlternative,
   type RealGasMultiGasInput,
@@ -552,6 +554,110 @@ describe("calculateRealGasMultiGasBlend", () => {
       expect(result.failure).toBe("gerg");
       expect(result.errors).toEqual(["GERG-2008 correction is limited to pressures at or below 400 bar absolute."]);
     });
+  });
+});
+
+describe("calculateRealGasMultiGasBlend edge cases", () => {
+  const ean36: RealGasMultiGasSource = { id: "bank-36-0", name: "EAN36", o2: 36, he: 0 };
+  const nearEan32: RealGasMultiGasSource = { id: "custom-0", name: "Custom (31.6 O2 / 0.0 He)", o2: 31.6, he: 0 };
+
+  test("rejects a target that holds less gas than the 1 atm left in an empty cylinder", () => {
+    // 1 psi of air at 200 F is fewer moles than 0 psi of air at 70 F.
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({ targetPressure: 1, targetO2: 21, targetHe: 0, settledTemperatureF: 200, sources: [air] }),
+      prices
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.failure).toBe("input");
+    expect(result.errors).toEqual([TARGET_BELOW_RESIDUAL_ERROR]);
+  });
+
+  test.each([
+    ["exact", multiGasInput()],
+    ["bleed", multiGasInput({ startPressure: 2000, startO2: 12, startHe: 76 })],
+    ["residual", multiGasInput({ targetO2: 50, targetHe: 50, sources: [helium, oxygen] })],
+    [
+      "closest",
+      multiGasInput({
+        targetO2: 25,
+        targetHe: 25,
+        sources: [ean36, { id: "custom-1", name: "10/50", o2: 10, he: 50 }]
+      })
+    ],
+    ["hot settle", multiGasInput({ settledTemperatureF: 110, sources: [{ ...helium, stageTemperatureF: 120 }, oxygen, air] })]
+  ])("every %s option settles on the target pressure", (_name, input) => {
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+    expect(result.alternatives.length).toBeGreaterThan(0);
+    for (const alternative of result.alternatives) {
+      expect(Math.abs(alternative.settledPressurePsi - input.targetPressure)).toBeLessThanOrEqual(0.05);
+    }
+  });
+
+  test("solves the retained start amount for one- and two-source bleeds", () => {
+    // Air plus EAN36 makes EAN32 only when 80/3 % of the target is kept from the air start.
+    expect(isolatedBleedStartAmounts(3000, { o2: 32, he: 0 }, { o2: 21, he: 0 }, [ean36])).toEqual([
+      expect.closeTo(800, 9)
+    ]);
+    // A mix that does not lie between the start and the source has no single-source answer.
+    expect(isolatedBleedStartAmounts(3000, { o2: 32, he: 10 }, { o2: 21, he: 0 }, [ean36])).toEqual([]);
+  });
+
+  test("finds an air-to-EAN32 bleed with a single EAN36 bank", () => {
+    // The only exact fill drains to one pressure between the bleed scan's sample points.
+    const input = multiGasInput({ startPressure: 2000, targetO2: 32, targetHe: 0, sources: [ean36] });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("bleed");
+    expect(result.bleedToPsi ?? 0).toBeCloseTo(763.56, 1);
+    expect(result.alternatives[0].steps.map((step) => step.gasName)).toEqual(["Bleed Tank", "EAN36"]);
+    expectExactReplay(input, result.alternatives[0]);
+  });
+
+  test("finds an isolated two-source bleed from an EAN40 start", () => {
+    const input = multiGasInput({
+      startPressure: 1120.923,
+      startO2: 40,
+      startHe: 0,
+      sources: [air, helium]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("bleed");
+    expect(result.bleedToPsi ?? 0).toBeCloseTo(1019.02, 1);
+    expectExactReplay(input, result.alternatives[0]);
+  });
+
+  test("shows a near-match single source as the closest blend, not a residual plan", () => {
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({ targetO2: 32, targetHe: 0, sources: [nearEan32] }),
+      prices
+    );
+
+    expect(result.match).toBe("closest");
+    expect(result.warnings).toContain(MULTI_GAS_SIMILAR_BLEND_WARNING);
+    const plan = result.alternatives[0];
+    expect(plan.residualAdjustedMix).toBeUndefined();
+    expect(plan.warnings.some((warning) => warning.startsWith("An empty cylinder"))).toBe(false);
+    expect(plan.steps.some((step) => step.kind === "bleed")).toBe(false);
+  });
+
+  test("drains to 0 for a closest blend only when no nearby mix is reachable from the start", () => {
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({ startPressure: 500, targetO2: 32, targetHe: 0, sources: [nearEan32] }),
+      prices
+    );
+
+    expect(result.match).toBe("closest");
+    expect(result.bleedToPsi).toBe(0);
+    expect(result.warnings).toEqual(expect.arrayContaining([BLEED_REQUIRED_WARNING, MULTI_GAS_SIMILAR_BLEND_WARNING]));
+    const plan = result.alternatives[0];
+    expect(plan.steps[0]).toMatchObject({ kind: "bleed", stopPressurePsi: 0 });
+    expect(plan.residualAdjustedMix).toBeUndefined();
+    expect(plan.finalO2).toBeCloseTo(31.55, 1);
   });
 });
 
