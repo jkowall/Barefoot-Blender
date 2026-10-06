@@ -16,6 +16,7 @@ import {
 import {
   BANK_LIMITS_EXCLUDE_ALL_WARNING,
   BLEED_REQUIRED_WARNING,
+  BANK_LIMITS_BLOCK_EXACT_WARNING,
   START_MATCHES_TARGET_ERROR,
   TARGET_BELOW_RESIDUAL_ERROR,
   calculateRealGasMultiGasBlend,
@@ -529,14 +530,23 @@ describe("calculateRealGasMultiGasBlend", () => {
       [{ targetPressure: 0 }, "Target pressure must be greater than zero."],
       [{ startPressure: -1 }, "Start pressure cannot be negative."],
       [{ targetO2: 70, targetHe: 40 }, "O2 + He must be 100% or less."],
-      [{ sources: [] }, "No gas sources available."],
-      [{ tankSizeCuFt: 0 }, "Tank size and rated pressure are required for GERG-2008 correction."],
-      [{ startTemperatureF: -400 }, "GERG-2008 correction is limited to temperatures at or above 250 K."],
-      [{ sources: [{ ...helium, stageTemperatureF: -20 }, oxygen, air] }, "GERG-2008 correction is limited to temperatures at or above 250 K."]
+      [{ sources: [] }, "No gas sources available."]
     ])("rejects %o", (overrides, error) => {
       const result = calculateRealGasMultiGasBlend(psi, multiGasInput(overrides), prices);
       expect(result.success).toBe(false);
       expect(result.failure).toBe("input");
+      expect(result.errors).toEqual([error]);
+    });
+
+    // GERG-2008 cannot evaluate these, but the ideal plan still applies, so they are "gerg" failures.
+    test.each([
+      [{ tankSizeCuFt: 0 }, "Tank size and rated pressure are required for GERG-2008 correction."],
+      [{ startTemperatureF: -400 }, "GERG-2008 correction is limited to temperatures at or above 250 K."],
+      [{ sources: [{ ...helium, stageTemperatureF: -20 }, oxygen, air] }, "GERG-2008 correction is limited to temperatures at or above 250 K."]
+    ])("cannot evaluate %o", (overrides, error) => {
+      const result = calculateRealGasMultiGasBlend(psi, multiGasInput(overrides), prices);
+      expect(result.success).toBe(false);
+      expect(result.failure).toBe("gerg");
       expect(result.errors).toEqual([error]);
     });
 
@@ -1101,6 +1111,103 @@ describe("calculateRealGasMultiGasBlend eighth review cases", () => {
     );
     expect(result.success).toBe(false);
     expect(result.failure).toBe("noBlend");
+  });
+});
+
+describe("calculateRealGasMultiGasBlend review follow-ups", () => {
+  test.each([
+    [3000, 3000.03],
+    [3000.01, 3000]
+  ])("treats a %f psi start for a %f psi target of the same mix as already matching", (startPressure, targetPressure) => {
+    // Neither the 0.03 psi top-up nor the 0.01 psi bleed can be metered.
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({ startPressure, targetPressure, startO2: 32, startHe: 0, targetO2: 32, targetHe: 0, sources: [oxygen, air] }),
+      prices
+    );
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual([START_MATCHES_TARGET_ERROR]);
+  });
+
+  test("names bank limits when they turn an exact plan into a closest blend", () => {
+    // Ideal math fits the 834 psi Air limit, but the real Air rise for 36/45 is about 902 psi.
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({
+        startO2: 32,
+        startHe: 35,
+        startTemperatureF: 90,
+        targetPressure: 3364,
+        targetO2: 36,
+        targetHe: 45,
+        sources: [
+          { ...helium, maxPressurePsi: 1927 },
+          oxygen,
+          { ...air, maxPressurePsi: 834 },
+          { id: "air-3", name: "Air", o2: 21, he: 0, maxPressurePsi: 247 }
+        ]
+      }),
+      prices
+    );
+    expect(result.match).toBe("closest");
+    expect(result.warnings).toContain(BANK_LIMITS_BLOCK_EXACT_WARNING);
+
+    const unlimited = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({ startO2: 32, startHe: 35, startTemperatureF: 90, targetPressure: 3364, targetO2: 36, targetHe: 45 }),
+      prices
+    );
+    expect(unlimited.match).toBe("exact");
+  });
+
+  test("flags a hypoxic target even when no plan is possible", () => {
+    const result = calculateRealGasMultiGasBlend(psi, multiGasInput({ targetO2: 10, targetHe: 70, sources: [air] }), prices);
+    expect(result.failure).toBe("noBlend");
+    expect(result.warnings).toContain("Hypoxic mix (<18% O2).");
+  });
+
+  test("flags the hypoxic mix a closest blend reaches on that option", () => {
+    // 15/55 from a 15/55 bank over air settles slightly away from 15/55.5, still hypoxic.
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({ targetO2: 15, targetHe: 57, sources: [{ id: "custom-0", name: "15/55", o2: 15, he: 55 }] }),
+      prices
+    );
+    expect(result.match).toBe("closest");
+    for (const alternative of result.alternatives) {
+      expect(alternative.warnings).toContain("Hypoxic mix (<18% O2).");
+    }
+  });
+
+  test("keeps the user's fill order after a bleed", () => {
+    const input = multiGasInput({
+      startPressure: 2000,
+      startO2: 12,
+      startHe: 76,
+      fillOrderMode: "manual",
+      sources: [air, oxygen, helium]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+    expect(result.match).toBe("bleed");
+    expect(result.alternatives[0].steps.map((step) => step.gasName)).toEqual(["Bleed Tank", "Air", "Oxygen"]);
+    expectExactReplay(input, result.alternatives[0]);
+  });
+
+  test("bleeds a fuller start down to a lower target of a different mix", () => {
+    const input = multiGasInput({
+      startPressure: 3000,
+      startO2: 21,
+      startHe: 0,
+      targetPressure: 2000,
+      targetO2: 32,
+      targetHe: 0,
+      sources: [oxygen]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+    expect(result.match).toBe("bleed");
+    expect(result.bleedToPsi ?? 0).toBeLessThan(2000);
+    expect(result.alternatives[0].finalO2).toBeCloseTo(32, 2);
+    expectExactReplay(input, result.alternatives[0]);
   });
 });
 

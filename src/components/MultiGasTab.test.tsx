@@ -4,15 +4,17 @@ import MultiGasTab, {
   MAX_GAS_SOURCES,
   StageTemperatureRecovery,
   clearStageTemperatures,
-  findMatchingIdealAlternative,
   hasStageTemperatureOverrides,
   realGasStepKey,
   showStageTemperatureRecovery,
-  stageTemperatureRecoveryRows,
+  stageTemperatureRecoveryRows
+} from "./MultiGasTab";
+import {
+  findMatchingIdealAlternative,
   moveGasSource,
   resolveMultiGasSources,
   selectMultiGasPlanModel
-} from "./MultiGasTab";
+} from "../utils/multiGasPlan";
 import type { GasSourceInput } from "../state/session";
 import { useSettingsStore } from "../state/settings";
 import { listTopOffOptions, solveNGasBlend, type GasSelection } from "../utils/calculations";
@@ -97,8 +99,13 @@ describe("selectMultiGasPlanModel", () => {
     )).toBe("idealFallback");
     expect(selectMultiGasPlanModel(
       "gerg2008",
-      failure({ failure: "input", errors: ["GERG-2008 correction is limited to temperatures at or above 250 K."] })
+      failure({ failure: "gerg", errors: ["GERG-2008 correction is limited to temperatures at or above 250 K."] })
     )).toBe("idealFallback");
+    // The failure kind decides, not the wording of the message.
+    expect(selectMultiGasPlanModel(
+      "gerg2008",
+      failure({ failure: "input", errors: ["GERG-2008 mentioned in an input error."] })
+    )).toBe("gerg2008");
     expect(selectMultiGasPlanModel(
       "gerg2008",
       failure({ failure: "input", errors: ["Target pressure must be greater than zero."] })
@@ -182,7 +189,7 @@ describe("stage temperature recovery", () => {
 
   test("keeps saved stage temperatures editable when an out-of-range one falls back to ideal", () => {
     const result = realGasResultFor(rows);
-    expect(result.failure).toBe("input");
+    expect(result.failure).toBe("gerg");
     expect(selectMultiGasPlanModel("gerg2008", result)).toBe("idealFallback");
     expect(showStageTemperatureRecovery("gerg2008", rows, false)).toBe(true);
   });
@@ -227,6 +234,12 @@ describe("stage temperature recovery", () => {
     expect(showStageTemperatureRecovery("gerg2008", rows, true, true)).toBe(true);
     expect(showStageTemperatureRecovery("gerg2008", clearStageTemperatures(rows), true, true)).toBe(true);
     expect(showStageTemperatureRecovery("ideal", rows, false, true)).toBe(false);
+  });
+
+  test("ignores stage temperatures saved on disabled rows", () => {
+    const disabled = rows.map((row) => ({ ...row, enabled: false }));
+    expect(showStageTemperatureRecovery("gerg2008", disabled, false)).toBe(false);
+    expect(stageTemperatureRecoveryRows(disabled, ["a", "b", "c"], null)).toEqual([]);
   });
 
   test("keeps a cleared row's input while it is being edited", () => {

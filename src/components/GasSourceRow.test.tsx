@@ -27,8 +27,11 @@ describe("GasSourceRow", () => {
 
   test("shows up and down buttons and disables them at the ends", () => {
     const markup = renderRow({ showMoveControls: true, canMoveUp: true, canMoveDown: false, onMove: vi.fn() });
-    expect(markup).toMatch(/<button[^>]*aria-label="Move Gas 2 up"(?![^>]*disabled)[^>]*>/);
-    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Move Gas 2 down"[^>]*>/);
+    // Check each button's whole opening tag: React may write disabled before or after aria-label.
+    const buttonTag = (label: string): string => /<button[^>]*>/g.exec(markup.slice(markup.lastIndexOf("<button", markup.indexOf(`aria-label="${label}"`))))?.[0] ?? "";
+    expect(buttonTag("Move Gas 2 up")).toContain('aria-label="Move Gas 2 up"');
+    expect(buttonTag("Move Gas 2 up")).not.toContain("disabled");
+    expect(buttonTag("Move Gas 2 down")).toContain("disabled");
   });
 
   test("uses a custom bank limit note", () => {

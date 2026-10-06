@@ -49,6 +49,7 @@ src/
 │   ├── gerg2008.ts      # GERG-2008 O2/N2/He equation of state
 │   ├── realGasBlend.ts  # GERG-2008 Standard Blend and Top-Off
 │   ├── realGasMultiGas.ts # GERG-2008 Multi-Gas planner
+│   ├── multiGasPlan.ts  # Multi-Gas source resolution, reorder, and plan-model selection
 │   ├── temperature.ts   # Temperature conversions and defaults
 │   ├── format.ts        # Number formatting helpers
 │   └── units.ts         # Unit conversion utilities

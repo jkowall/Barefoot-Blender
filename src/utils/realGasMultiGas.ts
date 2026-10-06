@@ -16,6 +16,7 @@ import {
   type OptimizerGasSource
 } from "./calculations";
 import {
+  GERG_MIN_TEMPERATURE_ERROR,
   GERG_MIN_TEMPERATURE_K,
   gasFractionsFromPercents,
   gaugePsiToAbsoluteKpa,
@@ -118,6 +119,8 @@ export type RealGasMultiGasResult = {
 
 export const BANK_LIMITS_EXCLUDE_ALL_WARNING =
   "Bank limits exclude every listed option; a fill that takes partial amounts from more sources may still exist.";
+export const BANK_LIMITS_BLOCK_EXACT_WARNING =
+  "Bank limits rule out the exact plans; more available pressure in a limited bank may allow the exact mix.";
 export const BLEED_REQUIRED_WARNING = "Bleed-down required to achieve target mix.";
 export const START_MATCHES_TARGET_ERROR = "Start tank already matches the target mix and pressure.";
 export const TARGET_BELOW_RESIDUAL_ERROR =
@@ -138,9 +141,10 @@ const BLEED_SEARCH_MIX_TOLERANCE_PERCENT = 0.001;
 const MIN_ADDITION_PSI = 0.05;
 // Every plan must settle at the target pressure within this tolerance at Settled Temp.
 const SETTLED_PRESSURE_TOLERANCE_PSI = 0.05;
-// A source's real-gas rise stays well within twice its ideal-equivalent amount across the supported
-// envelope (Z and stage temperature each move it by tens of percent), so options above twice a bank
-// limit are rejected before the GERG-2008 pass.
+// A source's real-gas rise is never below half its ideal-equivalent amount across the supported
+// envelope, so an option whose ideal-equivalent amount is above twice a bank limit cannot meet it and
+// is rejected before the GERG-2008 pass. (The rise can exceed twice the amount, for example helium
+// added last at a stage above 350 F, so this factor must not be lowered.)
 const CAP_PREFILTER_FACTOR = 2;
 // The closest-blend search can return thousands of near-duplicate options; at most this many are
 // evaluated with GERG-2008 per search so the tab stays responsive.
@@ -420,7 +424,8 @@ export const calculateRealGasMultiGasBlend = (
     return failure("input", waterVolumeLiters, warnings, ["No gas sources available."]);
   }
   if (waterVolumeLiters <= 0) {
-    return failure("input", waterVolumeLiters, warnings, ["Tank size and rated pressure are required for GERG-2008 correction."]);
+    // GERG-2008 cannot evaluate without a volume, but the ideal plan can still be shown.
+    return failure("gerg", waterVolumeLiters, warnings, ["Tank size and rated pressure are required for GERG-2008 correction."]);
   }
 
   const startFractions = gasFractionsFromPercents(input.startO2, input.startHe);
@@ -438,9 +443,7 @@ export const calculateRealGasMultiGasBlend = (
     ...input.sources.flatMap((source) => (source.stageTemperatureF === undefined ? [] : [source.stageTemperatureF]))
   ];
   if (temperaturesF.some((temperatureF) => !isValidTemperatureF(temperatureF))) {
-    return failure("input", waterVolumeLiters, warnings, [
-      "GERG-2008 correction is limited to temperatures at or above 250 K."
-    ]);
+    return failure("gerg", waterVolumeLiters, warnings, [GERG_MIN_TEMPERATURE_ERROR]);
   }
 
   const startTemperatureK = fahrenheitToKelvin(input.startTemperatureF);
@@ -491,7 +494,8 @@ export const calculateRealGasMultiGasBlend = (
   const sameMix =
     Math.abs(input.startO2 - input.targetO2) <= PERCENT_TOLERANCE &&
     Math.abs(input.startHe - input.targetHe) <= PERCENT_TOLERANCE;
-  if (sameMix && Math.abs(targetMoles - fullStartMoles) * psiPerMole <= 1e-6) {
+  // Within the smallest meterable addition, there is nothing to add or bleed.
+  if (sameMix && Math.abs(targetMoles - fullStartMoles) * psiPerMole <= MIN_ADDITION_PSI) {
     return failure("input", waterVolumeLiters, warnings, [START_MATCHES_TARGET_ERROR]);
   }
 
@@ -540,6 +544,10 @@ export const calculateRealGasMultiGasBlend = (
         moles: step.amount / psiPerMole,
         fractions: gasFractionsFromPercents(step.gas.o2, step.gas.he)
       }));
+    // An option whose every addition is too small to meter would be a plan with nothing to do.
+    if (additions.length === 0) {
+      return { rejected: "mix" };
+    }
     const addedMoles = additions.reduce((sum, addition) => sum + addition.moles, 0);
     const startMoles = totalMoles(start.components);
     const initialScale = addedMoles > MOLE_TOLERANCE ? Math.max(0, (targetMoles - startMoles) / addedMoles) : 1;
@@ -848,6 +856,10 @@ export const calculateRealGasMultiGasBlend = (
       return track(outcome).length > 0 ? state : null;
     };
     const highestFeasibleBelow = (topPsi: number, enforceCaps: boolean, points: number): StartState | null => {
+      // A top already at empty leaves only 0 to try; scanning would repeat that probe.
+      if (topPsi <= BLEED_PRESSURE_TOLERANCE_PSI) {
+        return feasibleAt(0, enforceCaps);
+      }
       let infeasiblePsi = topPsi;
       let found: StartState | null = null;
       for (let point = 1; point <= points && !found; point += 1) {
@@ -1083,13 +1095,15 @@ export const calculateRealGasMultiGasBlend = (
       maxAlternatives,
       closestOptions
     );
+  // Bank limits that rejected exact, bleed, or residual options are worth naming next to a closest blend.
+  const closestLimitWarnings = capRejected > 0 ? [BANK_LIMITS_BLOCK_EXACT_WARNING] : [];
   const closestOutcome = closestFrom(fullStart);
   const closest = track(closestOutcome);
   if (closest.length > 0) {
     return success(
       "closest",
       closest.map((alternative) => markReachedMix(alternative, false)),
-      [MULTI_GAS_SIMILAR_BLEND_WARNING, ...closestOutcome.warnings]
+      [MULTI_GAS_SIMILAR_BLEND_WARNING, ...closestLimitWarnings, ...closestOutcome.warnings]
     );
   }
   if (startPressurePsi > MOLE_TOLERANCE && "components" in residualStart) {
@@ -1099,7 +1113,7 @@ export const calculateRealGasMultiGasBlend = (
       return success(
         "closest",
         withBleed(drained.map((alternative) => markReachedMix(alternative, false)), residualStart),
-        [BLEED_REQUIRED_WARNING, MULTI_GAS_SIMILAR_BLEND_WARNING, ...drainedOutcome.warnings],
+        [BLEED_REQUIRED_WARNING, MULTI_GAS_SIMILAR_BLEND_WARNING, ...closestLimitWarnings, ...drainedOutcome.warnings],
         0
       );
     }
@@ -1107,6 +1121,8 @@ export const calculateRealGasMultiGasBlend = (
 
   // Envelope failures come only from candidates no bank limit ruled out, so GERG-2008 cannot say
   // the fill is impossible, even when other candidates hit their limits.
+  // Like ideal mode, flag a hypoxic or high-O2 target even when no plan is shown.
+  warnings.push(...targetSafetyWarnings);
   if (gergErrors.length > 0) {
     return failure("gerg", waterVolumeLiters, warnings, [...new Set(gergErrors)]);
   }

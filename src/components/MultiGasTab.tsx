@@ -1,5 +1,5 @@
 import { useMemo, useState, type KeyboardEvent } from "react";
-import type { GasModel, PressureUnit, SettingsSnapshot, TemperatureUnit } from "../state/settings";
+import type { GasModel, SettingsSnapshot, TemperatureUnit } from "../state/settings";
 import { useSessionStore, type MultiGasInput, type GasSourceInput } from "../state/session";
 import {
   applyFillOrderToAlternative,
@@ -9,7 +9,6 @@ import {
   type CostSettings,
   type MultiGasFillOrderMode,
   type OptimizerGasSource,
-  clampPercent,
   cuFtToLiters,
   pressureToCuFt
 } from "../utils/calculations";
@@ -24,8 +23,7 @@ import {
   calculateRealGasMultiGasBlend,
   type RealGasMultiGasAlternative,
   type RealGasMultiGasResult,
-  type RealGasMultiGasStep,
-  type RealGasMultiGasSource
+  type RealGasMultiGasStep
 } from "../utils/realGasMultiGas";
 import {
   DEFAULT_SETTLED_TEMPERATURE_F,
@@ -43,6 +41,12 @@ import { GasSourceRow } from "./GasSourceRow";
 import { SelectInput } from "./SelectInput";
 import TankContextFields from "./TankContextFields";
 import TrainingMathPanel from "./TrainingMathPanel";
+import {
+  findMatchingIdealAlternative,
+  moveGasSource,
+  resolveMultiGasSources,
+  selectMultiGasPlanModel
+} from "../utils/multiGasPlan";
 
 
 export const MAX_GAS_SOURCES = 6;
@@ -85,119 +89,6 @@ const realGasAlternativeKey = (alternative: RealGasMultiGasAlternative): string 
 const costLineKey = (line: { gas: string; amount: number; cost: number }): string =>
   `${line.gas}-${line.amount.toFixed(6)}-${line.cost.toFixed(2)}`;
 
-export type MultiGasSourceResolution = {
-  // Sources for the ideal optimizer, with the same ids and names it has always used.
-  idealSources: OptimizerGasSource[];
-  // The same sources with their GERG-2008 stage temperatures.
-  realGasSources: RealGasMultiGasSource[];
-  // Source id to its row in the session list, for writing stage temperatures back.
-  rowIndexById: Map<string, number>;
-};
-
-/**
- * Resolve the enabled source rows into solver gases. Ids are the option id plus the source's
- * position among enabled rows, so the same gas can be listed twice.
- */
-export const resolveMultiGasSources = (
-  gasSources: GasSourceInput[],
-  gasOptions: GasSelection[],
-  pressureUnit: PressureUnit
-): MultiGasSourceResolution => {
-  const idealSources: OptimizerGasSource[] = [];
-  const realGasSources: RealGasMultiGasSource[] = [];
-  const rowIndexById = new Map<string, number>();
-  let enabledIndex = 0;
-
-  gasSources.forEach((source, rowIndex) => {
-    if (!source.enabled) {
-      return;
-    }
-    const index = enabledIndex;
-    enabledIndex += 1;
-    const maxPressurePsi = source.maxPressure === undefined
-      ? undefined
-      : fromDisplayPressure(Math.max(0, source.maxPressure), pressureUnit);
-
-    let resolved: OptimizerGasSource | null = null;
-    if (source.id === "custom") {
-      const o2Val = clampPercent(source.customO2 ?? 32);
-      const heVal = Math.min(100 - o2Val, Math.max(0, source.customHe ?? 0));
-      resolved = {
-        id: `custom-${index}`,
-        name: `Custom (${o2Val.toFixed(1)} O2 / ${heVal.toFixed(1)} He)`,
-        o2: o2Val,
-        he: heVal,
-        maxPressurePsi
-      };
-    } else {
-      const option = gasOptions.find((entry) => entry.id === source.id);
-      if (option) {
-        resolved = { ...option, id: `${option.id}-${index}`, maxPressurePsi };
-      }
-    }
-    if (!resolved) {
-      return;
-    }
-    idealSources.push(resolved);
-    realGasSources.push({ ...resolved, stageTemperatureF: source.stageTemperatureF });
-    rowIndexById.set(resolved.id, rowIndex);
-  });
-
-  return { idealSources, realGasSources, rowIndexById };
-};
-
-/** Swap a source row with its neighbor, keeping the parallel React row keys in step. */
-export const moveGasSource = <T, K>(
-  sources: T[],
-  rowKeys: K[],
-  index: number,
-  direction: -1 | 1
-): { sources: T[]; rowKeys: K[] } => {
-  const target = index + direction;
-  if (index < 0 || index >= sources.length || target < 0 || target >= sources.length) {
-    return { sources, rowKeys };
-  }
-  const swap = <V,>(values: V[]): V[] => {
-    const next = [...values];
-    [next[index], next[target]] = [next[target], next[index]];
-    return next;
-  };
-  return { sources: swap(sources), rowKeys: rowKeys.length === sources.length ? swap(rowKeys) : rowKeys };
-};
-
-// "idealFallback" shows the ideal plan when GERG-2008 cannot evaluate the inputs (envelope or
-// temperature limits). A GERG "no blend" result is shown as is, so a bank limit is never hidden.
-export type MultiGasPlanModel = "ideal" | "gerg2008" | "idealFallback";
-
-export const selectMultiGasPlanModel = (
-  gasModel: GasModel,
-  realGasResult: RealGasMultiGasResult | null
-): MultiGasPlanModel => {
-  if (gasModel !== "gerg2008") {
-    return "ideal";
-  }
-  if (!realGasResult) {
-    return "idealFallback";
-  }
-  if (realGasResult.success) {
-    return "gerg2008";
-  }
-  const gergSpecific =
-    realGasResult.failure === "gerg" || realGasResult.errors.some((error) => error.includes("GERG-2008"));
-  return gergSpecific ? "idealFallback" : "gerg2008";
-};
-
-/** The ideal option that adds the same set of sources, for the Training Mode hand check. */
-export const findMatchingIdealAlternative = (
-  idealAlternatives: BlendAlternative[],
-  realGasAlternative: RealGasMultiGasAlternative
-): BlendAlternative | null => {
-  const key = realGasAlternative.sourceIds.join("|");
-  return idealAlternatives.find(
-    (alternative) => alternative.steps.map((step) => step.gas.id).sort().join("|") === key
-  ) ?? null;
-};
-
 /**
  * React key for a corrected stop row. Source ids are unique within a plan, and the key must not
  * change when a recalculation changes the amounts, or the row's Stage Temp input loses focus mid-edit.
@@ -231,16 +122,21 @@ export const showStageTemperatureRecovery = (
   gasSources: GasSourceInput[],
   hasCorrectedPlan: boolean,
   editing = false
-): boolean => gasModel === "gerg2008" && (editing || (!hasCorrectedPlan && hasStageTemperatureOverrides(gasSources)));
+): boolean =>
+  gasModel === "gerg2008" &&
+  (editing || (!hasCorrectedPlan && gasSources.some((source) => source.enabled && source.stageTemperatureF !== undefined)));
 
-/** Rows the recovery editor lists: saved stage temperatures, plus rows being edited that were just cleared. */
+/**
+ * Rows the recovery editor lists: enabled rows with a saved stage temperature (the solver ignores
+ * disabled rows), plus rows being edited that were just cleared.
+ */
 export const stageTemperatureRecoveryRows = (
   gasSources: GasSourceInput[],
   rowKeys: string[],
   editKeys: string[] | null
 ): number[] =>
   gasSources.flatMap((source, rowIndex) =>
-    source.stageTemperatureF !== undefined || (editKeys?.includes(rowKeys[rowIndex] ?? source.id) ?? false)
+    (source.enabled && source.stageTemperatureF !== undefined) || (editKeys?.includes(rowKeys[rowIndex] ?? source.id) ?? false)
       ? [rowIndex]
       : []
   );
@@ -279,7 +175,7 @@ export const StageTemperatureRecovery = ({
     >
       <div className="section-title">Stage Temperatures</div>
       <div className="table-note">
-        These stage temperatures are saved on their source gases. Correct or clear them to restore the corrected stops.
+        These stage temperatures are saved on their source gases. If one is out of range, correct or clear it here.
       </div>
       <div className="real-gas-temperature-grid">
         {stageTemperatureRecoveryRows(gasSources, rowKeys, editKeys).map((rowIndex) => {
@@ -376,12 +272,22 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     updateField({ [key]: value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit) });
   };
 
+  // Stop-row Stage Temp fields the user has emptied. They stay empty until a number is typed or
+  // focus leaves, instead of refilling with the inherited temperature mid-edit (which also made a
+  // leading "-" impossible to type).
+  const [clearedStageTemperatureIds, setClearedStageTemperatureIds] = useState<string[]>([]);
   const updateStageTemperature = (sourceId: string | undefined, value: number | undefined): void => {
     const rowIndex = sourceId === undefined ? undefined : sourceResolution.rowIndexById.get(sourceId);
-    if (rowIndex === undefined) return;
+    if (sourceId === undefined || rowIndex === undefined) return;
+    setClearedStageTemperatureIds((ids) =>
+      value === undefined ? [...ids.filter((id) => id !== sourceId), sourceId] : ids.filter((id) => id !== sourceId)
+    );
     updateGasSource(rowIndex, {
       stageTemperatureF: value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit)
     });
+  };
+  const endStageTemperatureEdit = (sourceId: string | undefined): void => {
+    setClearedStageTemperatureIds((ids) => ids.filter((id) => id !== sourceId));
   };
 
   // Row keys of the recovery editor's rows while someone is editing there; null otherwise.
@@ -391,7 +297,10 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     updateField({ gasSources: clearStageTemperatures(gasSources) });
   };
 
-  const stageTemperatureDisplay = (sourceId: string | undefined, resolvedTemperatureF: number): number => {
+  const stageTemperatureDisplay = (sourceId: string | undefined, resolvedTemperatureF: number): number | undefined => {
+    if (sourceId !== undefined && clearedStageTemperatureIds.includes(sourceId)) {
+      return undefined;
+    }
     const rowIndex = sourceId === undefined ? undefined : sourceResolution.rowIndexById.get(sourceId);
     const ownTemperatureF = rowIndex === undefined ? undefined : gasSources[rowIndex]?.stageTemperatureF;
     return toDisplayTemperature(ownTemperatureF ?? resolvedTemperatureF, settings.temperatureUnit);
@@ -416,8 +325,12 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
 
   // Compute blend result. The ideal plan always runs: it is the plan in ideal mode, the fallback when
   // GERG-2008 cannot evaluate the inputs, and the Training Mode hand check.
+  // Stage temperatures change the rows but not the ideal sources, so key the ideal solve on the
+  // sources' content: typing a Stage Temp then does not rerun the ideal search.
+  const idealSourcesKey = JSON.stringify(sourceResolution.idealSources);
+  const idealSources = useMemo(() => JSON.parse(idealSourcesKey) as OptimizerGasSource[], [idealSourcesKey]);
   const blendResult = useMemo(() => {
-    const enabledGases = sourceResolution.idealSources;
+    const enabledGases = idealSources;
     if (enabledGases.length === 0) {
       return null;
     }
@@ -444,7 +357,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
       };
     }
   }, [
-    sourceResolution,
+    idealSources,
     settings.pressureUnit,
     multiGas.targetPressure,
     multiGas.targetO2,
@@ -745,9 +658,11 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     >
       {useRealGas && (
         <div className="training-math-note">
-          {selectedRealGasAlternative
-            ? "GERG-2008 is selected. The corrected stops above include compressibility and stage temperatures; this hand check uses the ideal pressure-point balance for the same source gases, so its pressures differ."
-            : "GERG-2008 is selected. This hand check uses the ideal pressure-point balance."}
+          {selectedRealGasAlternative && !trainingMath
+            ? "GERG-2008 is selected. No ideal option uses the same source gases as this corrected plan, so there is no hand check for it."
+            : selectedRealGasAlternative
+              ? "GERG-2008 is selected. The corrected stops above include compressibility and stage temperatures; this hand check uses the ideal pressure-point balance for the same source gases, so its pressures differ."
+              : "GERG-2008 is selected. This hand check uses the ideal pressure-point balance."}
         </div>
       )}
       {trainingMath && (
@@ -1186,6 +1101,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                                   step={1}
                                   value={stageTemperatureDisplay(step.sourceId, step.temperatureF)}
                                   onChange={(val) => updateStageTemperature(step.sourceId, val)}
+                                  onBlur={() => endStageTemperatureEdit(step.sourceId)}
                                   onKeyDown={selectTempOnEnter}
                                 />
                               </div>
