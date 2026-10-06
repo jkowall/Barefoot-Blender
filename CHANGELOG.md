@@ -2,15 +2,21 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Stricter Style Policy**: The production Content-Security-Policy header now sets `style-src 'self'` without `'unsafe-inline'`. The privacy, terms, and support pages load their shared styles from `public/legal.css` instead of inline `<style>` blocks. The `index.html` meta policy still allows inline styles because the Vite dev server needs them.
+- **Dependencies**: Upgraded React, React DOM, and their type packages to 19.3.0, vite-plugin-pwa from 1.3.0 to 2.0.0 (major version), and Capacitor core, iOS, and Android to 8.5.2.
+
 ### Fixed
 
+- **iOS Capacitor Runtime**: Native iOS builds now pin `capacitor-swift-pm` 8.5.2 to match `@capacitor/ios` 8.5.2. Earlier builds still linked 8.4.1, which is affected by GHSA-rvm3-566m-v7fv.
 - **Multi-Gas Bleed-Down With Bank Limits**: Ideal Multi-Gas now finds the bleed-down when a capped bank means the tank can be drained too far as well as not far enough. It previously returned "No valid blend found" (2000 psi of 10/70 into 21/35 at 3000 psi with Air capped at 1300 psi now bleeds to 1500 psi). The search now scans start pressures from the current pressure down before refining, and keeps the smallest bleed it finds. Bleed-downs that already worked are unchanged, except a few where the old search drained more than needed. Those now bleed less.
 
 ## [1.1.2] - 2026-10-05
 
 ### Fixed
 
-- **GERG Empty-Cylinder Plans**: When the 1 atm left in an empty (0 PSI) cylinder makes the exact target unreachable, GERG-2008 now gives a corrected plan and states the mix it actually reaches instead of returning an error (1.1.1 regression). Examples are heliox or pure oxygen over an air residual (pure oxygen ends near 99.6% O2) and a bank top-off that matches the target over a different residual. Purge the cylinder and set the start mix to the purge gas to reach the target exactly.
+- **GERG Empty-Cylinder Plans**: When the 1 atm left in an empty (0 PSI) cylinder makes the exact target unreachable, GERG-2008 now gives a corrected plan and states the mix it actually reaches instead of returning an error (1.1.1 regression). Examples are heliox or pure oxygen over an air residual (pure oxygen ends near 99.6% O2) and a bank top-off that matches the target over a different residual. Hypoxic and high-O2 warnings on these plans follow the mix actually reached, not the unreachable target. Purge the cylinder and set the start mix to the purge gas to reach the target exactly.
 - **GERG Bleed-Down Guidance**: Standard Blend no longer shows "needs valid temp" stop rows or a temperature-correction note when GERG-2008 correction stops for a required bleed-down or another pre-solve input error. Only the GERG error is shown, and stage temperature rows remain for stage temperature envelope failures.
 
 ## [1.1.1] - 2026-10-05
