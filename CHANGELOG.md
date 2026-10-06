@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **Multi-Gas Bleed-Down With Bank Limits**: The Multi-Gas optimizer now finds the smallest bleed-down even when a bank pressure limit also rules out deeper bleeds. Before, it could report "No valid blend found with the selected gases and bank pressure limits" when a small bleed worked. Example: 2000 PSI of 10/70 to 3000 PSI of 21/35 with Air limited to 1300 PSI now bleeds to 1500 PSI.
+
 ## [1.1.2] - 2026-10-05
 
 ### Fixed

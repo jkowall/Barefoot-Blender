@@ -2091,6 +2091,56 @@ const findSimilarNGasAlternatives = (
   return uniqueAlternatives;
 };
 
+export type MaxFeasibleSearchOptions = {
+  samples?: number;
+  precision?: number;
+};
+
+/**
+ * Find the largest value in [low, high] where isFeasible returns true.
+ * Feasibility does not need to be monotone: scan `samples` evenly spaced values
+ * from high down to low, then bisect between the highest feasible sample and the
+ * infeasible sample above it until the gap is within `precision`.
+ * A feasible window narrower than (high - low) / samples can be missed.
+ * The returned value is always one where isFeasible returned true; null if none was.
+ */
+export const findMaxFeasibleValue = (
+  isFeasible: (value: number) => boolean,
+  low: number,
+  high: number,
+  options: MaxFeasibleSearchOptions = {}
+): number | null => {
+  if (!Number.isFinite(low) || !Number.isFinite(high) || high < low) return null;
+
+  const samples = Math.max(1, Math.floor(options.samples ?? 32));
+  const precision = Math.max(options.precision ?? 0.01, tolerance);
+  const step = (high - low) / samples;
+
+  let infeasibleAbove: number | null = null;
+  for (let i = 0; i <= samples; i++) {
+    const value = i === samples ? low : high - step * i;
+    if (!isFeasible(value)) {
+      infeasibleAbove = value;
+      continue;
+    }
+    if (infeasibleAbove === null) return value;
+
+    let feasible = value;
+    let infeasible = infeasibleAbove;
+    for (let iteration = 0; iteration < 64 && infeasible - feasible > precision; iteration++) {
+      const mid = (feasible + infeasible) / 2;
+      if (isFeasible(mid)) {
+        feasible = mid;
+      } else {
+        infeasible = mid;
+      }
+    }
+    return feasible;
+  }
+
+  return null;
+};
+
 /**
  * Main N-gas blend solver.
  * Finds optimal blend using available gas sources, minimizing cost.
@@ -2143,37 +2193,28 @@ export const solveNGasBlend = (
 
   // If no solution and bleed-down might help (target He < start He, or composition requires it)
   if (alternatives.length === 0 && startPressurePsi > tolerance) {
-    // Binary search for the maximum starting pressure (minimum bleed) that allows a solution
-    let low = 0;
-    let high = startPressurePsi;
-    let bestStartPressure = 0;
-    let bestAlternatives: BlendAlternative[] = [];
-
-    // 20 iterations is enough for < 1 PSI precision at 10000 PSI
-    for (let i = 0; i < 20; i++) {
-      if (high - low < tolerance) break;
-      const mid = (low + high) / 2;
-      const attemptAlts = generateBlendAlternatives(
+    const generateAtStartPressure = (pressurePsi: number): BlendAlternative[] =>
+      generateBlendAlternatives(
         targetPressurePsi,
         targetO2,
         targetHe,
-        mid,
+        pressurePsi,
         startO2,
         startHe,
         availableGases,
         costSettings
       );
 
-      if (attemptAlts.length > 0) {
-        bestStartPressure = mid;
-        bestAlternatives = attemptAlts;
-        low = mid; // Try to bleed less
-      } else {
-        high = mid; // Must bleed more
-      }
-    }
+    // Find the maximum starting pressure (minimum bleed) that allows a solution.
+    // Bank caps can make low start pressures infeasible too, so feasibility is not monotone.
+    const bestStartPressure = findMaxFeasibleValue(
+      (pressurePsi) => generateAtStartPressure(pressurePsi).length > 0,
+      0,
+      startPressurePsi
+    );
+    const bestAlternatives = bestStartPressure === null ? [] : generateAtStartPressure(bestStartPressure);
 
-    if (bestAlternatives.length > 0) {
+    if (bestStartPressure !== null && bestAlternatives.length > 0) {
       warnings.push("Bleed-down required to achieve target mix.");
 
       // Add bleed step to each alternative

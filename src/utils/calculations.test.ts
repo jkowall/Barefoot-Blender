@@ -7,6 +7,7 @@ import {
   calculateGasCost,
   calculateFillCostEstimate,
   generateBlendAlternatives,
+  findMaxFeasibleValue,
   solveNGasBlend,
   calculateEND,
   calculateDensity,
@@ -1059,6 +1060,136 @@ describe("solveNGasBlend bank limits", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("100% or less");
+  });
+});
+
+describe("solveNGasBlend bleed-down search", () => {
+  const settings = { pressureUnit: "psi" as const };
+  const costSettings = {
+    tankSizeCuFt: 80,
+    tankRatedPressure: 3000,
+    pricePerCuFtO2: 1,
+    pricePerCuFtHe: 3.5,
+    pricePerCuFtTopOff: 0.1
+  };
+  const helium = { id: "helium", name: "Helium", o2: 0, he: 100 };
+  const bleedWarning = "Bleed-down required to achieve target mix.";
+
+  const getBleedToPressure = (startPressure: number, fillOrder: { gas: string; amount: number }[]): number => {
+    expect(fillOrder[0]?.gas).toBe("Bleed Tank");
+    expect(fillOrder[0]?.amount).toBeLessThan(0);
+    return startPressure + fillOrder[0].amount;
+  };
+
+  test("finds a small bleed when a bank cap also rules out deep bleeds", () => {
+    // 2000 psi of 10/70 -> 3000 psi of 21/35 with Air capped at 1300 psi.
+    // Air/O2/He needs Air = (1320 - 0.2p) / 0.79 <= 1300 (p >= 1465) and He = 1050 - 0.7p >= 0 (p <= 1500).
+    // Deep bleeds (p < 1465) break the Air cap, so feasibility is not monotone in start pressure.
+    const result = solveNGasBlend(
+      settings,
+      3000,
+      21,
+      35,
+      2000,
+      10,
+      70,
+      [
+        { ...air, maxPressurePsi: 1300 },
+        oxygen,
+        helium
+      ],
+      costSettings
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.warnings).toContain(bleedWarning);
+    expect(result.alternatives.length).toBeGreaterThan(0);
+
+    for (const alternative of result.alternatives) {
+      const bleedTo = getBleedToPressure(2000, alternative.fillOrder);
+      expect(bleedTo).toBeCloseTo(1500, 1);
+      expect(alternative.costBreakdown[0].gas).toMatch(/^Bleed to \d+ psi$/);
+
+      const airStep = alternative.steps.find((step) => step.gas.id === "air");
+      expect(airStep?.amount ?? 0).toBeLessThanOrEqual(1300.01);
+      expect(alternative.finalO2).toBeCloseTo(21, 1);
+      expect(alternative.finalHe).toBeCloseTo(35, 1);
+    }
+  });
+
+  test("bleeds to the helium-limited pressure without bank caps", () => {
+    // 1500 psi of 12/76 -> 3000 psi of 21/35. Helium alone limits the start to 3000 * 0.35 / 0.76 = ~1381.6 psi.
+    const result = solveNGasBlend(
+      settings,
+      3000,
+      21,
+      35,
+      1500,
+      12,
+      76,
+      [oxygen, helium, air],
+      costSettings
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.warnings).toContain(bleedWarning);
+    const alternative = result.alternatives[0];
+    expect(alternative).toBeDefined();
+    if (!alternative) return;
+
+    const bleedTo = getBleedToPressure(1500, alternative.fillOrder);
+    expect(bleedTo).toBeCloseTo((3000 * 0.35) / 0.76, 1);
+    expect(alternative.finalHe).toBeCloseTo(35, 1);
+  });
+
+  test("keeps the bank-limit error when no bleed helps", () => {
+    // Air capped at 500 psi: Air/O2/He needs p >= 4625 and Air + O2 needs p >= 2194, both above the 2000 psi start.
+    const result = solveNGasBlend(
+      settings,
+      3000,
+      21,
+      35,
+      2000,
+      10,
+      70,
+      [
+        { ...air, maxPressurePsi: 500 },
+        oxygen,
+        helium
+      ],
+      costSettings
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.alternatives).toHaveLength(0);
+    expect(result.warnings).not.toContain(bleedWarning);
+    expect(result.error).toBe(
+      "No valid blend found with the selected gases and bank pressure limits. Increase availability or adjust the target."
+    );
+  });
+});
+
+describe("findMaxFeasibleValue", () => {
+  test("finds the threshold of a monotone predicate", () => {
+    const value = findMaxFeasibleValue((v) => v <= 1234.5, 0, 2000);
+    expect(value).not.toBeNull();
+    expect(value!).toBeLessThanOrEqual(1234.5);
+    expect(value!).toBeGreaterThan(1234.5 - 0.01);
+  });
+
+  test("finds the top of a feasible interval that excludes low values", () => {
+    const value = findMaxFeasibleValue((v) => v >= 1465 && v <= 1500, 0, 2000);
+    expect(value).not.toBeNull();
+    expect(value!).toBeLessThanOrEqual(1500);
+    expect(value!).toBeGreaterThan(1500 - 0.01);
+  });
+
+  test("returns the upper bound when it is feasible", () => {
+    expect(findMaxFeasibleValue(() => true, 0, 2000)).toBe(2000);
+  });
+
+  test("returns null when nothing is feasible", () => {
+    expect(findMaxFeasibleValue(() => false, 0, 2000)).toBeNull();
   });
 });
 

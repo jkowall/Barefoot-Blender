@@ -153,6 +153,15 @@ P₁·O₂₁ + P₂·O₂₂ = P_target·O₂_target
 - Requires the source gases to have different O₂% values (denominator non-zero).
 - Returns volumes to add from each source.
 
+### N-Gas Optimizer
+
+Module: `solveNGasBlend`
+
+- Tries every 1-, 2-, and 3-gas combination of the enabled sources against the O₂/He the added gas must supply, rejects any step above that source's bank pressure limit (`maxPressurePsi`), and ranks the rest by estimated cost.
+- If nothing works from the current start pressure, it searches for the highest post-bleed start pressure that does (the smallest bleed). Bank limits mean feasibility is not monotone: a deeper bleed needs more added gas, so it can exceed a capped bank. Example: 2000 PSI of 10/70 to 3000 PSI of 21/35 with Air limited to 1300 PSI works only between about 1465 and 1500 PSI. The search (`findMaxFeasibleValue`) checks 33 evenly spaced start pressures from the current pressure down to 0, then bisects between the highest one that works and the next one above it to within 0.01 PSI. A feasible window narrower than 1/32 of the start pressure can be missed.
+- A bleed plan starts with a `Bleed Tank` step, adds a `Bleed to X` cost line, and warns that bleed-down is required.
+- If no bleed works either, it looks for the closest blend within ±1% O₂ / ±5% He at the target pressure, and otherwise returns an error that names the bank pressure limits when any are set.
+
 ## 4. Utility Calculators
 
 ### Maximum Operating Depth (MOD)
