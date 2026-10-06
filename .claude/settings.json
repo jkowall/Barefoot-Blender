@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git push origin --delete *)"
+    ],
+    "deny": [
+      "Bash(git push origin --delete main)"
+    ]
+  }
+}
