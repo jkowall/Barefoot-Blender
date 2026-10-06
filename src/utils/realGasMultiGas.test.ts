@@ -940,6 +940,68 @@ describe("calculateRealGasMultiGasBlend fifth review cases", () => {
   });
 });
 
+describe("calculateRealGasMultiGasBlend sixth review cases", () => {
+  test("bleeds an EAN40 start for two helium banks with the same O2:He ratio", () => {
+    // Keeping 8.75% of the target moles as EAN40 and adding 7.5% of 10/20 and 83.75% of 20/40 makes 21/35.
+    const input = multiGasInput({
+      startPressure: 2000,
+      startO2: 40,
+      startHe: 0,
+      sources: [
+        { id: "custom-0", name: "10/20", o2: 10, he: 20 },
+        { id: "custom-1", name: "20/40", o2: 20, he: 40 }
+      ]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("bleed");
+    const plan = result.alternatives[0];
+    const lean = plan.steps.find((step) => step.sourceId === "custom-0")?.molesAdded ?? 0;
+    const rich = plan.steps.find((step) => step.sourceId === "custom-1")?.molesAdded ?? 0;
+    expect(lean).toBeGreaterThan(0);
+    expect(rich / lean).toBeCloseTo(83.75 / 7.5, 2);
+    expectExactReplay(input, plan);
+  });
+
+  test("solves banks that share the start's nitrogen fraction as a range", () => {
+    // 10/80 start, 21/69 target, and 15/75 and 30/60 banks are all 10% nitrogen, so the O2 and He
+    // balances only repeat the total between them and the pair leaves a range of kept start gas.
+    const input = multiGasInput({
+      startPressure: 2000,
+      startO2: 10,
+      startHe: 80,
+      targetO2: 21,
+      targetHe: 69,
+      fillOrderMode: "manual",
+      sources: [
+        { id: "custom-0", name: "15/75", o2: 15, he: 75, maxPressurePsi: 343.15 },
+        { id: "custom-1", name: "30/60", o2: 30, he: 60, maxPressurePsi: 1656.89 }
+      ]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("bleed");
+    expect(result.bleedToPsi ?? 0).toBeGreaterThan(990);
+    expect(result.bleedToPsi ?? 0).toBeLessThan(1010);
+    const plan = result.alternatives[0];
+    expect(plan.steps.find((step) => step.sourceId === "custom-0")?.pressureChangePsi ?? 0).toBeLessThanOrEqual(343.16);
+    expect(plan.steps.find((step) => step.sourceId === "custom-1")?.pressureChangePsi ?? 0).toBeLessThanOrEqual(1656.9);
+    expectExactReplay(input, plan);
+  });
+
+  test("describes a constant-nitrogen pair as a range of kept start gas", () => {
+    const solutions = bleedSubsetSolutions(3000, { o2: 21, he: 69 }, { o2: 10, he: 80 }, [
+      { id: "custom-0", name: "15/75", o2: 15, he: 75 },
+      { id: "custom-1", name: "30/60", o2: 30, he: 60 }
+    ]);
+    // 30/60 alone works at one kept amount; the pair works over a range.
+    expect(solutions.map((solution) => [solution.kind, solution.sources.map((gas) => gas.name)])).toEqual([
+      ["point", ["30/60"]],
+      ["line", ["15/75", "30/60"]]
+    ]);
+  });
+});
+
 describe("resolveMultiGasStageTemperaturesF", () => {
   test("inherits the previous stage, then Start Temp", () => {
     expect(

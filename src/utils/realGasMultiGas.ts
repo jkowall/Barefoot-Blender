@@ -209,24 +209,49 @@ const isValidTemperatureF = (temperatureF: number): boolean => {
 const LINEAR_SINGULAR_TOLERANCE = 1e-9;
 // Smallest change in a source's real-gas rise across a bleed range that counts as a direction.
 const RISE_DIRECTION_TOLERANCE_PSI = 1e-6;
-// Allowed mismatch in the equation a 1-source solve does not use, as a fraction of the target amount.
+// Allowed mismatch in a balance the solve cannot satisfy exactly, as a fraction of its right-hand side.
 const LINEAR_CONSISTENCY_TOLERANCE = 1e-5;
 
-// Determinant of a 3x3 matrix given by rows.
-const determinant3 = (m: number[][]): number =>
-  m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
-  m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
-  m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
-
-// Solve m * x = rhs by Cramer's rule; null when m is singular.
-const solve3 = (m: number[][], rhs: number[]): number[] | null => {
-  const det = determinant3(m);
-  if (Math.abs(det) <= LINEAR_SINGULAR_TOLERANCE) {
+// Solve columns * x = rhs for the 3-row total/O2/He balance when the columns are independent and rhs
+// lies in their span within `tolerance`; null otherwise. Gaussian elimination with partial pivoting.
+const solveInSpan = (columns: number[][], rhs: number[], tolerance: number): number[] | null => {
+  const unknowns = columns.length;
+  if (unknowns > 3) {
     return null;
   }
-  return [0, 1, 2].map((column) =>
-    determinant3(m.map((row, i) => row.map((value, j) => (j === column ? rhs[i] : value)))) / det
-  );
+  const rows = [0, 1, 2].map((i) => [...columns.map((column) => column[i]), rhs[i]]);
+  for (let col = 0; col < unknowns; col += 1) {
+    let pivot = col;
+    for (let row = col + 1; row < 3; row += 1) {
+      if (Math.abs(rows[row][col]) > Math.abs(rows[pivot][col])) {
+        pivot = row;
+      }
+    }
+    if (Math.abs(rows[pivot][col]) <= LINEAR_SINGULAR_TOLERANCE) {
+      return null;
+    }
+    [rows[col], rows[pivot]] = [rows[pivot], rows[col]];
+    for (let row = col + 1; row < 3; row += 1) {
+      const factor = rows[row][col] / rows[col][col];
+      for (let j = col; j <= unknowns; j += 1) {
+        rows[row][j] -= factor * rows[col][j];
+      }
+    }
+  }
+  for (let row = unknowns; row < 3; row += 1) {
+    if (Math.abs(rows[row][unknowns]) > tolerance) {
+      return null;
+    }
+  }
+  const x = new Array<number>(unknowns).fill(0);
+  for (let row = unknowns - 1; row >= 0; row -= 1) {
+    let sum = rows[row][unknowns];
+    for (let j = row + 1; j < unknowns; j += 1) {
+      sum -= rows[row][j] * x[j];
+    }
+    x[row] = sum / rows[row][row];
+  }
+  return x;
 };
 
 export type BleedSubsetSolution =
@@ -243,13 +268,16 @@ export type BleedSubsetSolution =
     };
 
 /**
- * Exact fills after a bleed, per subset of one to three sources, from the linear mole balance
- * (amounts in the same units as targetAmount; mixes in percent). One source, and two sources whose O2
- * and He balances both matter, work at a single kept start amount, which a pressure scan can step
- * over. Two sources with one redundant balance (all nitrox, or all sharing the start's helium
- * fraction), and three sources with both balances, work over a range of kept amounts in which each
- * source's amount changes linearly; bank limits then cut that range at points a search can bisect for.
- * Three sources with a redundant balance leave two free amounts and are not covered here.
+ * Exact fills after a bleed, per subset of one to three sources, from the linear total, O2, and He
+ * balances (amounts in the same units as targetAmount; mixes in percent).
+ * - When the start mix is not something the subset's sources can make, at most one kept start amount
+ *   works (a point). A pressure scan can step over it.
+ * - When the sources can make the start mix, any kept amount r in a range works, and each source's
+ *   amount changes linearly with r (a line). Bank limits cut that range at points a search can bisect
+ *   for. This covers any dependent balance: all nitrox, a shared helium or nitrogen fraction, or three
+ *   independent sources.
+ * Sources that are not independent of each other (identical rows, or three sources that only span two
+ * balances) leave more than one free amount and are not covered here.
  */
 export const bleedSubsetSolutions = (
   targetAmount: number,
@@ -257,20 +285,11 @@ export const bleedSubsetSolutions = (
   start: { o2: number; he: number },
   sources: GasSelection[]
 ): BleedSubsetSolution[] => {
-  const t = { o2: target.o2 / 100, he: target.he / 100 };
-  const s = { o2: start.o2 / 100, he: start.he / 100 };
+  const startColumn = [1, start.o2 / 100, start.he / 100];
+  const targetColumn = [targetAmount, targetAmount * target.o2 / 100, targetAmount * target.he / 100];
+  const targetTolerance = LINEAR_CONSISTENCY_TOLERANCE * targetAmount;
   const solutions: BleedSubsetSolution[] = [];
   const nonnegative = (value: number): boolean => value >= -MOLE_TOLERANCE;
-  // A component balance is redundant when the start, the target, and every source share that
-  // fraction (for example all nitrox, or all 35% helium): it only repeats the total balance.
-  const redundant = (component: "o2" | "he", subset: GasSelection[]): boolean =>
-    Math.abs(s[component] - t[component]) <= LINEAR_SINGULAR_TOLERANCE &&
-    subset.every((gas) => Math.abs(gas[component] / 100 - s[component]) <= LINEAR_SINGULAR_TOLERANCE);
-  const addPoint = (subset: GasSelection[], retained: number, additions: number[]): void => {
-    if (nonnegative(retained) && additions.every(nonnegative)) {
-      solutions.push({ kind: "point", sources: subset, retained: Math.max(0, retained), additions });
-    }
-  };
   const addLine = (subset: GasSelection[], offsets: number[], slopes: number[]): void => {
     // additions_i(r) = offsets_i - slopes_i * r must stay nonnegative.
     let minRetained = 0;
@@ -289,83 +308,41 @@ export const bleedSubsetSolutions = (
     }
   };
 
-  for (const source of sources) {
-    const g = { o2: source.o2 / 100, he: source.he / 100 };
-    // retained + added = target; solve with the O2 balance, or the He balance when O2 cannot separate
-    // the start mix from the source, then check the other balance.
-    const useO2 = Math.abs(s.o2 - g.o2) > LINEAR_SINGULAR_TOLERANCE;
-    const denominator = useO2 ? s.o2 - g.o2 : s.he - g.he;
-    if (Math.abs(denominator) <= LINEAR_SINGULAR_TOLERANCE) {
-      continue;
-    }
-    const retained = targetAmount * (useO2 ? t.o2 - g.o2 : t.he - g.he) / denominator;
-    const added = targetAmount - retained;
-    const otherResidual = useO2
-      ? retained * s.he + added * g.he - targetAmount * t.he
-      : retained * s.o2 + added * g.o2 - targetAmount * t.o2;
-    if (Math.abs(otherResidual) <= LINEAR_CONSISTENCY_TOLERANCE * targetAmount) {
-      addPoint([source], retained, [added]);
-    }
+  const subsets: GasSelection[][] = [];
+  for (let i = 0; i < sources.length; i += 1) {
+    subsets.push([sources[i]]);
   }
-
   for (let i = 0; i < sources.length; i += 1) {
     for (let j = i + 1; j < sources.length; j += 1) {
-      const subset = [sources[i], sources[j]];
-      const a = { o2: sources[i].o2 / 100, he: sources[i].he / 100 };
-      const b = { o2: sources[j].o2 / 100, he: sources[j].he / 100 };
-      const o2Redundant = redundant("o2", subset);
-      const heRedundant = redundant("he", subset);
-      if (!o2Redundant && !heRedundant) {
-        // [1 1 1; s.o2 a.o2 b.o2; s.he a.he b.he] [retained; x1; x2] = target * [1; t.o2; t.he]
-        const solved = solve3(
-          [[1, 1, 1], [s.o2, a.o2, b.o2], [s.he, a.he, b.he]],
-          [targetAmount, targetAmount * t.o2, targetAmount * t.he]
-        );
-        if (solved) {
-          addPoint(subset, solved[0], [solved[1], solved[2]]);
-        }
-        continue;
-      }
-      if (o2Redundant && heRedundant) {
-        continue;
-      }
-      // One balance repeats the total, so the other leaves a range:
-      // x1 + x2 = target - r and a.c x1 + b.c x2 = target t.c - r s.c.
-      const component = o2Redundant ? "he" : "o2";
-      const denominator = b[component] - a[component];
-      if (Math.abs(denominator) <= LINEAR_SINGULAR_TOLERANCE) {
-        continue;
-      }
-      addLine(
-        subset,
-        [
-          targetAmount * (b[component] - t[component]) / denominator,
-          targetAmount * (t[component] - a[component]) / denominator
-        ],
-        [(b[component] - s[component]) / denominator, (s[component] - a[component]) / denominator]
-      );
+      subsets.push([sources[i], sources[j]]);
     }
   }
-
   for (let i = 0; i < sources.length; i += 1) {
     for (let j = i + 1; j < sources.length; j += 1) {
       for (let k = j + 1; k < sources.length; k += 1) {
-        const subset = [sources[i], sources[j], sources[k]];
-        // With a redundant balance three sources leave two free amounts; the scan covers those.
-        if (redundant("o2", subset) || redundant("he", subset)) {
-          continue;
-        }
-        const matrix = [
-          [1, 1, 1],
-          subset.map((gas) => gas.o2 / 100),
-          subset.map((gas) => gas.he / 100)
-        ];
-        const offsets = solve3(matrix, [targetAmount, targetAmount * t.o2, targetAmount * t.he]);
-        const slopes = solve3(matrix, [1, s.o2, s.he]);
-        if (offsets && slopes) {
+        subsets.push([sources[i], sources[j], sources[k]]);
+      }
+    }
+  }
+
+  for (const subset of subsets) {
+    const columns = subset.map((gas) => [1, gas.o2 / 100, gas.he / 100]);
+    // Kept start gas that the sources could also make: the target needs offsets - slopes * r.
+    const slopes = solveInSpan(columns, startColumn, LINEAR_CONSISTENCY_TOLERANCE);
+    if (slopes) {
+      // A lone source with the start's own mix only tops up; nothing to solve for.
+      if (subset.length > 1) {
+        const offsets = solveInSpan(columns, targetColumn, targetTolerance);
+        if (offsets) {
           addLine(subset, offsets, slopes);
         }
       }
+      continue;
+    }
+    // [start, sources] [retained; additions] = target, when those columns are independent.
+    const solved = solveInSpan([startColumn, ...columns], targetColumn, targetTolerance);
+    if (solved && solved.every(nonnegative)) {
+      solutions.push({ kind: "point", sources: subset, retained: Math.max(0, solved[0]), additions: solved.slice(1) });
     }
   }
 
