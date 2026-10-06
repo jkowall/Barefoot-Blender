@@ -1041,6 +1041,32 @@ describe("calculateRealGasMultiGasBlend seventh review cases", () => {
 });
 
 describe("calculateRealGasMultiGasBlend eighth review cases", () => {
+  test("solves a narrow window when helium is proportional to O2 in every gas", () => {
+    // 5/12.5 start, 15/37.5 target, and 10/25 then 20/50 banks all have He = 2.5 x O2, so the pair
+    // leaves a range of kept start gas; the two limits leave a window near 503 psi.
+    const input = multiGasInput({
+      startPressure: 2000,
+      startO2: 5,
+      startHe: 12.5,
+      targetO2: 15,
+      targetHe: 37.5,
+      fillOrderMode: "manual",
+      sources: [
+        { id: "custom-0", name: "10/25", o2: 10, he: 25, maxPressurePsi: 598.768 },
+        { id: "custom-1", name: "20/50", o2: 20, he: 50, maxPressurePsi: 1898.099 }
+      ]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("bleed");
+    expect(result.bleedToPsi ?? 0).toBeGreaterThan(500);
+    expect(result.bleedToPsi ?? 0).toBeLessThan(506);
+    const plan = result.alternatives[0];
+    expect(plan.steps.find((step) => step.sourceId === "custom-0")?.pressureChangePsi ?? 0).toBeLessThanOrEqual(598.778);
+    expect(plan.steps.find((step) => step.sourceId === "custom-1")?.pressureChangePsi ?? 0).toBeLessThanOrEqual(1898.109);
+    expectExactReplay(input, plan);
+  });
+
   test("reports no blend when only bank limits stop a bleed whose uncapped probes break the envelope", () => {
     // The only source is capped at 0 psi; the uncapped bleed probe's 200 F stage passes 400 bar.
     const result = calculateRealGasMultiGasBlend(
