@@ -32,6 +32,7 @@ import {
   temperatureUnitLabel,
   toDisplayTemperature
 } from "../utils/temperature";
+import { useClearableNumber } from "./useClearableNumber";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { logger } from "../utils/logger";
 import { AccordionItem } from "./Accordion";
@@ -265,10 +266,14 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     updateField({ gasSources: moved.sources });
   };
 
+  // Start/Settled Temp fields the user has emptied stay empty until a number is typed or focus
+  // leaves, instead of refilling with the default mid-edit (which made a leading "-" impossible).
+  const clearableTemperatures = useClearableNumber<"startTemperatureF" | "settledTemperatureF">();
   const updateTemperatureField = (
     key: "startTemperatureF" | "settledTemperatureF",
     value: number | undefined
   ): void => {
+    clearableTemperatures.track(key, value);
     updateField({ [key]: value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit) });
   };
 
@@ -919,7 +924,8 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
             <NumberInput
               label={`Start Temp (${temperatureLabel})`}
               step={1}
-              value={toDisplayTemperature(startTemperatureF, settings.temperatureUnit)}
+              value={clearableTemperatures.display("startTemperatureF", toDisplayTemperature(startTemperatureF, settings.temperatureUnit))}
+              onBlur={() => clearableTemperatures.endEdit("startTemperatureF")}
               onChange={(val) => updateTemperatureField("startTemperatureF", val)}
               onKeyDown={selectTempOnEnter}
             />
@@ -1009,7 +1015,8 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
             <NumberInput
               label={`Settled Temp (${temperatureLabel})`}
               step={1}
-              value={toDisplayTemperature(settledTemperatureF, settings.temperatureUnit)}
+              value={clearableTemperatures.display("settledTemperatureF", toDisplayTemperature(settledTemperatureF, settings.temperatureUnit))}
+              onBlur={() => clearableTemperatures.endEdit("settledTemperatureF")}
               onChange={(val) => updateTemperatureField("settledTemperatureF", val)}
               onKeyDown={selectTempOnEnter}
             />
