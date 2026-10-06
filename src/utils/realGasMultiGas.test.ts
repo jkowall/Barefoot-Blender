@@ -381,6 +381,37 @@ describe("calculateRealGasMultiGasBlend", () => {
       expect(oxygenStep?.pressureChangePsi ?? 0).toBeCloseTo(694.64, 1);
     });
 
+    test("still finds a closest blend deep in the candidate list", () => {
+      // With helium limited to 400 psi, 15/55 cannot be made; the first option that fits the limits
+      // sits far down the closest-blend list.
+      const result = calculateRealGasMultiGasBlend(
+        psi,
+        multiGasInput({
+          targetO2: 15,
+          targetHe: 55,
+          sources: [
+            { ...helium, maxPressurePsi: 400 },
+            oxygen,
+            { ...air, maxPressurePsi: 900 },
+            { id: "bank-36-3", name: "EAN36", o2: 36, he: 0 },
+            { ...trimix2135, id: "trimix-2135-4" },
+            { id: "trimix-1845-5", name: "Trimix 18/45", o2: 18, he: 45 }
+          ]
+        }),
+        prices
+      );
+
+      expect(result.match).toBe("closest");
+      expect(result.alternatives.length).toBeGreaterThan(0);
+      for (const alternative of result.alternatives) {
+        const heliumStep = alternative.steps.find((step) => step.sourceId === helium.id);
+        const airStep = alternative.steps.find((step) => step.sourceId === air.id);
+        expect(heliumStep?.pressureChangePsi ?? 0).toBeLessThanOrEqual(400.01);
+        expect(airStep?.pressureChangePsi ?? 0).toBeLessThanOrEqual(900.01);
+        expect(alternative.settledPressurePsi).toBeCloseTo(3000, 2);
+      }
+    });
+
     test("depends on fill order because the real rise does", () => {
       // Helium rises about 987 psi when added first and about 1267 psi when added last.
       const cappedHelium = { ...helium, maxPressurePsi: 1100 };

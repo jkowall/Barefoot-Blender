@@ -132,6 +132,16 @@ const EXACT_MIX_TOLERANCE_PERCENT = 0.01;
 const BLEED_SEARCH_MIX_TOLERANCE_PERCENT = 0.001;
 // Additions smaller than this (ideal-equivalent PSI) cannot be metered and are dropped.
 const MIN_ADDITION_PSI = 0.05;
+// A source's real-gas rise stays well within twice its ideal-equivalent amount across the supported
+// envelope (Z and stage temperature each move it by tens of percent), so options above twice a bank
+// limit are rejected before the GERG-2008 pass.
+const CAP_PREFILTER_FACTOR = 2;
+// The closest-blend search can return thousands of near-duplicate options; at most this many are
+// evaluated with GERG-2008 per search so the tab stays responsive.
+const MAX_REALIZED_CANDIDATES = 400;
+// Slack for the quick bank-limit check made before the scale refinement, which moves amounts by
+// well under this fraction.
+const QUICK_CAP_SLACK = 0.02;
 
 /**
  * Stage temperatures in fill order: each stage uses its own value, otherwise the previous stage's,
@@ -342,6 +352,46 @@ export const calculateRealGasMultiGasBlend = (
     const addedMoles = additions.reduce((sum, addition) => sum + addition.moles, 0);
     const startMoles = totalMoles(start.components);
     const initialScale = addedMoles > MOLE_TOLERANCE ? Math.max(0, (targetMoles - startMoles) / addedMoles) : 1;
+
+    const simulateAt = (scale: number) => {
+      const ordered = orderBlendStepsForFill(
+        additions.map((addition) => ({ ...addition, amount: addition.moles * scale })),
+        input.fillOrderMode,
+        sourceOrderIds
+      );
+      const stageTemperatures = resolveMultiGasStageTemperaturesF(
+        ordered.map((addition) => ({ stageTemperatureF: addition.source?.stageTemperatureF })),
+        input.startTemperatureF
+      );
+      const simulation = simulateRealGasStages(
+        start.components,
+        ordered.map((addition, index) => ({
+          key: addition.gas.id,
+          gasName: addition.gas.name,
+          moles: addition.amount,
+          fractions: addition.fractions,
+          temperatureF: stageTemperatures[index]
+        })),
+        waterVolumeLiters,
+        start.pressurePsi
+      );
+      return { ordered, simulation };
+    };
+    const exceedsCap = (stages: { key: string; pressureChangePsi: number }[], slack: number): boolean =>
+      stages.some((stage) => {
+        const cap = sourceById.get(stage.key)?.maxPressurePsi;
+        return cap !== undefined && stage.pressureChangePsi > cap * (1 + slack) + CAP_TOLERANCE_PSI;
+      });
+
+    // The scale refinement costs several GERG density solves, so reject clear bank-limit misses first.
+    const hasCappedSource = additions.some((addition) => addition.source?.maxPressurePsi !== undefined);
+    if (options.enforceCaps && hasCappedSource) {
+      const quick = simulateAt(initialScale);
+      if (quick.simulation.success && exceedsCap(quick.simulation.steps, QUICK_CAP_SLACK)) {
+        return { rejected: "cap" };
+      }
+    }
+
     const scale = refineAdditionScaleToSettledTarget(
       start.components,
       additions,
@@ -350,39 +400,12 @@ export const calculateRealGasMultiGasBlend = (
       waterVolumeLiters,
       initialScale
     );
-
-    const ordered = orderBlendStepsForFill(
-      additions.map((addition) => ({ ...addition, amount: addition.moles * scale })),
-      input.fillOrderMode,
-      sourceOrderIds
-    );
-    const stageTemperatures = resolveMultiGasStageTemperaturesF(
-      ordered.map((addition) => ({ stageTemperatureF: addition.source?.stageTemperatureF })),
-      input.startTemperatureF
-    );
-    const simulation = simulateRealGasStages(
-      start.components,
-      ordered.map((addition, index) => ({
-        key: addition.gas.id,
-        gasName: addition.gas.name,
-        moles: addition.amount,
-        fractions: addition.fractions,
-        temperatureF: stageTemperatures[index]
-      })),
-      waterVolumeLiters,
-      start.pressurePsi
-    );
+    const { ordered, simulation } = simulateAt(scale);
     if (!simulation.success) {
       return { rejected: "gerg", errors: simulation.errors };
     }
-
-    if (options.enforceCaps) {
-      for (const stage of simulation.steps) {
-        const cap = sourceById.get(stage.key)?.maxPressurePsi;
-        if (cap !== undefined && stage.pressureChangePsi > cap + CAP_TOLERANCE_PSI) {
-          return { rejected: "cap" };
-        }
-      }
+    if (options.enforceCaps && exceedsCap(simulation.steps, 0)) {
+      return { rejected: "cap" };
     }
 
     const finalFractions = fractionsFromMoles(simulation.finalComponents);
@@ -446,10 +469,22 @@ export const calculateRealGasMultiGasBlend = (
     const outcome: RealizeOutcome = { alternatives: [], capRejected: 0, gergErrors: [], warnings: [] };
     // Dropping unmeterable additions can make two candidates identical.
     const seen = new Set<string>();
+    let evaluated = 0;
     for (const candidate of candidates) {
-      if (outcome.alternatives.length >= limit) {
+      if (outcome.alternatives.length >= limit || evaluated >= MAX_REALIZED_CANDIDATES) {
         break;
       }
+      if (
+        options.enforceCaps &&
+        candidate.steps.some((step) => {
+          const cap = sourceById.get(step.gas.id)?.maxPressurePsi;
+          return cap !== undefined && step.amount > cap * CAP_PREFILTER_FACTOR + CAP_TOLERANCE_PSI;
+        })
+      ) {
+        outcome.capRejected += 1;
+        continue;
+      }
+      evaluated += 1;
       const result = realizeOne(candidate, start, options);
       if ("alternative" in result) {
         const key = result.alternative.steps.map((step) => `${step.sourceId}:${step.molesAdded.toFixed(4)}`).join("|");
