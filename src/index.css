@@ -1460,6 +1460,10 @@ td {
   background: rgba(239, 68, 68, 0.4);
 }
 
+.stage-temperature-recovery {
+  margin-bottom: 16px;
+}
+
 .gas-source-actions {
   display: inline-flex;
   align-items: center;

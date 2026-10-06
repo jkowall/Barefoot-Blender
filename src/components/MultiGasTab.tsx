@@ -1,5 +1,5 @@
 import { useMemo, useState, type KeyboardEvent } from "react";
-import type { GasModel, PressureUnit, SettingsSnapshot } from "../state/settings";
+import type { GasModel, PressureUnit, SettingsSnapshot, TemperatureUnit } from "../state/settings";
 import { useSessionStore, type MultiGasInput, type GasSourceInput } from "../state/session";
 import {
   applyFillOrderToAlternative,
@@ -197,11 +197,70 @@ export const findMatchingIdealAlternative = (
   ) ?? null;
 };
 
+export const hasStageTemperatureOverrides = (gasSources: GasSourceInput[]): boolean =>
+  gasSources.some((source) => source.stageTemperatureF !== undefined);
+
+/** Clear every source's stage temperature so all stages inherit Start Temp again. */
+export const clearStageTemperatures = (gasSources: GasSourceInput[]): GasSourceInput[] =>
+  gasSources.map((source) => (source.stageTemperatureF === undefined ? source : { ...source, stageTemperatureF: undefined }));
+
 const selectTempOnEnter = (event: KeyboardEvent<HTMLInputElement>): void => {
   if (event.key === "Enter") {
     event.preventDefault();
     event.currentTarget.select();
   }
+};
+
+/**
+ * Stage temperatures are saved on their source rows but edited on corrected stop rows. When GERG-2008
+ * shows no corrected plan (an out-of-range stage temperature, or a bank limit no option meets), the
+ * saved values still need an editor so a bad one can be fixed or cleared.
+ */
+export const showStageTemperatureRecovery = (
+  gasModel: GasModel,
+  gasSources: GasSourceInput[],
+  hasCorrectedPlan: boolean
+): boolean => gasModel === "gerg2008" && !hasCorrectedPlan && hasStageTemperatureOverrides(gasSources);
+
+type StageTemperatureRecoveryProps = {
+  gasSources: GasSourceInput[];
+  rowKeys: string[];
+  temperatureUnit: TemperatureUnit;
+  onChange: (rowIndex: number, temperatureF: number | undefined) => void;
+  onReset: () => void;
+};
+
+export const StageTemperatureRecovery = ({
+  gasSources,
+  rowKeys,
+  temperatureUnit,
+  onChange,
+  onReset
+}: StageTemperatureRecoveryProps): JSX.Element => {
+  const temperatureLabel = temperatureUnitLabel(temperatureUnit);
+  return (
+    <div className="cost-breakdown stage-temperature-recovery">
+      <div className="section-title">Stage Temperatures</div>
+      <div className="table-note">
+        These stage temperatures are saved on their source gases. Correct or clear them to restore the corrected stops.
+      </div>
+      <div className="real-gas-temperature-grid">
+        {gasSources.map((source, rowIndex) => source.stageTemperatureF === undefined ? null : (
+          <NumberInput
+            key={rowKeys[rowIndex] ?? source.id}
+            label={`Gas ${rowIndex + 1} Stage Temp (${temperatureLabel})`}
+            step={1}
+            value={toDisplayTemperature(source.stageTemperatureF, temperatureUnit)}
+            onChange={(val) => onChange(rowIndex, val === undefined ? undefined : fromDisplayTemperature(val, temperatureUnit))}
+            onKeyDown={selectTempOnEnter}
+          />
+        ))}
+      </div>
+      <button className="settings-button" type="button" onClick={onReset}>
+        Reset stage temps
+      </button>
+    </div>
+  );
 };
 
 const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
@@ -283,6 +342,10 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     updateGasSource(rowIndex, {
       stageTemperatureF: value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit)
     });
+  };
+
+  const resetStageTemperatures = (): void => {
+    updateField({ gasSources: clearStageTemperatures(gasSources) });
   };
 
   const stageTemperatureDisplay = (sourceId: string | undefined, resolvedTemperatureF: number): number => {
@@ -845,6 +908,20 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     </TrainingMathPanel>
   ) : null;
 
+  const stageTemperatureRecovery = showStageTemperatureRecovery(
+    settings.gasModel,
+    gasSources,
+    selectedRealGasAlternative !== null
+  ) ? (
+    <StageTemperatureRecovery
+      gasSources={gasSources}
+      rowKeys={gasSourceRowKeys}
+      temperatureUnit={settings.temperatureUnit}
+      onChange={(rowIndex, temperatureF) => updateGasSource(rowIndex, { stageTemperatureF: temperatureF })}
+      onReset={resetStageTemperatures}
+    />
+  ) : null;
+
   return (
     <ErrorBoundary fallback={<div className="error">MultiGasTab crashed. Please check the console for details.</div>}>
       <AccordionItem title="Start Tank" defaultOpen={true}>
@@ -982,6 +1059,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
           {!realGasResult.success && realGasResult.errors.map((error) => (
             <div key={error} className="error">{error}</div>
           ))}
+          {stageTemperatureRecovery}
 
           {realGasResult.success && realGasResult.alternatives.length > 0 && (
             <>
@@ -1054,6 +1132,11 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                   <div className="table-note">
                     Stage temps default to Start Temp. Enter a measured cylinder temperature on a stop row to update that stop and any following unedited stops.
                   </div>
+                  {hasStageTemperatureOverrides(gasSources) && (
+                    <button className="settings-button" type="button" onClick={resetStageTemperatures}>
+                      Reset stage temps
+                    </button>
+                  )}
                   <div className="table-note">
                     Initial reference: {formatPressure(selectedRealGasAlternative.startHotPressurePsi, settings.pressureUnit, 1)}
                     {selectedRealGasAlternative.startZ !== undefined && <> (Z {formatNumber(selectedRealGasAlternative.startZ, 4)})</>}. Final stage stop: {formatPressure(selectedRealGasAlternative.finalHotPressurePsi, settings.pressureUnit, 1)} for settled target {formatPressure(selectedRealGasAlternative.settledPressurePsi, settings.pressureUnit, 1)} at {formatNumber(toDisplayTemperature(settledTemperatureF, settings.temperatureUnit), 1)} {temperatureLabel}.
@@ -1110,6 +1193,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
               <div className="table-note">Showing the ideal partial-pressure plan instead.</div>
             </div>
           )}
+          {stageTemperatureRecovery}
 
           {!blendResult.success && (
             <div className="error">{blendResult.error}</div>

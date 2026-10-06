@@ -1,7 +1,12 @@
-import { describe, expect, test } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, test, vi } from "vitest";
 import {
   MAX_GAS_SOURCES,
+  StageTemperatureRecovery,
+  clearStageTemperatures,
   findMatchingIdealAlternative,
+  hasStageTemperatureOverrides,
+  showStageTemperatureRecovery,
   moveGasSource,
   resolveMultiGasSources,
   selectMultiGasPlanModel
@@ -134,5 +139,83 @@ describe("findMatchingIdealAlternative", () => {
       const match = findMatchingIdealAlternative(ideal.alternatives, alternative);
       expect(match?.steps.map((step) => step.gas.id).sort()).toEqual(alternative.sourceIds);
     }
+  });
+});
+
+describe("stage temperature recovery", () => {
+  const rows: GasSourceInput[] = [
+    { id: "helium", enabled: true, stageTemperatureF: -20 },
+    { id: "oxygen", enabled: true },
+    { id: "air", enabled: true, stageTemperatureF: 90 }
+  ];
+
+  const realGasResultFor = (gasSources: GasSourceInput[], targetPressure = 3000): RealGasMultiGasResult =>
+    calculateRealGasMultiGasBlend(
+      { pressureUnit: "psi" },
+      {
+        startPressure: 0,
+        targetPressure,
+        startO2: 21,
+        startHe: 0,
+        targetO2: 21,
+        targetHe: 35,
+        tankSizeCuFt: 80,
+        tankRatedPressurePsi: 3000,
+        startTemperatureF: 70,
+        settledTemperatureF: 70,
+        sources: resolveMultiGasSources(gasSources, gasOptions, "psi").realGasSources,
+        fillOrderMode: "auto"
+      },
+      {}
+    );
+
+  test("detects and clears saved stage temperatures", () => {
+    expect(hasStageTemperatureOverrides(rows)).toBe(true);
+    const cleared = clearStageTemperatures(rows);
+    expect(hasStageTemperatureOverrides(cleared)).toBe(false);
+    expect(cleared.map((row) => row.id)).toEqual(["helium", "oxygen", "air"]);
+    expect(cleared[1]).toBe(rows[1]);
+  });
+
+  test("keeps saved stage temperatures editable when an out-of-range one falls back to ideal", () => {
+    const result = realGasResultFor(rows);
+    expect(result.failure).toBe("input");
+    expect(selectMultiGasPlanModel("gerg2008", result)).toBe("idealFallback");
+    expect(showStageTemperatureRecovery("gerg2008", rows, false)).toBe(true);
+  });
+
+  test("keeps saved stage temperatures editable when bank limits leave no corrected plan", () => {
+    const capped: GasSourceInput[] = [
+      { id: "helium", enabled: true, maxPressure: 500, stageTemperatureF: 95 },
+      { id: "oxygen", enabled: true },
+      { id: "air", enabled: true }
+    ];
+    const result = realGasResultFor(capped);
+    expect(result.success).toBe(false);
+    expect(selectMultiGasPlanModel("gerg2008", result)).toBe("gerg2008");
+    expect(showStageTemperatureRecovery("gerg2008", capped, result.alternatives.length > 0)).toBe(true);
+  });
+
+  test("stays hidden when a corrected plan shows the stop-row editors, in ideal mode, or with nothing saved", () => {
+    expect(showStageTemperatureRecovery("gerg2008", rows, true)).toBe(false);
+    expect(showStageTemperatureRecovery("ideal", rows, false)).toBe(false);
+    expect(showStageTemperatureRecovery("gerg2008", clearStageTemperatures(rows), false)).toBe(false);
+  });
+
+  test("renders an input for each saved stage temperature and a reset button", () => {
+    const markup = renderToStaticMarkup(
+      <StageTemperatureRecovery
+        gasSources={rows}
+        rowKeys={["a", "b", "c"]}
+        temperatureUnit="c"
+        onChange={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(markup).toContain("Gas 1 Stage Temp (C)");
+    expect(markup).not.toContain("Gas 2 Stage Temp");
+    expect(markup).toContain("Gas 3 Stage Temp (C)");
+    expect(markup).toContain("Reset stage temps");
   });
 });
