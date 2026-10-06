@@ -207,6 +207,8 @@ const isValidTemperatureF = (temperatureF: number): boolean => {
 };
 
 const LINEAR_SINGULAR_TOLERANCE = 1e-9;
+// Smallest change in a source's real-gas rise across a bleed range that counts as a direction.
+const RISE_DIRECTION_TOLERANCE_PSI = 1e-6;
 // Allowed mismatch in the equation a 1-source solve does not use, as a fraction of the target amount.
 const LINEAR_CONSISTENCY_TOLERANCE = 1e-5;
 
@@ -242,11 +244,12 @@ export type BleedSubsetSolution =
 
 /**
  * Exact fills after a bleed, per subset of one to three sources, from the linear mole balance
- * (amounts in the same units as targetAmount; mixes in percent). One source, and two sources with
- * helium involved, work at a single kept start amount, which a pressure scan can step over. Two
- * all-nitrox sources, and three sources with helium, work over a range of kept amounts in which each
+ * (amounts in the same units as targetAmount; mixes in percent). One source, and two sources whose O2
+ * and He balances both matter, work at a single kept start amount, which a pressure scan can step
+ * over. Two sources with one redundant balance (all nitrox, or all sharing the start's helium
+ * fraction), and three sources with both balances, work over a range of kept amounts in which each
  * source's amount changes linearly; bank limits then cut that range at points a search can bisect for.
- * Three all-nitrox sources leave two free amounts and are not covered here.
+ * Three sources with a redundant balance leave two free amounts and are not covered here.
  */
 export const bleedSubsetSolutions = (
   targetAmount: number,
@@ -258,10 +261,11 @@ export const bleedSubsetSolutions = (
   const s = { o2: start.o2 / 100, he: start.he / 100 };
   const solutions: BleedSubsetSolution[] = [];
   const nonnegative = (value: number): boolean => value >= -MOLE_TOLERANCE;
-  const heliumActive = (subset: GasSelection[]): boolean =>
-    s.he > LINEAR_SINGULAR_TOLERANCE ||
-    t.he > LINEAR_SINGULAR_TOLERANCE ||
-    subset.some((gas) => gas.he / 100 > LINEAR_SINGULAR_TOLERANCE);
+  // A component balance is redundant when the start, the target, and every source share that
+  // fraction (for example all nitrox, or all 35% helium): it only repeats the total balance.
+  const redundant = (component: "o2" | "he", subset: GasSelection[]): boolean =>
+    Math.abs(s[component] - t[component]) <= LINEAR_SINGULAR_TOLERANCE &&
+    subset.every((gas) => Math.abs(gas[component] / 100 - s[component]) <= LINEAR_SINGULAR_TOLERANCE);
   const addPoint = (subset: GasSelection[], retained: number, additions: number[]): void => {
     if (nonnegative(retained) && additions.every(nonnegative)) {
       solutions.push({ kind: "point", sources: subset, retained: Math.max(0, retained), additions });
@@ -309,7 +313,9 @@ export const bleedSubsetSolutions = (
       const subset = [sources[i], sources[j]];
       const a = { o2: sources[i].o2 / 100, he: sources[i].he / 100 };
       const b = { o2: sources[j].o2 / 100, he: sources[j].he / 100 };
-      if (heliumActive(subset)) {
+      const o2Redundant = redundant("o2", subset);
+      const heRedundant = redundant("he", subset);
+      if (!o2Redundant && !heRedundant) {
         // [1 1 1; s.o2 a.o2 b.o2; s.he a.he b.he] [retained; x1; x2] = target * [1; t.o2; t.he]
         const solved = solve3(
           [[1, 1, 1], [s.o2, a.o2, b.o2], [s.he, a.he, b.he]],
@@ -320,15 +326,23 @@ export const bleedSubsetSolutions = (
         }
         continue;
       }
-      // All nitrox: x1 + x2 = target - r and a.o2 x1 + b.o2 x2 = target t.o2 - r s.o2.
-      const denominator = b.o2 - a.o2;
+      if (o2Redundant && heRedundant) {
+        continue;
+      }
+      // One balance repeats the total, so the other leaves a range:
+      // x1 + x2 = target - r and a.c x1 + b.c x2 = target t.c - r s.c.
+      const component = o2Redundant ? "he" : "o2";
+      const denominator = b[component] - a[component];
       if (Math.abs(denominator) <= LINEAR_SINGULAR_TOLERANCE) {
         continue;
       }
       addLine(
         subset,
-        [targetAmount * (b.o2 - t.o2) / denominator, targetAmount * (t.o2 - a.o2) / denominator],
-        [(b.o2 - s.o2) / denominator, (s.o2 - a.o2) / denominator]
+        [
+          targetAmount * (b[component] - t[component]) / denominator,
+          targetAmount * (t[component] - a[component]) / denominator
+        ],
+        [(b[component] - s[component]) / denominator, (s[component] - a[component]) / denominator]
       );
     }
   }
@@ -337,7 +351,8 @@ export const bleedSubsetSolutions = (
     for (let j = i + 1; j < sources.length; j += 1) {
       for (let k = j + 1; k < sources.length; k += 1) {
         const subset = [sources[i], sources[j], sources[k]];
-        if (!heliumActive(subset)) {
+        // With a redundant balance three sources leave two free amounts; the scan covers those.
+        if (redundant("o2", subset) || redundant("he", subset)) {
           continue;
         }
         const matrix = [
@@ -771,10 +786,46 @@ export const calculateRealGasMultiGasBlend = (
     alternatives.map((alternative) => ({ ...alternative, steps: [bleedStep(start), ...alternative.steps] }));
 
   // 2. Bleed down to the highest drain-to pressure that still allows an exact fill (the smallest
-  // bleed). Each search scans from the top down for a feasible point, then bisects up toward the
-  // infeasible point above it. Without bank limits the feasible range ends at the composition limit.
-  // Bank limits can shrink it to a narrow window that excludes 0, which a plain bisection over
-  // [0, start] misses, so the capped search scans the uncapped range more finely.
+  // bleed). Excess start gas that already has the target mix only needs a drain, to the pressure at
+  // which the kept moles at Start Temp equal the target's.
+  if (sameMix && targetMoles < fullStartMoles - MOLE_TOLERANCE) {
+    const drainedPressure = stateFromComponents(
+      startTemperatureK,
+      componentMolesFromTotal(targetMoles, startFractions),
+      waterVolumeLiters
+    );
+    const drained = drainedPressure.success ? startStateAt(drainedPressure.pressurePsi) : null;
+    if (drained && "components" in drained) {
+      const settled = stateFromComponents(settledTemperatureK, drained.components, waterVolumeLiters);
+      if (settled.success && Math.abs(settled.pressurePsi - targetPressurePsi) <= SETTLED_PRESSURE_TOLERANCE_PSI) {
+        const drainOnly: RealGasMultiGasAlternative = {
+          steps: [],
+          finalO2: input.startO2,
+          finalHe: input.startHe,
+          finalN2: Math.max(0, 100 - input.startO2 - input.startHe),
+          deviationO2: input.startO2 - input.targetO2,
+          deviationHe: input.startHe - input.targetHe,
+          startHotPressurePsi: drained.pressurePsi,
+          startZ: drained.z,
+          finalHotPressurePsi: drained.pressurePsi,
+          settledPressurePsi: settled.pressurePsi,
+          estimatedCost: 0,
+          costBreakdown: [],
+          sourceIds: [],
+          warnings: []
+        };
+        return success(
+          "bleed",
+          withBleed([drainOnly], drained),
+          [BLEED_REQUIRED_WARNING, ...targetSafetyWarnings, ...settled.warnings],
+          drained.pressurePsi
+        );
+      }
+    }
+  }
+
+  // Otherwise each search scans from the top down for a feasible point, then bisects up toward the
+  // infeasible point above it, and the subset solves below catch answers narrower than the scan step.
   if (startPressurePsi > MOLE_TOLERANCE) {
     const feasibleAt = (pressurePsi: number, enforceCaps: boolean): StartState | null => {
       const state = startStateAt(pressurePsi);
@@ -785,7 +836,8 @@ export const calculateRealGasMultiGasBlend = (
         enforceCaps,
         mixTolerance: { o2: BLEED_SEARCH_MIX_TOLERANCE_PERCENT, he: BLEED_SEARCH_MIX_TOLERANCE_PERCENT }
       });
-      return outcome.alternatives.length > 0 ? state : null;
+      // Keep the reasons a bleed failed, so an envelope failure falls back to ideal instead of "no blend".
+      return track(outcome).length > 0 ? state : null;
     };
     const highestFeasibleBelow = (topPsi: number, enforceCaps: boolean, points: number): StartState | null => {
       let infeasiblePsi = topPsi;
@@ -862,10 +914,11 @@ export const calculateRealGasMultiGasBlend = (
       }
     }
 
-    // On a range of kept amounts, each source's amount, and so its real-gas rise, moves one way. A
-    // limited source whose amount grows with the kept amount caps the range from above; one whose
-    // amount shrinks caps it from below. Bisect for the highest kept amount under every upper cap,
-    // then check the lower caps there.
+    // On a range of kept amounts each limited source's real-gas rise moves one way, though not always
+    // the way its moles do: a fixed helium amount rises more over a denser residual. So measure each
+    // rise at both ends of the range. A rise that grows with the kept amount caps the range from above;
+    // one that shrinks or holds is best at the top. Bisect for the highest kept amount under every
+    // upper cap, then check the other limits there.
     const lines = subsetSolutions
       .flatMap((solution) => (solution.kind === "line" ? [solution] : []))
       .sort((a, b) => b.maxRetained - a.maxRetained);
@@ -876,11 +929,11 @@ export const calculateRealGasMultiGasBlend = (
       if (low > high || high <= bestRetained()) {
         continue;
       }
-      const limits = line.sources.flatMap((gas, index) => {
+      const limits = line.sources.flatMap((gas) => {
         const cap = sourceById.get(gas.id)?.maxPressurePsi;
-        return cap === undefined ? [] : [{ id: gas.id, cap, slope: line.slopes[index] }];
+        return cap === undefined ? [] : [{ id: gas.id, cap }];
       });
-      const capViolations = (retainedAmount: number): { upper: boolean; lower: boolean; fixed: boolean } | null => {
+      const risesAt = (retainedAmount: number): Map<string, number> | null => {
         const pressurePsi = drainToPressure(retainedAmount);
         const state = pressurePsi === null ? null : startStateAt(pressurePsi);
         if (!state || !("components" in state)) {
@@ -906,51 +959,54 @@ export const calculateRealGasMultiGasBlend = (
         if (!("alternative" in realized)) {
           return null;
         }
-        const violations = { upper: false, lower: false, fixed: false };
-        for (const limit of limits) {
-          const rise = realized.alternative.steps.find((step) => step.sourceId === limit.id)?.pressureChangePsi ?? 0;
-          if (rise <= limit.cap + CAP_TOLERANCE_PSI) {
-            continue;
-          }
-          if (limit.slope < -LINEAR_SINGULAR_TOLERANCE) {
-            violations.upper = true;
-          } else if (limit.slope > LINEAR_SINGULAR_TOLERANCE) {
-            violations.lower = true;
-          } else {
-            violations.fixed = true;
-          }
-        }
-        return violations;
+        return new Map(realized.alternative.steps.map((step) => [step.sourceId ?? "", step.pressureChangePsi]));
       };
+      const exceeds = (rises: Map<string, number>, limit: { id: string; cap: number }): boolean =>
+        (rises.get(limit.id) ?? 0) > limit.cap + CAP_TOLERANCE_PSI;
 
-      let retained = high;
-      let atRetained = capViolations(high);
-      if (!atRetained || atRetained.fixed) {
+      const atHigh = risesAt(high);
+      if (!atHigh) {
         continue;
       }
-      if (atRetained.upper) {
-        const atLow = capViolations(low);
-        if (!atLow || atLow.upper || atLow.fixed) {
-          continue;
+      if (!limits.some((limit) => exceeds(atHigh, limit))) {
+        if (high > bestRetained()) {
+          tryDrainTo(high);
         }
-        let feasibleRetained = low;
-        let violationsThere = atLow;
+        continue;
+      }
+      const atLow = high > low ? risesAt(low) : null;
+      if (!atLow) {
+        continue;
+      }
+      const upperLimits = limits.filter(
+        (limit) => (atHigh.get(limit.id) ?? 0) > (atLow.get(limit.id) ?? 0) + RISE_DIRECTION_TOLERANCE_PSI
+      );
+      const otherLimits = limits.filter((limit) => !upperLimits.includes(limit));
+      const meetsUpperLimits = (rises: Map<string, number>): boolean =>
+        upperLimits.every((limit) => !exceeds(rises, limit));
+      if (!meetsUpperLimits(atLow)) {
+        continue;
+      }
+      let feasibleRetained = low;
+      let feasibleRises = atLow;
+      if (meetsUpperLimits(atHigh)) {
+        feasibleRetained = high;
+        feasibleRises = atHigh;
+      } else {
         let infeasibleRetained = high;
         while (infeasibleRetained - feasibleRetained > BLEED_PRESSURE_TOLERANCE_PSI) {
           const mid = (feasibleRetained + infeasibleRetained) / 2;
-          const atMid = capViolations(mid);
-          if (atMid && !atMid.upper && !atMid.fixed) {
+          const atMid = risesAt(mid);
+          if (atMid && meetsUpperLimits(atMid)) {
             feasibleRetained = mid;
-            violationsThere = atMid;
+            feasibleRises = atMid;
           } else {
             infeasibleRetained = mid;
           }
         }
-        retained = feasibleRetained;
-        atRetained = violationsThere;
       }
-      if (!atRetained.lower && retained > bestRetained()) {
-        tryDrainTo(retained);
+      if (!otherLimits.some((limit) => exceeds(feasibleRises, limit)) && feasibleRetained > bestRetained()) {
+        tryDrainTo(feasibleRetained);
       }
     }
 

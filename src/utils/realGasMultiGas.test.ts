@@ -793,6 +793,103 @@ describe("calculateRealGasMultiGasBlend start temperature warnings", () => {
   });
 });
 
+describe("calculateRealGasMultiGasBlend fourth review cases", () => {
+  test("solves banks that share the start's helium fraction as a range on the O2 balance", () => {
+    // 10/35 start with 15/35 and 30/35 banks: every gas is 35% helium, so the helium balance only
+    // repeats the total and the pair leaves a range of kept start gas.
+    const input = multiGasInput({
+      startPressure: 2000,
+      startO2: 10,
+      startHe: 35,
+      targetO2: 21,
+      targetHe: 35,
+      fillOrderMode: "manual",
+      sources: [
+        { id: "custom-0", name: "15/35", o2: 15, he: 35, maxPressurePsi: 343.688 },
+        { id: "custom-1", name: "30/35", o2: 30, he: 35, maxPressurePsi: 1656.352 }
+      ]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("bleed");
+    expect(result.bleedToPsi ?? 0).toBeCloseTo(1000, 0);
+    const plan = result.alternatives[0];
+    expect(plan.steps.find((step) => step.sourceId === "custom-0")?.pressureChangePsi ?? 0).toBeLessThanOrEqual(343.698);
+    expect(plan.steps.find((step) => step.sourceId === "custom-1")?.pressureChangePsi ?? 0).toBeLessThanOrEqual(1656.362);
+    expectExactReplay(input, plan);
+  });
+
+  test("bounds a fixed helium amount by its real rise, which still changes with the residual", () => {
+    // The start has no helium, so the helium moles are the same at every bleed, but their rise is not.
+    const input = multiGasInput({
+      startPressure: 2000,
+      startO2: 10,
+      startHe: 0,
+      sources: [
+        { ...helium, maxPressurePsi: 1127.26 },
+        oxygen,
+        { ...air, maxPressurePsi: 422.01 }
+      ]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("bleed");
+    expect(result.bleedToPsi ?? 0).toBeGreaterThan(999);
+    expect(result.bleedToPsi ?? 0).toBeLessThan(1002);
+    const plan = result.alternatives[0];
+    expect(plan.steps.find((step) => step.sourceId === helium.id)?.pressureChangePsi ?? 0).toBeLessThanOrEqual(1127.27);
+    expect(plan.steps.find((step) => step.sourceId === air.id)?.pressureChangePsi ?? 0).toBeLessThanOrEqual(422.02);
+    expectExactReplay(input, plan);
+  });
+
+  test("drains excess start gas that already has the target mix", () => {
+    const input = multiGasInput({
+      startPressure: 3000,
+      startO2: 32,
+      startHe: 0,
+      targetPressure: 2000,
+      targetO2: 32,
+      targetHe: 0,
+      sources: [air]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("bleed");
+    expect(result.bleedToPsi ?? 0).toBeCloseTo(2000, 2);
+    const plan = result.alternatives[0];
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0]).toMatchObject({ kind: "bleed" });
+    expect(plan.settledPressurePsi).toBeCloseTo(2000, 2);
+    expect(plan.estimatedCost).toBe(0);
+  });
+
+  test("reports a GERG failure, not no blend, when a required bleed breaks the envelope", () => {
+    // Only Oxygen and Air: the 76% helium start must be drained, and a 120 F Air stage then passes
+    // 400 bar on the way to 5600 psi.
+    const hot = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({
+        startPressure: 5000,
+        startO2: 12,
+        startHe: 76,
+        targetPressure: 5600,
+        sources: [oxygen, { ...air, stageTemperatureF: 120 }]
+      }),
+      prices
+    );
+    expect(hot.success).toBe(false);
+    expect(hot.failure).toBe("gerg");
+    expect(hot.errors).toEqual(["GERG-2008 correction is limited to pressures at or below 400 bar absolute."]);
+
+    const normal = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({ startPressure: 5000, startO2: 12, startHe: 76, targetPressure: 5600, sources: [oxygen, air] }),
+      prices
+    );
+    expect(normal.match).toBe("bleed");
+  });
+});
+
 describe("resolveMultiGasStageTemperaturesF", () => {
   test("inherits the previous stage, then Start Temp", () => {
     expect(
