@@ -19,6 +19,7 @@ import {
   START_MATCHES_TARGET_ERROR,
   TARGET_BELOW_RESIDUAL_ERROR,
   calculateRealGasMultiGasBlend,
+  bleedSubsetSolutions,
   isolatedBleedStartAmounts,
   resolveMultiGasStageTemperaturesF,
   type RealGasMultiGasAlternative,
@@ -696,6 +697,77 @@ describe("calculateRealGasMultiGasBlend limits after scaling", () => {
       expect(Math.abs(alternative.deviationHe)).toBeLessThanOrEqual(5 + 1e-6);
     }
     expect(result.match).not.toBe("closest");
+  });
+});
+
+describe("calculateRealGasMultiGasBlend bleeds between two bank limits", () => {
+  test("describes nitrox pairs and three-source helium subsets as ranges of kept start gas", () => {
+    const ean36 = { id: "bank-36", name: "EAN36", o2: 36, he: 0 };
+    const nitroxPair = bleedSubsetSolutions(3000, { o2: 32, he: 0 }, { o2: 10, he: 0 }, [oxygen, air]);
+    const pairLine = nitroxPair.find((solution) => solution.kind === "line");
+    expect(pairLine).toBeDefined();
+    if (pairLine?.kind === "line") {
+      // Keeping r of EAN10 leaves 960 - 0.1r of O2 to add from Oxygen and Air.
+      const retained = 1500;
+      const additions = pairLine.offsets.map((offset, index) => offset - pairLine.slopes[index] * retained);
+      expect(retained + additions[0] + additions[1]).toBeCloseTo(3000, 9);
+      expect(retained * 0.1 + additions[0] + additions[1] * 0.21).toBeCloseTo(960, 9);
+      // Air runs out when 0.9r of the start's nitrogen covers the target's 2040.
+      expect(pairLine.maxRetained).toBeCloseTo(2040 / 0.9, 6);
+    }
+
+    const heliumTriple = bleedSubsetSolutions(3000, { o2: 21, he: 35 }, { o2: 10, he: 0 }, [helium, oxygen, air]);
+    expect(heliumTriple.some((solution) => solution.kind === "line" && solution.sources.length === 3)).toBe(true);
+    expect(bleedSubsetSolutions(3000, { o2: 32, he: 0 }, { o2: 21, he: 0 }, [ean36])).toEqual([
+      expect.objectContaining({ kind: "point", retained: expect.closeTo(800, 9) })
+    ]);
+  });
+
+  test("finds a narrow window where an oxygen limit caps the bleed from above and an Air limit from below", () => {
+    const input = multiGasInput({
+      startPressure: 2500,
+      startO2: 10,
+      startHe: 0,
+      targetO2: 32,
+      targetHe: 0,
+      sources: [
+        { ...oxygen, maxPressurePsi: 600 },
+        { ...air, maxPressurePsi: 935 }
+      ]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("bleed");
+    expect(result.bleedToPsi ?? 0).toBeGreaterThan(1465);
+    expect(result.bleedToPsi ?? 0).toBeLessThan(1467);
+    const plan = result.alternatives[0];
+    expect(plan.steps.find((step) => step.sourceId === oxygen.id)?.pressureChangePsi ?? 0).toBeLessThanOrEqual(600.01);
+    expect(plan.steps.find((step) => step.sourceId === air.id)?.pressureChangePsi ?? 0).toBeLessThanOrEqual(935.01);
+    expectExactReplay(input, plan);
+  });
+
+  test("finds a narrow three-source window with oxygen and Air limits", () => {
+    const input = multiGasInput({
+      startPressure: 2000,
+      startO2: 10,
+      startHe: 0,
+      targetO2: 21,
+      targetHe: 35,
+      sources: [
+        helium,
+        { ...oxygen, maxPressurePsi: 451.2 },
+        { ...air, maxPressurePsi: 424.7 }
+      ]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("bleed");
+    expect(result.bleedToPsi ?? 0).toBeGreaterThan(995);
+    expect(result.bleedToPsi ?? 0).toBeLessThan(1010);
+    const plan = result.alternatives[0];
+    expect(plan.steps.find((step) => step.sourceId === oxygen.id)?.pressureChangePsi ?? 0).toBeLessThanOrEqual(451.21);
+    expect(plan.steps.find((step) => step.sourceId === air.id)?.pressureChangePsi ?? 0).toBeLessThanOrEqual(424.71);
+    expectExactReplay(input, plan);
   });
 });
 
