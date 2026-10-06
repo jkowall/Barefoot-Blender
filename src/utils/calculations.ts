@@ -1454,7 +1454,7 @@ const getGasCostRank = (gas: GasSelection): number => {
  * Estimate cost for using a gas at a given pressure.
  * If He price is 0/undefined, uses heuristic ranking.
  */
-const estimateGasPressureCost = (
+export const estimateGasPressureCost = (
   gas: OptimizerGasSource,
   pressurePsi: number,
   costSettings: CostSettings
