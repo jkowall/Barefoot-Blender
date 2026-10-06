@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.2.0] - 2026-10-06
+
+### Added
+
+- **GERG-2008 Multi-Gas**: Multi-Gas now follows the Gas model setting. In GERG-2008 mode it plans fills from any mix of sources in real-gas moles and shows corrected stops with the pressure rise, Z, and real-gas volume of each addition. A three-source fill such as Air, a trimix bank, and Helium into a 12/76 residual is solved in one pass instead of by repeated Top-Off and Standard Blend trials. With Helium, Oxygen, and Air it matches Standard Blend's corrected stops.
+- **Multi-Gas Temperatures**: GERG-2008 mode adds Start Temp, Settled Temp, and a Stage Temp input on each stop row. Stage temps default to Start Temp and carry forward to later unedited stops.
+- **Multi-Gas Fill Order**: A Fill Order control keeps the recommended order (helium, oxygen, richer mixes, then Air) or switches to "My order", where up/down buttons on each source row set the order. Amounts stay the same in any order; only the stop pressures change.
+- **Multi-Gas Bleed and Residual Plans**: GERG-2008 Multi-Gas finds the smallest bleed-down that still allows an exact fill, plans over the 1 atm left in an empty cylinder like Standard Blend, and falls back to the closest blend within +/-1% O2 and +/-5% He.
+
+### Changed
+
+- **Multi-Gas Sources**: Up to 6 source gases (was 4).
+- **Multi-Gas Real-Gas Cost**: In GERG-2008 mode, Multi-Gas cost and volumes come from solved real-gas moles at 1 atm and 70 F, and bank limits apply to each source's real-gas pressure rise at its stage temperature and fill position. Ideal mode is unchanged.
+
+### Fixed
+
+- **Calculation Docs**: The Multi-Gas section of the calculation model described a legacy two-gas nitrox solver; it now documents the optimizer the tab uses.
+
 ## [1.1.2] - 2026-10-05
 
 ### Fixed
