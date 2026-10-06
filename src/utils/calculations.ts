@@ -946,11 +946,7 @@ export const MULTI_GAS_HE_TOLERANCE = 5;
 const MULTI_GAS_O2_STEP = 0.1;
 const MULTI_GAS_HE_STEP = 0.5;
 const MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI = 0.5;
-// Bleed-down search: scan 32 to 1001 start pressures (0 through the current
-// pressure, ~10 psi apart below 10,000 psi), then bisect the bracket to 0.001 psi.
-const MULTI_GAS_BLEED_SCAN_MIN_INTERVALS = 31;
-const MULTI_GAS_BLEED_SCAN_MAX_INTERVALS = 1000;
-const MULTI_GAS_BLEED_SCAN_STEP_PSI = 10;
+// Bleed-down search: bisect inside the highest workable breakpoint segment to 0.001 psi.
 const MULTI_GAS_BLEED_SEARCH_PRECISION_PSI = 0.001;
 export const MULTI_GAS_BANK_LIMIT_ERROR =
   "No valid blend found with the selected gases and bank pressure limits. Increase availability or adjust the target.";
@@ -2152,6 +2148,120 @@ export const findSimilarNGasAlternatives = (
   return uniqueAlternatives;
 };
 
+type BleedFunctional = [number, number, number];
+
+/**
+ * Start pressures where a Multi-Gas bleed-down plan can switch between feasible
+ * and infeasible, sorted from highest to lowest and ending at 0.
+ *
+ * At start pressure p the gas to add is v(p) = [added, neededO2, neededHe] psi,
+ * which is affine in p. Every check in generateBlendAlternatives (needed-mix
+ * bounds, single-gas match, 2- and 3-gas amounts, bank caps, the 2-gas pressure
+ * residual) compares a linear functional of v(p) with a constant, so feasibility
+ * is constant between the roots collected here.
+ */
+const collectBleedBreakpoints = (
+  targetPressurePsi: number,
+  targetO2: number,
+  targetHe: number,
+  startPressurePsi: number,
+  startO2: number,
+  startHe: number,
+  availableGases: OptimizerGasSource[]
+): number[] => {
+  const v0: BleedFunctional = [
+    targetPressurePsi,
+    targetPressurePsi * fraction(targetO2),
+    targetPressurePsi * fraction(targetHe)
+  ];
+  const dv: BleedFunctional = [-1, -fraction(startO2), -fraction(startHe)];
+  const dot = (a: BleedFunctional, b: BleedFunctional) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const added: BleedFunctional = [1, 0, 0];
+  const roots: number[] = [];
+  // Record p where c . v(p) = k.
+  const addRoot = (c: BleedFunctional, k = 0) => {
+    const slope = dot(c, dv);
+    if (Math.abs(slope) < 1e-12) return;
+    const root = (k - dot(c, v0)) / slope;
+    if (Number.isFinite(root) && root > tolerance && root < startPressurePsi - tolerance) {
+      roots.push(root);
+    }
+  };
+  // Amount functional: root at 0, and at the bank cap if one is set.
+  const addAmount = (c: BleedFunctional, gas: OptimizerGasSource) => {
+    addRoot(c);
+    if (gas.maxPressurePsi !== undefined) addRoot(c, gas.maxPressurePsi);
+  };
+
+  // Needed-mix bounds (in percent and in fraction form).
+  addRoot([0.005, 1, 0]);
+  addRoot([0.005, 0, 1]);
+  addRoot([1.005, -1, -1]);
+  addRoot([0, 1, 0]);
+  addRoot([0, 0, 1]);
+  addRoot([1, -1, -1]);
+
+  const gases = availableGases.filter((gas) => gas);
+  for (const gas of gases) {
+    // Single-gas match: |gas% * added - 100 * needed| < 0.5 * added.
+    for (const offset of [-0.5, 0.5]) {
+      addRoot([(gas.o2 + offset) / 100, -1, 0]);
+      addRoot([(gas.he + offset) / 100, 0, -1]);
+    }
+    if (gas.maxPressurePsi !== undefined) addRoot(added, gas.maxPressurePsi);
+  }
+
+  for (let i = 0; i < gases.length; i++) {
+    for (let j = i + 1; j < gases.length; j++) {
+      const gas1 = gases[i];
+      const gas2 = gases[j];
+      const o1 = fraction(gas1.o2), h1 = fraction(gas1.he);
+      const o2 = fraction(gas2.o2), h2 = fraction(gas2.he);
+      const det = o1 * h2 - o2 * h1;
+      if (Math.abs(det) < tolerance) {
+        // Nitrox-only pair solved on O2 alone.
+        const denom = o1 - o2;
+        if (Math.abs(denom) < tolerance) continue;
+        const g1: BleedFunctional = [-o2 / denom, 1 / denom, 0];
+        addAmount(g1, gas1);
+        addAmount([1 - g1[0], -g1[1], -g1[2]], gas2);
+        continue;
+      }
+      const g1: BleedFunctional = [0, h2 / det, -o2 / det];
+      const g2: BleedFunctional = [0, -h1 / det, o1 / det];
+      addAmount(g1, gas1);
+      addAmount(g2, gas2);
+      const residual: BleedFunctional = [-1, g1[1] + g2[1], g1[2] + g2[2]];
+      addRoot(residual, -MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI);
+      addRoot(residual, MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI);
+    }
+  }
+
+  for (let i = 0; i < gases.length; i++) {
+    for (let j = i + 1; j < gases.length; j++) {
+      for (let k = j + 1; k < gases.length; k++) {
+        const trio = [gases[i], gases[j], gases[k]];
+        const [o1, o2, o3] = trio.map((gas) => fraction(gas.o2));
+        const [h1, h2, h3] = trio.map((gas) => fraction(gas.he));
+        const detA = (o2 * h3 - o3 * h2) - (o1 * h3 - o3 * h1) + (o1 * h2 - o2 * h1);
+        if (Math.abs(detA) < tolerance) continue;
+        // Rows of A^-1 for A = [[1, 1, 1], [o1, o2, o3], [h1, h2, h3]].
+        const rows: BleedFunctional[] = [
+          [(o2 * h3 - o3 * h2) / detA, (h2 - h3) / detA, (o3 - o2) / detA],
+          [(o3 * h1 - o1 * h3) / detA, (h3 - h1) / detA, (o1 - o3) / detA],
+          [(o1 * h2 - o2 * h1) / detA, (h1 - h2) / detA, (o2 - o1) / detA]
+        ];
+        rows.forEach((row, index) => addAmount(row, trio[index]));
+      }
+    }
+  }
+
+  roots.sort((a, b) => b - a);
+  const unique = roots.filter((root, index) => index === 0 || roots[index - 1] - root > tolerance);
+  unique.push(0);
+  return unique;
+};
+
 /**
  * Main N-gas blend solver.
  * Finds optimal blend using available gas sources, minimizing cost.
@@ -2205,12 +2315,14 @@ export const solveNGasBlend = (
   // If no solution and bleed-down might help (target He < start He, or composition requires it)
   if (alternatives.length === 0 && startPressurePsi > tolerance) {
     // Find the maximum starting pressure (minimum bleed) that allows a solution.
-    // Bank caps can make the feasible range an interval that excludes 0 (drain too
-    // far and a capped bank cannot supply the difference), so scan down from the
-    // current pressure for the highest feasible point before bisecting.
+    // Bank caps can make the feasible range a union of intervals that excludes 0
+    // (drain too far and a capped bank cannot supply the difference), and a window
+    // can be only a few psi wide. Every feasibility check is affine in the start
+    // pressure, so feasibility only changes at known breakpoints: walk the segments
+    // between them from the current pressure down and stop at the first that works.
     type BleedCandidate = { startPressurePsi: number; alternatives: BlendAlternative[] };
-    const tryStartPressure = (pressurePsi: number) =>
-      generateBlendAlternatives(
+    const tryStartPressure = (pressurePsi: number): BleedCandidate | null => {
+      const attemptAlts = generateBlendAlternatives(
         targetPressurePsi,
         targetO2,
         targetHe,
@@ -2220,15 +2332,18 @@ export const solveNGasBlend = (
         availableGases,
         costSettings
       );
-    // Bisect toward the highest feasible start pressure below `high`; `best` is a
-    // known feasible point at `low`, if any.
-    const bisectHighestFeasible = (low: number, high: number, best: BleedCandidate | null) => {
+      return attemptAlts.length > 0 ? { startPressurePsi: pressurePsi, alternatives: attemptAlts } : null;
+    };
+    // Bisect toward the highest feasible start pressure below `high`, given a
+    // feasible point at `best`.
+    const bisectHighestFeasible = (best: BleedCandidate, high: number) => {
+      let low = best.startPressurePsi;
       while (high - low > MULTI_GAS_BLEED_SEARCH_PRECISION_PSI) {
         const mid = (low + high) / 2;
         if (mid <= low || mid >= high) break; // Float spacing exceeds the precision
-        const attemptAlts = tryStartPressure(mid);
-        if (attemptAlts.length > 0) {
-          best = { startPressurePsi: mid, alternatives: attemptAlts };
+        const attempt = tryStartPressure(mid);
+        if (attempt) {
+          best = attempt;
           low = mid; // Try to bleed less
         } else {
           high = mid; // Must bleed more
@@ -2237,32 +2352,31 @@ export const solveNGasBlend = (
       return best;
     };
 
-    const scanIntervals = Math.min(
-      MULTI_GAS_BLEED_SCAN_MAX_INTERVALS,
-      Math.max(MULTI_GAS_BLEED_SCAN_MIN_INTERVALS, Math.ceil(startPressurePsi / MULTI_GAS_BLEED_SCAN_STEP_PSI))
+    const breakpoints = collectBleedBreakpoints(
+      targetPressurePsi,
+      targetO2,
+      targetHe,
+      startPressurePsi,
+      startO2,
+      startHe,
+      availableGases
     );
-    let scanned: BleedCandidate | null = null;
-    let infeasibleAbove = startPressurePsi;
-    // The current start pressure already failed, so begin one step below it.
-    for (let i = scanIntervals - 1; i >= 0; i--) {
-      const scanPressure = (startPressurePsi * i) / scanIntervals;
-      const attemptAlts = tryStartPressure(scanPressure);
-      if (attemptAlts.length > 0) {
-        scanned = bisectHighestFeasible(scanPressure, infeasibleAbove, {
-          startPressurePsi: scanPressure,
-          alternatives: attemptAlts
-        });
+    let best: BleedCandidate | null = null;
+    // The current start pressure already failed.
+    let upper = startPressurePsi;
+    for (const breakpoint of breakpoints) {
+      const midAttempt = tryStartPressure((breakpoint + upper) / 2);
+      if (midAttempt) {
+        best = bisectHighestFeasible(midAttempt, upper);
         break;
       }
-      infeasibleAbove = scanPressure;
+      const pointAttempt = tryStartPressure(breakpoint);
+      if (pointAttempt) {
+        best = pointAttempt;
+        break;
+      }
+      upper = breakpoint;
     }
-
-    // Plain bisection over the full range can still land in a feasible window
-    // narrower than the scan step, so keep whichever search drains less.
-    const bisected = bisectHighestFeasible(0, startPressurePsi, null);
-    const best = scanned && (!bisected || scanned.startPressurePsi >= bisected.startPressurePsi)
-      ? scanned
-      : bisected;
 
     if (best) {
       const { startPressurePsi: bestStartPressure, alternatives: bestAlternatives } = best;

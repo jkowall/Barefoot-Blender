@@ -729,6 +729,38 @@ describe("calculateRealGasStandardBlend", () => {
     expect(reconstructStandardFinalState(inputs, air, corrected).settledPressurePsi).toBeCloseTo(5650, 1);
   });
 
+  // 400 bar absolute is about 5786.8 psig. A pressure-matching refinement evaluates candidate
+  // mixes that settle above the envelope and fails these fills outright.
+  test.each([
+    { label: "pure oxygen over an air residual", startO2: 21, targetO2: 100, targetHe: 0, targetPressure: 5785 },
+    { label: "pure oxygen over an air residual", startO2: 21, targetO2: 100, targetHe: 0, targetPressure: 5786.8 },
+    { label: "pure helium over an air residual", startO2: 21, targetO2: 0, targetHe: 100, targetPressure: 5786 },
+    { label: "pure helium over an oxygen residual", startO2: 100, targetO2: 0, targetHe: 100, targetPressure: 5786.5 }
+  ])("plans a residual-adjusted fill of $label at $targetPressure psi", ({ startO2, targetO2, targetHe, targetPressure }) => {
+    const inputs = standardTrimixInput({ startO2, targetO2, targetHe, targetPressure });
+    const corrected = calculateRealGasStandardBlend({ pressureUnit: "psi" }, inputs, air);
+
+    expect(corrected.errors).toEqual([]);
+    expect(corrected.success).toBe(true);
+    expect(corrected.residualAdjustedMix).toBeDefined();
+    expect(corrected.finalHotPressurePsi).toBeCloseTo(targetPressure, 3);
+    expect(reconstructStandardFinalState(inputs, air, corrected).settledPressurePsi).toBeCloseTo(targetPressure, 3);
+  });
+
+  test.each([
+    { label: "pure oxygen over an air residual", startO2: 21, targetO2: 100, targetHe: 0, targetPressure: 3000 },
+    { label: "pure oxygen over an air residual", startO2: 21, targetO2: 100, targetHe: 0, targetPressure: 5780 },
+    { label: "pure helium over an air residual", startO2: 21, targetO2: 0, targetHe: 100, targetPressure: 5000 },
+    { label: "pure helium over an oxygen residual", startO2: 100, targetO2: 0, targetHe: 100, targetPressure: 5780 }
+  ])("lands a residual-adjusted fill of $label on $targetPressure psi to within 0.0005 psi", ({ startO2, targetO2, targetHe, targetPressure }) => {
+    const inputs = standardTrimixInput({ startO2, targetO2, targetHe, targetPressure });
+    const corrected = calculateRealGasStandardBlend({ pressureUnit: "psi" }, inputs, air);
+
+    expect(corrected.success).toBe(true);
+    expect(corrected.residualAdjustedMix).toBeDefined();
+    expect(reconstructStandardFinalState(inputs, air, corrected).settledPressurePsi).toBeCloseTo(targetPressure, 3);
+  });
+
   test("still rejects an empty start whose top-off gas cannot make the target even from vacuum", () => {
     const ean32: GasSelection = { id: "ean32", name: "EAN32", o2: 32, he: 0 };
     const corrected = calculateRealGasStandardBlend(

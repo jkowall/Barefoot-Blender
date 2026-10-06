@@ -1108,6 +1108,52 @@ describe("solveNGasBlend bleed-down search", () => {
     expect(2000 + alternative.fillOrder[0].amount + addedPressure).toBeCloseTo(3000, 1);
   });
 
+  const cappedBanks = (caps: { oxygen?: number; helium?: number; air?: number; ean32?: number }) => [
+    { id: "oxygen", name: "Oxygen", o2: 100, he: 0, maxPressurePsi: caps.oxygen },
+    { id: "helium", name: "Helium", o2: 0, he: 100, maxPressurePsi: caps.helium },
+    { id: "air", name: "Air", o2: 21, he: 0, maxPressurePsi: caps.air },
+    { id: "ean32", name: "EAN32", o2: 32, he: 0, maxPressurePsi: caps.ean32 }
+  ];
+  // `mixDigits` is loose for 2-gas plans, which accept a 0.5 psi pressure residual.
+  const expectBleedTo = (
+    result: ReturnType<typeof solveNGasBlend>,
+    startPsi: number,
+    bleedToPsi: number,
+    o2: number,
+    he: number,
+    mixDigits = 2
+  ) => {
+    expect(result.success).toBe(true);
+    expect(result.warnings).toContain("Bleed-down required to achieve target mix.");
+    const alternative = result.alternatives[0];
+    expect(alternative).toBeDefined();
+    if (!alternative) return;
+    expect(alternative.fillOrder[0].gas).toBe("Bleed Tank");
+    expect(startPsi + alternative.fillOrder[0].amount).toBeCloseTo(bleedToPsi, 1);
+    expect(alternative.finalO2).toBeCloseTo(o2, mixDigits);
+    expect(alternative.finalHe).toBeCloseTo(he, mixDigits);
+    const addedPressure = alternative.steps.reduce((sum, step) => sum + step.amount, 0);
+    expect(Math.abs(startPsi + alternative.fillOrder[0].amount + addedPressure - 3000)).toBeLessThanOrEqual(0.5 + 1e-6);
+  };
+
+  test("finds a capped-bank bleed window narrower than 10 psi", () => {
+    // Only starts of ~491-499 psi work; the old 10 psi scan stepped over them.
+    const sources = cappedBanks({ oxygen: 1193, air: 1081, ean32: 381 });
+    const result = solveNGasBlend(settings, 3000, 19, 44, 2188, 46, 51, sources, costSettings);
+
+    expectBleedTo(result, 2188, 499.04, 19, 44);
+    expect(result.alternatives[0]?.costBreakdown[0].gas).toBe("Bleed to 499 psi");
+  });
+
+  test("picks the higher of two nearby capped-bank bleed windows", () => {
+    // Windows of ~1727.5-1836 psi and 1839-1848 psi; the old scan bled to 1836.
+    const sources = cappedBanks({ oxygen: 1183, helium: 1180, air: 1928, ean32: 545 });
+    const result = solveNGasBlend(settings, 3000, 38, 52, 2768, 62, 22, sources, costSettings);
+
+    expectBleedTo(result, 2768, 1848, 38, 52, 0);
+    expect(result.alternatives[0]?.costBreakdown[0].gas).toBe("Bleed to 1848 psi");
+  });
+
   test("keeps the uncapped minimum bleed unchanged", () => {
     // Pinned from the bisection-only search before the scan was added.
     const result = solveNGasBlend(settings, 3000, 21, 35, 2500, 18, 45, trimixSources(), costSettings);
