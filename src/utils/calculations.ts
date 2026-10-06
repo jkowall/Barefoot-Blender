@@ -941,8 +941,8 @@ const solveTwoGasBlend = (
   };
 };
 
-const MULTI_GAS_O2_TOLERANCE = 1;
-const MULTI_GAS_HE_TOLERANCE = 5;
+export const MULTI_GAS_O2_TOLERANCE = 1;
+export const MULTI_GAS_HE_TOLERANCE = 5;
 const MULTI_GAS_O2_STEP = 0.1;
 const MULTI_GAS_HE_STEP = 0.5;
 const MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI = 0.5;

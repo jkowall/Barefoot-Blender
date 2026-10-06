@@ -661,6 +661,44 @@ describe("calculateRealGasMultiGasBlend edge cases", () => {
   });
 });
 
+describe("calculateRealGasMultiGasBlend limits after scaling", () => {
+  test("checks bank limits on residual-adjusted amounts, not the empty-cylinder plan", () => {
+    // Pure oxygen to 5 psi over 1 atm of air: the empty-cylinder plan is about 19.7 psi of oxygen,
+    // but the cylinder already holds 1 atm, so the real rise is 5 psi.
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({ targetPressure: 5, targetO2: 100, targetHe: 0, sources: [{ ...oxygen, maxPressurePsi: 6 }] }),
+      prices
+    );
+
+    expect(result.match).toBe("residualAdjusted");
+    const oxygenStep = result.alternatives[0].steps.find((step) => step.sourceId === oxygen.id);
+    expect(oxygenStep?.pressureChangePsi ?? 0).toBeCloseTo(5, 2);
+    expect(result.alternatives[0].settledPressurePsi).toBeCloseTo(5, 2);
+  });
+
+  test("keeps closest blends inside +/-1% O2 and +/-5% He after settling", () => {
+    // Over a helium residual this source refines to just past 5 points of helium below target.
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({
+        startO2: 0,
+        startHe: 100,
+        targetO2: 18,
+        targetHe: 50,
+        sources: [{ id: "custom-0", name: "18/44.698", o2: 18, he: 44.69823348 }]
+      }),
+      prices
+    );
+
+    for (const alternative of result.alternatives) {
+      expect(Math.abs(alternative.deviationO2)).toBeLessThanOrEqual(1 + 1e-6);
+      expect(Math.abs(alternative.deviationHe)).toBeLessThanOrEqual(5 + 1e-6);
+    }
+    expect(result.match).not.toBe("closest");
+  });
+});
+
 describe("resolveMultiGasStageTemperaturesF", () => {
   test("inherits the previous stage, then Start Temp", () => {
     expect(

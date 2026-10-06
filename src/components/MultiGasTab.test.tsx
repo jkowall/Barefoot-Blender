@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
-import {
+import MultiGasTab, {
   MAX_GAS_SOURCES,
   StageTemperatureRecovery,
   clearStageTemperatures,
@@ -12,6 +12,7 @@ import {
   selectMultiGasPlanModel
 } from "./MultiGasTab";
 import type { GasSourceInput } from "../state/session";
+import { useSettingsStore } from "../state/settings";
 import { listTopOffOptions, solveNGasBlend, type GasSelection } from "../utils/calculations";
 import { calculateRealGasMultiGasBlend, type RealGasMultiGasResult } from "../utils/realGasMultiGas";
 
@@ -217,5 +218,20 @@ describe("stage temperature recovery", () => {
     expect(markup).not.toContain("Gas 2 Stage Temp");
     expect(markup).toContain("Gas 3 Stage Temp (C)");
     expect(markup).toContain("Reset stage temps");
+  });
+});
+
+describe("MultiGasTab plan options", () => {
+  test.each(["gerg2008", "ideal"] as const)("labels each option radio for screen readers in %s mode", (gasModel) => {
+    const settings = { ...useSettingsStore.getState(), gasModel };
+    const markup = renderToStaticMarkup(
+      <MultiGasTab
+        settings={settings}
+        topOffOptions={listTopOffOptions(settings.customGases)}
+        trainingModeEnabled={false}
+      />
+    );
+
+    expect(markup).toMatch(/<input[^>]*type="radio"[^>]*aria-label="Option 1"/);
   });
 });

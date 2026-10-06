@@ -1,7 +1,9 @@
 import type { PressureUnit } from "../state/settings";
 import {
   MULTI_GAS_BANK_LIMIT_ERROR,
+  MULTI_GAS_HE_TOLERANCE,
   MULTI_GAS_NO_BLEND_ERROR,
+  MULTI_GAS_O2_TOLERANCE,
   MULTI_GAS_SIMILAR_BLEND_WARNING,
   estimateGasPressureCost,
   findSimilarNGasAlternatives,
@@ -174,7 +176,7 @@ type StartState = {
 type RealizeOptions = {
   enforceCaps: boolean;
   // Reject options whose reached mix is further than this from the target (percentage points).
-  mixTolerancePercent?: number;
+  mixTolerance?: { o2: number; he: number };
 };
 
 type RealizeOutcome = {
@@ -503,11 +505,11 @@ export const calculateRealGasMultiGasBlend = (
     }
 
     const finalFractions = fractionsFromMoles(simulation.finalComponents);
-    const mixTolerance = options.mixTolerancePercent;
+    const mixTolerance = options.mixTolerance;
     if (
       mixTolerance !== undefined &&
-      (Math.abs(finalFractions.o2 * 100 - input.targetO2) > mixTolerance ||
-        Math.abs(finalFractions.he * 100 - input.targetHe) > mixTolerance)
+      (Math.abs(finalFractions.o2 * 100 - input.targetO2) > mixTolerance.o2 ||
+        Math.abs(finalFractions.he * 100 - input.targetHe) > mixTolerance.he)
     ) {
       return { rejected: "mix" };
     }
@@ -574,11 +576,17 @@ export const calculateRealGasMultiGasBlend = (
       if (outcome.alternatives.length >= limit || evaluated >= MAX_REALIZED_CANDIDATES) {
         break;
       }
+      // Compare the amounts after the same scaling the realization applies: residual-adjusted options
+      // are planned for an empty cylinder and shrink by the moles already in it.
+      const addedAmount = candidate.steps.reduce((sum, step) => sum + Math.max(0, step.amount), 0);
+      const amountScale = addedAmount > 0
+        ? Math.max(0, (targetMoles - totalMoles(start.components)) * psiPerMole / addedAmount)
+        : 1;
       if (
         options.enforceCaps &&
         candidate.steps.some((step) => {
           const cap = sourceById.get(step.gas.id)?.maxPressurePsi;
-          return cap !== undefined && step.amount > cap * CAP_PREFILTER_FACTOR + CAP_TOLERANCE_PSI;
+          return cap !== undefined && step.amount * amountScale > cap * CAP_PREFILTER_FACTOR + CAP_TOLERANCE_PSI;
         })
       ) {
         outcome.capRejected += 1;
@@ -602,8 +610,16 @@ export const calculateRealGasMultiGasBlend = (
     }
     return outcome;
   };
-  const exactOptions: RealizeOptions = { enforceCaps: true, mixTolerancePercent: EXACT_MIX_TOLERANCE_PERCENT };
-  const approximateOptions: RealizeOptions = { enforceCaps: true };
+  const exactOptions: RealizeOptions = {
+    enforceCaps: true,
+    mixTolerance: { o2: EXACT_MIX_TOLERANCE_PERCENT, he: EXACT_MIX_TOLERANCE_PERCENT }
+  };
+  const residualOptions: RealizeOptions = { enforceCaps: true };
+  // The settled-pressure refinement can move a closest blend slightly, so recheck its limits.
+  const closestOptions: RealizeOptions = {
+    enforceCaps: true,
+    mixTolerance: { o2: MULTI_GAS_O2_TOLERANCE + PERCENT_TOLERANCE, he: MULTI_GAS_HE_TOLERANCE + PERCENT_TOLERANCE }
+  };
 
   let capRejected = 0;
   const gergErrors: string[] = [];
@@ -664,7 +680,7 @@ export const calculateRealGasMultiGasBlend = (
       }
       const outcome = realize(enumerate(totalMoles(state.components)), state, 1, {
         enforceCaps,
-        mixTolerancePercent: BLEED_SEARCH_MIX_TOLERANCE_PERCENT
+        mixTolerance: { o2: BLEED_SEARCH_MIX_TOLERANCE_PERCENT, he: BLEED_SEARCH_MIX_TOLERANCE_PERCENT }
       });
       return outcome.alternatives.length > 0 ? state : null;
     };
@@ -765,7 +781,7 @@ export const calculateRealGasMultiGasBlend = (
   // within 0.5 points, and purging would not make such a source reach the target either.
   if ("components" in residualStart) {
     const vacuumCandidates = enumerate(0).filter((candidate) => additionsMakeTarget(candidate.steps, input));
-    const residualOutcome = realize(vacuumCandidates, residualStart, maxAlternatives, approximateOptions);
+    const residualOutcome = realize(vacuumCandidates, residualStart, maxAlternatives, residualOptions);
     const residual = track(residualOutcome);
     if (residual.length > 0) {
       const startWasAboveZero = startPressurePsi > MOLE_TOLERANCE;
@@ -796,7 +812,7 @@ export const calculateRealGasMultiGasBlend = (
       ),
       start,
       maxAlternatives,
-      approximateOptions
+      closestOptions
     );
   const closestOutcome = closestFrom(fullStart);
   const closest = track(closestOutcome);

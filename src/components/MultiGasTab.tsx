@@ -1074,6 +1074,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                       <input
                         type="radio"
                         name="blend-alternative"
+                        aria-label={`Option ${index + 1}`}
                         checked={index === selectedIndex}
                         onChange={() => selectAlternative(index)}
                       />
@@ -1212,6 +1213,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                       <input
                         type="radio"
                         name="blend-alternative"
+                        aria-label={`Option ${index + 1}`}
                         checked={index === selectedIndex}
                         onChange={() => selectAlternative(index)}
                       />
