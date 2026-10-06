@@ -158,9 +158,19 @@ The Multi-Gas tab takes a start cylinder, a target mix and pressure, and 1 to 6 
    - Three sources solve the 3x3 system `[1 1 1; O2; He] * amounts = P_added * [1; O2_needed; He_needed]`, which is unique when it exists.
    - Negative amounts and amounts above a source's bank limit are rejected.
 3. Rank the options by fill cost (section 5) and show up to five.
-4. If none works, bisect the start pressure for the smallest bleed-down; if that fails, search for the closest blend within +/-1% O2 and +/-5% He.
+4. If none works, search for the smallest bleed-down (see N-Gas Bleed-Down Search below); if that fails, search for the closest blend within +/-1% O2 and +/-5% He.
 
 With four or more sources there can be many valid fills. The optimizer lists the cheapest subset solutions; it does not search fills that take partial amounts from more than three sources.
+
+### N-Gas Bleed-Down Search
+
+Module: `solveNGasBlend`
+
+When no 1-, 2-, or 3-source plan reaches the target from the current start pressure, the solver looks for the highest start pressure (smallest bleed) that works:
+- Bank caps (`maxPressurePsi`) can make the workable start range an interval that excludes 0. Draining too far leaves more to add than a capped bank can supply. So the search does not assume that draining further always stays feasible.
+- Scan start pressures from the current pressure down to 0: at least 32 points, no more than about 10 PSI apart. Bisect between the highest workable point and the failing point above it to 0.001 PSI.
+- Also run a plain bisection over the full range, which can land in a workable window narrower than the scan step, and keep whichever result drains less.
+- The plan gets a leading `Bleed Tank` step, a `Bleed to ...` cost line, and the "Bleed-down required to achieve target mix." warning.
 
 ### GERG-2008 Multi-Gas
 
