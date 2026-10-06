@@ -7,6 +7,7 @@ import {
   calculateGasCost,
   calculateFillCostEstimate,
   generateBlendAlternatives,
+  isolatedBleedStartAmounts,
   solveNGasBlend,
   calculateEND,
   calculateDensity,
@@ -1124,6 +1125,66 @@ describe("solveNGasBlend bleed-down search", () => {
     expect(alternative.estimatedCost).toBeCloseTo(6.8178, 3);
     expect(alternative.finalO2).toBeCloseTo(21, 2);
     expect(alternative.finalHe).toBeCloseTo(35, 2);
+  });
+
+  const ean40Sources = [
+    { id: "air", name: "Air", o2: 21, he: 0 },
+    { id: "helium", name: "Helium", o2: 0, he: 100 }
+  ];
+
+  test("solves the retained start amount for one- and two-source bleeds", () => {
+    const ean36 = { id: "ean36", name: "EAN36", o2: 36, he: 0 };
+    // Air plus EAN36 makes EAN32 only when 800 of the 3000 psi is kept from the air start.
+    expect(isolatedBleedStartAmounts(3000, { o2: 32, he: 0 }, { o2: 21, he: 0 }, [ean36])).toEqual([
+      expect.closeTo(800, 9)
+    ]);
+    // A mix that does not lie between the start and the source has no single-source answer.
+    expect(isolatedBleedStartAmounts(3000, { o2: 32, he: 10 }, { o2: 21, he: 0 }, [ean36])).toEqual([]);
+    // EAN40 plus Air and Helium makes 21/35 only when 220.5 / 0.19 psi of EAN40 is kept.
+    expect(isolatedBleedStartAmounts(3000, { o2: 21, he: 35 }, { o2: 40, he: 0 }, ean40Sources)).toEqual([
+      expect.closeTo(220.5 / 0.19, 6)
+    ]);
+  });
+
+  test("finds the single start pressure where EAN40 plus Air and Helium makes 21/35", () => {
+    // Helium adds 1050 psi and the O2 balance keeps 220.5 / 0.19 = 1160.53 psi of EAN40. A 2-source
+    // plan accepts a 0.5 psi residual, so only ~1159.97-1161.08 psi works and both the ~10 psi scan
+    // and the plain bisection from 1505 psi stepped over it.
+    const retainedPsi = 220.5 / 0.19;
+    const result = solveNGasBlend(settings, 3000, 21, 35, 1505, 40, 0, ean40Sources, costSettings);
+
+    expect(result.success).toBe(true);
+    expect(result.warnings).toEqual(["Bleed-down required to achieve target mix."]);
+
+    const alternative = result.alternatives[0];
+    expect(alternative).toBeDefined();
+    if (!alternative) return;
+
+    expect(alternative.fillOrder.map((step) => step.gas)).toEqual(["Bleed Tank", "Helium", "Air"]);
+    expect(alternative.fillOrder[0].amount).toBeCloseTo(retainedPsi - 1505, 3);
+    expect(alternative.costBreakdown[0].gas).toBe("Bleed to 1161 psi");
+    expect(alternative.fillOrder[1].amount).toBeCloseTo(1050, 3);
+    expect(alternative.fillOrder[2].amount).toBeCloseTo(1950 - retainedPsi, 3);
+    expect(alternative.finalO2).toBeCloseTo(21, 6);
+    expect(alternative.finalHe).toBeCloseTo(35, 6);
+
+    const addedPressure = alternative.steps.reduce((sum, step) => sum + step.amount, 0);
+    expect(1505 + alternative.fillOrder[0].amount + addedPressure).toBeCloseTo(3000, 6);
+  });
+
+  test("does not bleed EAN40 when the only exact start is above the cylinder pressure", () => {
+    // 1120.923 psi is already below the 1160.53 psi exact point, so draining cannot help in ideal
+    // mode. (GERG-2008 shifts that point below this start, so the real-gas plan does bleed.)
+    const result = solveNGasBlend(settings, 3000, 21, 35, 1120.923, 40, 0, ean40Sources, costSettings);
+
+    expect(result.success).toBe(true);
+    expect(result.warnings).toEqual([
+      "Exact target cannot be made; showing closest blend within +/-1% O2 / +/-5% He."
+    ]);
+    expect(result.alternatives.length).toBeGreaterThan(0);
+    for (const alternative of result.alternatives) {
+      expect(alternative.fillOrder.some((step) => step.gas === "Bleed Tank")).toBe(false);
+    }
   });
 });
 

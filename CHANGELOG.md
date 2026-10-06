@@ -5,6 +5,7 @@
 ### Fixed
 
 - **Multi-Gas Bleed-Down With Bank Limits**: Ideal Multi-Gas now finds the bleed-down when a capped bank means the tank can be drained too far as well as not far enough. It previously returned "No valid blend found" (2000 psi of 10/70 into 21/35 at 3000 psi with Air capped at 1300 psi now bleeds to 1500 psi). The search now scans start pressures from the current pressure down before refining, and keeps the smallest bleed it finds. Bleed-downs that already worked are unchanged, except a few where the old search drained more than needed. Those now bleed less.
+- **Multi-Gas Single-Point Bleed-Down**: Ideal Multi-Gas now finds a bleed-down whose only exact plan sits at one start pressure, which happens with the start mix plus two source gases such as Air and Helium. It previously showed a closest blend (1505 psi of EAN40 into 21/35 at 3000 psi with Air and Helium now bleeds to 1161 psi and reaches 21/35 exactly). The solver now solves those start pressures directly and checks each one. Bleed-downs the search already found are unchanged.
 
 ## [1.1.2] - 2026-10-05
 

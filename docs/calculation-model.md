@@ -161,6 +161,7 @@ When no 1-, 2-, or 3-source plan reaches the target from the current start press
 - Bank caps (`maxPressurePsi`) can make the workable start range an interval that excludes 0. Draining too far leaves more to add than a capped bank can supply. So the search does not assume that draining further always stays feasible.
 - Scan start pressures from the current pressure down to 0: at least 32 points, no more than about 10 PSI apart. Bisect between the highest workable point and the failing point above it to 0.001 PSI.
 - Also run a plain bisection over the full range, which can land in a workable window narrower than the scan step, and keep whichever result drains less.
+- With one or two sources, an exact fill after a bleed exists at a single start pressure, because the kept start pressure and the source amounts must meet all three balances (total, O2, He). A 2-source plan accepts a 0.5 PSI residual, so that window is only about 1 PSI wide and both searches can step over it. `isolatedBleedStartAmounts` solves those start pressures directly; each one below the current pressure is checked with the normal plan search and kept only when it drains more than 0.001 PSI less than the search result.
 - The plan gets a leading `Bleed Tank` step, a `Bleed to ...` cost line, and the "Bleed-down required to achieve target mix." warning.
 
 ## 4. Utility Calculators

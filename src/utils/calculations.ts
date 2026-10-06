@@ -952,6 +952,10 @@ const MULTI_GAS_BLEED_SCAN_MIN_INTERVALS = 31;
 const MULTI_GAS_BLEED_SCAN_MAX_INTERVALS = 1000;
 const MULTI_GAS_BLEED_SCAN_STEP_PSI = 10;
 const MULTI_GAS_BLEED_SEARCH_PRECISION_PSI = 0.001;
+// Single-point bleed solve: determinant below which a start/source system is singular, and the
+// allowed mismatch in the balance a 1-source solve does not use, as a fraction of the target amount.
+const MULTI_GAS_BLEED_SINGULAR_TOLERANCE = 1e-9;
+const MULTI_GAS_BLEED_CONSISTENCY_TOLERANCE = 1e-5;
 const MULTI_GAS_SIMILAR_BLEND_WARNING =
   "Exact target cannot be made; showing closest blend within +/-1% O2 / +/-5% He.";
 
@@ -2098,6 +2102,68 @@ const findSimilarNGasAlternatives = (
 };
 
 /**
+ * Start amounts to keep (in the same units as targetAmount) at which the start mix plus one or two
+ * sources makes the target exactly. With one or two sources such a fill after a bleed exists at a
+ * single drain-to point, which a pressure scan can step over, so these points are solved directly.
+ * Mixes are percentages. Candidates are not range-checked against the cylinder contents.
+ */
+export const isolatedBleedStartAmounts = (
+  targetAmount: number,
+  target: { o2: number; he: number },
+  start: { o2: number; he: number },
+  sources: GasSelection[]
+): number[] => {
+  const t = { o2: fraction(target.o2), he: fraction(target.he) };
+  const s = { o2: fraction(start.o2), he: fraction(start.he) };
+  const amounts: number[] = [];
+  const accept = (retained: number, additions: number[]): void => {
+    if (retained >= -tolerance && additions.every((amount) => amount >= -tolerance)) {
+      amounts.push(Math.max(0, retained));
+    }
+  };
+
+  for (const source of sources) {
+    const g = { o2: fraction(source.o2), he: fraction(source.he) };
+    // retained + added = target; solve with the O2 balance, or the He balance when O2 cannot separate
+    // the start mix from the source, then check the other balance.
+    const useO2 = Math.abs(s.o2 - g.o2) > MULTI_GAS_BLEED_SINGULAR_TOLERANCE;
+    const denominator = useO2 ? s.o2 - g.o2 : s.he - g.he;
+    if (Math.abs(denominator) <= MULTI_GAS_BLEED_SINGULAR_TOLERANCE) {
+      continue;
+    }
+    const retained = targetAmount * (useO2 ? t.o2 - g.o2 : t.he - g.he) / denominator;
+    const added = targetAmount - retained;
+    const otherResidual = useO2
+      ? retained * s.he + added * g.he - targetAmount * t.he
+      : retained * s.o2 + added * g.o2 - targetAmount * t.o2;
+    if (Math.abs(otherResidual) <= MULTI_GAS_BLEED_CONSISTENCY_TOLERANCE * targetAmount) {
+      accept(retained, [added]);
+    }
+  }
+
+  for (let i = 0; i < sources.length; i++) {
+    for (let j = i + 1; j < sources.length; j++) {
+      const a = { o2: fraction(sources[i].o2), he: fraction(sources[i].he) };
+      const b = { o2: fraction(sources[j].o2), he: fraction(sources[j].he) };
+      // [1 1 1; s.o2 a.o2 b.o2; s.he a.he b.he] [retained; x1; x2] = target * [1; t.o2; t.he]
+      const det = (a.o2 * b.he - b.o2 * a.he) - (s.o2 * b.he - b.o2 * s.he) + (s.o2 * a.he - a.o2 * s.he);
+      if (Math.abs(det) <= MULTI_GAS_BLEED_SINGULAR_TOLERANCE) {
+        continue;
+      }
+      const r1 = targetAmount;
+      const r2 = targetAmount * t.o2;
+      const r3 = targetAmount * t.he;
+      const retained = (r1 * (a.o2 * b.he - b.o2 * a.he) - (r2 * b.he - b.o2 * r3) + (r2 * a.he - a.o2 * r3)) / det;
+      const x1 = ((s.o2 * r3 - r2 * s.he) - r1 * (s.o2 * b.he - b.o2 * s.he) + (r2 * b.he - b.o2 * r3)) / det;
+      const x2 = ((a.o2 * r3 - r2 * a.he) - (s.o2 * r3 - r2 * s.he) + r1 * (s.o2 * a.he - a.o2 * s.he)) / det;
+      accept(retained, [x1, x2]);
+    }
+  }
+
+  return amounts;
+};
+
+/**
  * Main N-gas blend solver.
  * Finds optimal blend using available gas sources, minimizing cost.
  * Supports bleed-down scenarios when target composition requires removing gas.
@@ -2205,9 +2271,27 @@ export const solveNGasBlend = (
     // Plain bisection over the full range can still land in a feasible window
     // narrower than the scan step, so keep whichever search drains less.
     const bisected = bisectHighestFeasible(0, startPressurePsi, null);
-    const best = scanned && (!bisected || scanned.startPressurePsi >= bisected.startPressurePsi)
+    let best = scanned && (!bisected || scanned.startPressurePsi >= bisected.startPressurePsi)
       ? scanned
       : bisected;
+
+    // With one or two sources an exact fill after a bleed exists at a single start pressure, which
+    // both searches can step over. Solve those points directly and keep one only when it drains
+    // less than the search found, so bleeds the search already pinned down stay unchanged.
+    const isolatedStarts = isolatedBleedStartAmounts(
+      targetPressurePsi,
+      { o2: targetO2, he: targetHe },
+      { o2: startO2, he: startHe },
+      availableGases
+    );
+    for (const isolatedStartPsi of isolatedStarts) {
+      if (isolatedStartPsi >= startPressurePsi - tolerance) continue;
+      if (best && isolatedStartPsi <= best.startPressurePsi + MULTI_GAS_BLEED_SEARCH_PRECISION_PSI) continue;
+      const attemptAlts = tryStartPressure(isolatedStartPsi);
+      if (attemptAlts.length > 0) {
+        best = { startPressurePsi: isolatedStartPsi, alternatives: attemptAlts };
+      }
+    }
 
     if (best) {
       const { startPressurePsi: bestStartPressure, alternatives: bestAlternatives } = best;
