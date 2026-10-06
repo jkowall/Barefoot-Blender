@@ -1064,6 +1064,69 @@ describe("solveNGasBlend bank limits", () => {
   });
 });
 
+describe("solveNGasBlend bleed-down search", () => {
+  const settings = { pressureUnit: "psi" as const };
+  const costSettings = {
+    tankSizeCuFt: 80,
+    tankRatedPressure: 3000,
+    pricePerCuFtO2: 1,
+    pricePerCuFtHe: 3.5,
+    pricePerCuFtTopOff: 0.1
+  };
+  const trimixSources = (airMaxPressurePsi?: number) => [
+    { id: "oxygen", name: "Oxygen", o2: 100, he: 0 },
+    { id: "helium", name: "Helium", o2: 0, he: 100 },
+    { id: "air", name: "Air", o2: 21, he: 0, maxPressurePsi: airMaxPressurePsi }
+  ];
+
+  // 2000 psi of 10/70 into 21/35 at 3000 psi: He balance needs start <= 1500 psi,
+  // and the Air cap needs start >= ~1465 psi (1300) or ~1485 psi (1295), so the
+  // feasible start range excludes 0 and a plain bisection over [0, 2000] misses it.
+  test.each([1300, 1295])("finds the bleed window that a %i psi Air cap leaves above 0", (airCap) => {
+    const result = solveNGasBlend(settings, 3000, 21, 35, 2000, 10, 70, trimixSources(airCap), costSettings);
+
+    expect(result.success).toBe(true);
+    expect(result.warnings).toContain("Bleed-down required to achieve target mix.");
+
+    const alternative = result.alternatives[0];
+    expect(alternative).toBeDefined();
+    if (!alternative) return;
+
+    expect(alternative.fillOrder[0].gas).toBe("Bleed Tank");
+    expect(alternative.fillOrder[0].amount).toBeCloseTo(-500, 1);
+    expect(alternative.costBreakdown[0].gas).toBe("Bleed to 1500 psi");
+    expect(alternative.costBreakdown[0].amount).toBeCloseTo(500, 1);
+
+    const airStep = alternative.steps.find((step) => step.gas.id === "air");
+    expect(airStep?.amount).toBeLessThanOrEqual(airCap + 1e-6);
+    expect(alternative.finalO2).toBeCloseTo(21, 2);
+    expect(alternative.finalHe).toBeCloseTo(35, 2);
+
+    const addedPressure = alternative.steps.reduce((sum, step) => sum + step.amount, 0);
+    expect(2000 + alternative.fillOrder[0].amount + addedPressure).toBeCloseTo(3000, 1);
+  });
+
+  test("keeps the uncapped minimum bleed unchanged", () => {
+    // Pinned from the bisection-only search before the scan was added.
+    const result = solveNGasBlend(settings, 3000, 21, 35, 2500, 18, 45, trimixSources(), costSettings);
+
+    expect(result.success).toBe(true);
+    expect(result.warnings).toEqual(["Bleed-down required to achieve target mix."]);
+    expect(result.alternatives).toHaveLength(1);
+
+    const [alternative] = result.alternatives;
+    expect(alternative.fillOrder.map((step) => step.gas)).toEqual(["Bleed Tank", "Oxygen", "Air"]);
+    expect(alternative.fillOrder[0].amount).toBeCloseTo(-166.667, 2);
+    expect(alternative.fillOrder[1].amount).toBeCloseTo(88.608, 2);
+    expect(alternative.fillOrder[2].amount).toBeCloseTo(578.059, 2);
+    expect(alternative.costBreakdown.map((line) => line.gas)).toEqual(["Bleed to 2333 psi", "Air", "Oxygen"]);
+    expect(alternative.costBreakdown[0].cost).toBe(0);
+    expect(alternative.estimatedCost).toBeCloseTo(6.8178, 3);
+    expect(alternative.finalO2).toBeCloseTo(21, 2);
+    expect(alternative.finalHe).toBeCloseTo(35, 2);
+  });
+});
+
 describe("generateBlendAlternatives deduplication", () => {
   const costSettings = {
     tankSizeCuFt: 80,
