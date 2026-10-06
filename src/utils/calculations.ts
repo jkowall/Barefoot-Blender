@@ -946,7 +946,11 @@ const MULTI_GAS_HE_TOLERANCE = 5;
 const MULTI_GAS_O2_STEP = 0.1;
 const MULTI_GAS_HE_STEP = 0.5;
 const MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI = 0.5;
-const MULTI_GAS_SIMILAR_BLEND_WARNING =
+export const MULTI_GAS_BANK_LIMIT_ERROR =
+  "No valid blend found with the selected gases and bank pressure limits. Increase availability or adjust the target.";
+export const MULTI_GAS_NO_BLEND_ERROR =
+  "No valid blend found with available gases. Try adding more gas sources or adjusting target.";
+export const MULTI_GAS_SIMILAR_BLEND_WARNING =
   "Exact target cannot be made; showing closest blend within +/-1% O2 / +/-5% He.";
 
 const buildSearchValues = (
@@ -1672,30 +1676,81 @@ const trySingleGasSolution = (
 };
 
 /**
+ * Recommended fill-order comparator: pure He first, then pure O2, then by He content descending,
+ * then by O2 content descending, so Air and other diluents go last.
+ */
+export const compareRecommendedFillOrder = (
+  a: { gas: GasSelection },
+  b: { gas: GasSelection }
+): number => {
+  // Pure He comes first
+  if (a.gas.he === 100 && b.gas.he !== 100) return -1;
+  if (b.gas.he === 100 && a.gas.he !== 100) return 1;
+  // Then pure O2
+  if (a.gas.o2 === 100 && b.gas.o2 !== 100) return -1;
+  if (b.gas.o2 === 100 && a.gas.o2 !== 100) return 1;
+  // Then by He content (higher He first)
+  if (a.gas.he !== b.gas.he) return b.gas.he - a.gas.he;
+  // Then by O2 content (higher O2 first)
+  if (a.gas.o2 !== b.gas.o2) return b.gas.o2 - a.gas.o2;
+  // Air/diluent last
+  return 0;
+};
+
+/**
  * Get recommended fill order for a blend (He first, then O2, then diluent/Air).
  */
 export const getRecommendedFillOrder = (
   steps: { gas: OptimizerGasSource; amount: number }[]
 ): { gas: string; amount: number }[] => {
-  // Sort by: pure He first, then by He content descending, then by O2 content descending
   const sorted = [...steps]
     .filter(s => s.amount > tolerance)
-    .sort((a, b) => {
-      // Pure He comes first
-      if (a.gas.he === 100 && b.gas.he !== 100) return -1;
-      if (b.gas.he === 100 && a.gas.he !== 100) return 1;
-      // Then pure O2
-      if (a.gas.o2 === 100 && b.gas.o2 !== 100) return -1;
-      if (b.gas.o2 === 100 && a.gas.o2 !== 100) return 1;
-      // Then by He content (higher He first)
-      if (a.gas.he !== b.gas.he) return b.gas.he - a.gas.he;
-      // Then by O2 content (higher O2 first)  
-      if (a.gas.o2 !== b.gas.o2) return b.gas.o2 - a.gas.o2;
-      // Air/diluent last
-      return 0;
-    });
+    .sort(compareRecommendedFillOrder);
 
   return sorted.map(s => ({ gas: s.gas.name, amount: s.amount }));
+};
+
+// "auto" uses the recommended order; "manual" follows the user's source list from top to bottom.
+export type MultiGasFillOrderMode = "auto" | "manual";
+
+/**
+ * Order blend steps for filling. Amounts never change with order; only the stop pressures do.
+ * Manual mode sorts by each step's position in sourceOrderIds; unknown ids go last.
+ */
+export const orderBlendStepsForFill = <T extends { gas: GasSelection; amount: number }>(
+  steps: T[],
+  mode: MultiGasFillOrderMode,
+  sourceOrderIds: readonly string[]
+): T[] => {
+  const positive = steps.filter((step) => step.amount > tolerance);
+  if (mode === "auto") {
+    return [...positive].sort(compareRecommendedFillOrder);
+  }
+  const position = (id: string): number => {
+    const index = sourceOrderIds.indexOf(id);
+    return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  return [...positive].sort((a, b) => position(a.gas.id) - position(b.gas.id));
+};
+
+/**
+ * Apply a fill-order mode to an ideal blend alternative. Auto returns the alternative unchanged;
+ * manual rebuilds fillOrder from the source list, keeping any bleed step first.
+ */
+export const applyFillOrderToAlternative = (
+  alternative: BlendAlternative,
+  mode: MultiGasFillOrderMode,
+  sourceOrderIds: readonly string[]
+): BlendAlternative => {
+  if (mode === "auto") {
+    return alternative;
+  }
+  const bleedSteps = alternative.fillOrder.filter((step) => step.amount < 0);
+  const ordered = orderBlendStepsForFill(alternative.steps, mode, sourceOrderIds);
+  return {
+    ...alternative,
+    fillOrder: [...bleedSteps, ...ordered.map((step) => ({ gas: step.gas.name, amount: step.amount }))]
+  };
 };
 
 /**
@@ -2002,7 +2057,7 @@ const blendAlternativeCompositionDistance = (alternative: BlendAlternative): num
   return o2Distance + heDistance;
 };
 
-const findSimilarNGasAlternatives = (
+export const findSimilarNGasAlternatives = (
   targetPressurePsi: number,
   targetO2: number,
   targetHe: number,
@@ -2217,8 +2272,8 @@ export const solveNGasBlend = (
       success: false,
       alternatives: [],
       error: availableGases.some((gas) => gas.maxPressurePsi !== undefined)
-        ? "No valid blend found with the selected gases and bank pressure limits. Increase availability or adjust the target."
-        : "No valid blend found with available gases. Try adding more gas sources or adjusting target.",
+        ? MULTI_GAS_BANK_LIMIT_ERROR
+        : MULTI_GAS_NO_BLEND_ERROR,
       warnings
     };
   }
