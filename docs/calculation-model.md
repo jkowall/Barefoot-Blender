@@ -158,9 +158,9 @@ P₁·O₂₁ + P₂·O₂₂ = P_target·O₂_target
 Module: `solveNGasBlend`
 
 When no 1-, 2-, or 3-source plan reaches the target from the current start pressure, the solver looks for the highest start pressure (smallest bleed) that works:
-- Bank caps (`maxPressurePsi`) can make the workable start range an interval that excludes 0. Draining too far leaves more to add than a capped bank can supply. So the search does not assume that draining further always stays feasible.
-- Scan start pressures from the current pressure down to 0: at least 32 points, no more than about 10 PSI apart. Bisect between the highest workable point and the failing point above it to 0.001 PSI.
-- Also run a plain bisection over the full range, which can land in a workable window narrower than the scan step, and keep whichever result drains less.
+- Bank caps (`maxPressurePsi`) can make the workable start range a set of intervals that excludes 0, and a window can be only a few PSI wide. Draining too far leaves more to add than a capped bank can supply. So the search does not assume that draining further always stays feasible.
+- Every check the 1-, 2-, and 3-source solvers make (needed-mix bounds, single-source match, source amounts, bank caps, and the 2-source 0.5 PSI pressure residual) is linear in the start pressure, so the solver computes every start pressure where one of them changes sign. Feasibility cannot change between two neighboring breakpoints.
+- Walk those segments from the current pressure down to 0, testing each segment's midpoint and then its lower breakpoint. The first segment that works is bisected up toward its upper breakpoint to 0.001 PSI; a lone workable breakpoint is used as is. This finds the smallest possible bleed, however narrow the window.
 - The plan gets a leading `Bleed Tank` step, a `Bleed to ...` cost line, and the "Bleed-down required to achieve target mix." warning.
 
 ## 4. Utility Calculators
