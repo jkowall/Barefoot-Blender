@@ -1040,6 +1040,44 @@ describe("calculateRealGasMultiGasBlend seventh review cases", () => {
   });
 });
 
+describe("calculateRealGasMultiGasBlend eighth review cases", () => {
+  test("reports no blend when only bank limits stop a bleed whose uncapped probes break the envelope", () => {
+    // The only source is capped at 0 psi; the uncapped bleed probe's 200 F stage passes 400 bar.
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({
+        startPressure: 500,
+        startO2: 21,
+        startHe: 35,
+        targetPressure: 5600,
+        sources: [{ id: "custom-0", name: "21/35", o2: 21, he: 35, maxPressurePsi: 0, stageTemperatureF: 200 }]
+      }),
+      prices
+    );
+    expect(result.success).toBe(false);
+    expect(result.failure).toBe("noBlend");
+  });
+
+  test("counts a bank limit a completed stage broke before a later stage fails", () => {
+    // Oxygen (capped at 0 psi) fills before the 200 F Air stage passes 400 bar.
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({
+        startPressure: 1000,
+        startO2: 10,
+        startHe: 0,
+        targetPressure: 5600,
+        targetO2: 32,
+        targetHe: 0,
+        sources: [{ ...oxygen, maxPressurePsi: 0 }, { ...air, stageTemperatureF: 200 }]
+      }),
+      prices
+    );
+    expect(result.success).toBe(false);
+    expect(result.failure).toBe("noBlend");
+  });
+});
+
 describe("resolveMultiGasStageTemperaturesF", () => {
   test("inherits the previous stage, then Start Temp", () => {
     expect(

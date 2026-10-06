@@ -8,6 +8,7 @@ import MultiGasTab, {
   hasStageTemperatureOverrides,
   realGasStepKey,
   showStageTemperatureRecovery,
+  stageTemperatureRecoveryRows,
   moveGasSource,
   resolveMultiGasSources,
   selectMultiGasPlanModel
@@ -219,6 +220,33 @@ describe("stage temperature recovery", () => {
     expect(markup).not.toContain("Gas 2 Stage Temp");
     expect(markup).toContain("Gas 3 Stage Temp (C)");
     expect(markup).toContain("Reset stage temps");
+  });
+
+  test("stays open while someone edits in it, even once a corrected plan returns", () => {
+    // Typing 70 over -20: the 7 already makes the plan valid, so the editor must outlast that keystroke.
+    expect(showStageTemperatureRecovery("gerg2008", rows, true, true)).toBe(true);
+    expect(showStageTemperatureRecovery("gerg2008", clearStageTemperatures(rows), true, true)).toBe(true);
+    expect(showStageTemperatureRecovery("ideal", rows, false, true)).toBe(false);
+  });
+
+  test("keeps a cleared row's input while it is being edited", () => {
+    const keys = ["a", "b", "c"];
+    expect(stageTemperatureRecoveryRows(rows, keys, null)).toEqual([0, 2]);
+    const cleared = rows.map((row, index) => (index === 0 ? { ...row, stageTemperatureF: undefined } : row));
+    expect(stageTemperatureRecoveryRows(cleared, keys, null)).toEqual([2]);
+    expect(stageTemperatureRecoveryRows(cleared, keys, ["a", "c"])).toEqual([0, 2]);
+
+    const markup = renderToStaticMarkup(
+      <StageTemperatureRecovery
+        gasSources={cleared}
+        rowKeys={keys}
+        temperatureUnit="f"
+        onChange={vi.fn()}
+        onReset={vi.fn()}
+        editKeys={["a", "c"]}
+      />
+    );
+    expect(markup).toContain("Gas 1 Stage Temp (F)");
   });
 });
 

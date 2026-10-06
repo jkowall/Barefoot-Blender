@@ -222,13 +222,28 @@ const selectTempOnEnter = (event: KeyboardEvent<HTMLInputElement>): void => {
 /**
  * Stage temperatures are saved on their source rows but edited on corrected stop rows. When GERG-2008
  * shows no corrected plan (an out-of-range stage temperature, or a bank limit no option meets), the
- * saved values still need an editor so a bad one can be fixed or cleared.
+ * saved values still need an editor so a bad one can be fixed or cleared. Inputs commit on every
+ * keystroke, so once someone is editing there the editor stays until focus leaves it: otherwise the
+ * first digit that makes the plan valid (7 of 70) would close it.
  */
 export const showStageTemperatureRecovery = (
   gasModel: GasModel,
   gasSources: GasSourceInput[],
-  hasCorrectedPlan: boolean
-): boolean => gasModel === "gerg2008" && !hasCorrectedPlan && hasStageTemperatureOverrides(gasSources);
+  hasCorrectedPlan: boolean,
+  editing = false
+): boolean => gasModel === "gerg2008" && (editing || (!hasCorrectedPlan && hasStageTemperatureOverrides(gasSources)));
+
+/** Rows the recovery editor lists: saved stage temperatures, plus rows being edited that were just cleared. */
+export const stageTemperatureRecoveryRows = (
+  gasSources: GasSourceInput[],
+  rowKeys: string[],
+  editKeys: string[] | null
+): number[] =>
+  gasSources.flatMap((source, rowIndex) =>
+    source.stageTemperatureF !== undefined || (editKeys?.includes(rowKeys[rowIndex] ?? source.id) ?? false)
+      ? [rowIndex]
+      : []
+  );
 
 type StageTemperatureRecoveryProps = {
   gasSources: GasSourceInput[];
@@ -236,6 +251,9 @@ type StageTemperatureRecoveryProps = {
   temperatureUnit: TemperatureUnit;
   onChange: (rowIndex: number, temperatureF: number | undefined) => void;
   onReset: () => void;
+  editKeys?: string[] | null;
+  onEditStart?: () => void;
+  onEditEnd?: () => void;
 };
 
 export const StageTemperatureRecovery = ({
@@ -243,26 +261,40 @@ export const StageTemperatureRecovery = ({
   rowKeys,
   temperatureUnit,
   onChange,
-  onReset
+  onReset,
+  editKeys = null,
+  onEditStart,
+  onEditEnd
 }: StageTemperatureRecoveryProps): JSX.Element => {
   const temperatureLabel = temperatureUnitLabel(temperatureUnit);
   return (
-    <div className="cost-breakdown stage-temperature-recovery">
+    <div
+      className="cost-breakdown stage-temperature-recovery"
+      onFocus={() => onEditStart?.()}
+      onBlur={(event) => {
+        if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+          onEditEnd?.();
+        }
+      }}
+    >
       <div className="section-title">Stage Temperatures</div>
       <div className="table-note">
         These stage temperatures are saved on their source gases. Correct or clear them to restore the corrected stops.
       </div>
       <div className="real-gas-temperature-grid">
-        {gasSources.map((source, rowIndex) => source.stageTemperatureF === undefined ? null : (
-          <NumberInput
-            key={rowKeys[rowIndex] ?? source.id}
-            label={`Gas ${rowIndex + 1} Stage Temp (${temperatureLabel})`}
-            step={1}
-            value={toDisplayTemperature(source.stageTemperatureF, temperatureUnit)}
-            onChange={(val) => onChange(rowIndex, val === undefined ? undefined : fromDisplayTemperature(val, temperatureUnit))}
-            onKeyDown={selectTempOnEnter}
-          />
-        ))}
+        {stageTemperatureRecoveryRows(gasSources, rowKeys, editKeys).map((rowIndex) => {
+          const source = gasSources[rowIndex];
+          return (
+            <NumberInput
+              key={rowKeys[rowIndex] ?? source.id}
+              label={`Gas ${rowIndex + 1} Stage Temp (${temperatureLabel})`}
+              step={1}
+              value={source.stageTemperatureF === undefined ? undefined : toDisplayTemperature(source.stageTemperatureF, temperatureUnit)}
+              onChange={(val) => onChange(rowIndex, val === undefined ? undefined : fromDisplayTemperature(val, temperatureUnit))}
+              onKeyDown={selectTempOnEnter}
+            />
+          );
+        })}
       </div>
       <button className="settings-button" type="button" onClick={onReset}>
         Reset stage temps
@@ -352,7 +384,10 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     });
   };
 
+  // Row keys of the recovery editor's rows while someone is editing there; null otherwise.
+  const [recoveryEditKeys, setRecoveryEditKeys] = useState<string[] | null>(null);
   const resetStageTemperatures = (): void => {
+    setRecoveryEditKeys(null);
     updateField({ gasSources: clearStageTemperatures(gasSources) });
   };
 
@@ -919,7 +954,8 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
   const stageTemperatureRecovery = showStageTemperatureRecovery(
     settings.gasModel,
     gasSources,
-    selectedRealGasAlternative !== null
+    selectedRealGasAlternative !== null,
+    recoveryEditKeys !== null
   ) ? (
     <StageTemperatureRecovery
       gasSources={gasSources}
@@ -927,6 +963,13 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
       temperatureUnit={settings.temperatureUnit}
       onChange={(rowIndex, temperatureF) => updateGasSource(rowIndex, { stageTemperatureF: temperatureF })}
       onReset={resetStageTemperatures}
+      editKeys={recoveryEditKeys}
+      onEditStart={() =>
+        setRecoveryEditKeys((keys) =>
+          keys ?? stageTemperatureRecoveryRows(gasSources, gasSourceRowKeys, null).map((rowIndex) => gasSourceRowKeys[rowIndex] ?? gasSources[rowIndex].id)
+        )
+      }
+      onEditEnd={() => setRecoveryEditKeys(null)}
     />
   ) : null;
 
@@ -1062,239 +1105,244 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
         )}
       </AccordionItem>
 
-      {showRealGasPlan && (
+      {(showRealGasPlan || blendResult) && (
+        // One section for both models, with the recovery editor in a fixed slot: switching from the
+        // ideal fallback to the corrected plan mid-edit must not remount the input being typed in.
         <AccordionItem title="Blend Options" defaultOpen={true}>
-          {!realGasResult.success && realGasResult.errors.map((error) => (
-            <div key={error} className="error">{error}</div>
-          ))}
+          {showRealGasPlan ? (
+            !realGasResult.success && realGasResult.errors.map((error) => (
+              <div key={error} className="error">{error}</div>
+            ))
+          ) : (
+            planModel === "idealFallback" && realGasResult && !realGasResult.success && (
+              <div className="warnings">
+                {realGasResult.errors.map((error) => (
+                  <div key={error} className="warning">{error}</div>
+                ))}
+                <div className="table-note">Showing the ideal partial-pressure plan instead.</div>
+              </div>
+            )
+          )}
           {stageTemperatureRecovery}
 
-          {realGasResult.success && realGasResult.alternatives.length > 0 && (
+          {showRealGasPlan ? (
             <>
-              <div className="alternatives-list">
-                {realGasResult.alternatives.map((alt, index) => (
-                  <div
-                    key={realGasAlternativeKey(alt)}
-                    className={`alternative-option ${index === selectedIndex ? 'selected' : ''}`}
-                    onClick={() => selectAlternative(index)}
-                  >
-                    <div className="alternative-header">
-                      <input
-                        type="radio"
-                        name="blend-alternative"
-                        aria-label={`Option ${index + 1}`}
-                        checked={index === selectedIndex}
-                        onChange={() => selectAlternative(index)}
-                      />
-                      <span className="alternative-title">Option {index + 1}</span>
-                      <span className="alternative-cost">{formatCost(alt.estimatedCost)}</span>
-                    </div>
-                    <div className="alternative-gases">
-                      {alt.costBreakdown.map((item) => (
-                        <span key={costLineKey(item)} className="alternative-gas">
-                          {item.gas}: {formatRealGasVolume(item.volumeCuFt)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {selectedRealGasAlternative && (
-                <div className="fill-plan">
-                  <h4>GERG-2008 Corrected Stops</h4>
-                  <ol className="result-list">
-                    {selectedRealGasAlternative.steps.map((step, index) => (
-                      step.kind === "bleed" ? (
-                        <li key={realGasStepKey(step)} className="real-gas-step bleed-step">
-                          <div className="real-gas-step-main">
-                            <span>
-                              {index + 1}. Drain to <strong>{formatPressure(step.stopPressurePsi, settings.pressureUnit, 1)}</strong>
+              {realGasResult.success && realGasResult.alternatives.length > 0 && (
+                <>
+                  <div className="alternatives-list">
+                    {realGasResult.alternatives.map((alt, index) => (
+                      <div
+                        key={realGasAlternativeKey(alt)}
+                        className={`alternative-option ${index === selectedIndex ? 'selected' : ''}`}
+                        onClick={() => selectAlternative(index)}
+                      >
+                        <div className="alternative-header">
+                          <input
+                            type="radio"
+                            name="blend-alternative"
+                            aria-label={`Option ${index + 1}`}
+                            checked={index === selectedIndex}
+                            onChange={() => selectAlternative(index)}
+                          />
+                          <span className="alternative-title">Option {index + 1}</span>
+                          <span className="alternative-cost">{formatCost(alt.estimatedCost)}</span>
+                        </div>
+                        <div className="alternative-gases">
+                          {alt.costBreakdown.map((item) => (
+                            <span key={costLineKey(item)} className="alternative-gas">
+                              {item.gas}: {formatRealGasVolume(item.volumeCuFt)}
                             </span>
-                          </div>
-                          <div className="real-gas-step-detail">
-                            {formatSignedPressure(step.pressureChangePsi, settings.pressureUnit, 1)} at Start Temp, Z {formatNumber(step.z, 4)}
-                          </div>
-                        </li>
-                      ) : (
-                        <li key={realGasStepKey(step)} className="real-gas-step">
-                          <div className="real-gas-step-main">
-                            <span>
-                              {index + 1}. Add {step.gasName}: <strong>{formatPressure(step.stopPressurePsi, settings.pressureUnit, 1)}</strong>
-                            </span>
-                            <NumberInput
-                              className="stage-temperature-field"
-                              label={`Stage Temp (${temperatureLabel})`}
-                              step={1}
-                              value={stageTemperatureDisplay(step.sourceId, step.temperatureF)}
-                              onChange={(val) => updateStageTemperature(step.sourceId, val)}
-                              onKeyDown={selectTempOnEnter}
-                            />
-                          </div>
-                          <div className="real-gas-step-detail">
-                            {formatSignedPressure(step.pressureChangePsi, settings.pressureUnit, 1)}, Z {formatNumber(step.z, 4)}, {formatRealGasVolume(step.volumeCuFt)}
-                          </div>
-                        </li>
-                      )
+                          ))}
+                        </div>
+                      </div>
                     ))}
-                  </ol>
-                  <div className="table-note">
-                    Stage temps default to Start Temp. Enter a measured cylinder temperature on a stop row to update that stop and any following unedited stops.
                   </div>
-                  {hasStageTemperatureOverrides(gasSources) && (
-                    <button className="settings-button" type="button" onClick={resetStageTemperatures}>
-                      Reset stage temps
-                    </button>
-                  )}
-                  <div className="table-note">
-                    Initial reference: {formatPressure(selectedRealGasAlternative.startHotPressurePsi, settings.pressureUnit, 1)}
-                    {selectedRealGasAlternative.startZ !== undefined && <> (Z {formatNumber(selectedRealGasAlternative.startZ, 4)})</>}. Final stage stop: {formatPressure(selectedRealGasAlternative.finalHotPressurePsi, settings.pressureUnit, 1)} for settled target {formatPressure(selectedRealGasAlternative.settledPressurePsi, settings.pressureUnit, 1)} at {formatNumber(toDisplayTemperature(settledTemperatureF, settings.temperatureUnit), 1)} {temperatureLabel}.
-                  </div>
-                  <div className="table-note">
-                    Resulting mix ≈ {selectedRealGasAlternative.finalO2.toFixed(2)}% O2 / {selectedRealGasAlternative.finalHe.toFixed(2)}% He
-                  </div>
-                  {selectedRealGasAlternative.warnings.length > 0 && (
-                    <div className="warnings">
-                      {selectedRealGasAlternative.warnings.map((warning) => (
-                        <div key={warning} className="warning">{warning}</div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="cost-summary">
-                    Estimated cost: {formatCost(selectedRealGasAlternative.estimatedCost)}
-                  </div>
-                  <div className="cost-breakdown">
-                    <div className="section-title">Cost Basis</div>
-                    <div className="grid two">
-                      {selectedRealGasAlternative.costBreakdown.map((line) => (
-                        <div key={costLineKey(line)} className="cost-line">
-                          <span>{line.gas}:</span>
-                          <span>{formatRealGasVolume(line.volumeCuFt)} = {formatCost(line.cost)}</span>
+
+                  {selectedRealGasAlternative && (
+                    <div className="fill-plan">
+                      <h4>GERG-2008 Corrected Stops</h4>
+                      <ol className="result-list">
+                        {selectedRealGasAlternative.steps.map((step, index) => (
+                          step.kind === "bleed" ? (
+                            <li key={realGasStepKey(step)} className="real-gas-step bleed-step">
+                              <div className="real-gas-step-main">
+                                <span>
+                                  {index + 1}. Drain to <strong>{formatPressure(step.stopPressurePsi, settings.pressureUnit, 1)}</strong>
+                                </span>
+                              </div>
+                              <div className="real-gas-step-detail">
+                                {formatSignedPressure(step.pressureChangePsi, settings.pressureUnit, 1)} at Start Temp, Z {formatNumber(step.z, 4)}
+                              </div>
+                            </li>
+                          ) : (
+                            <li key={realGasStepKey(step)} className="real-gas-step">
+                              <div className="real-gas-step-main">
+                                <span>
+                                  {index + 1}. Add {step.gasName}: <strong>{formatPressure(step.stopPressurePsi, settings.pressureUnit, 1)}</strong>
+                                </span>
+                                <NumberInput
+                                  className="stage-temperature-field"
+                                  label={`Stage Temp (${temperatureLabel})`}
+                                  step={1}
+                                  value={stageTemperatureDisplay(step.sourceId, step.temperatureF)}
+                                  onChange={(val) => updateStageTemperature(step.sourceId, val)}
+                                  onKeyDown={selectTempOnEnter}
+                                />
+                              </div>
+                              <div className="real-gas-step-detail">
+                                {formatSignedPressure(step.pressureChangePsi, settings.pressureUnit, 1)}, Z {formatNumber(step.z, 4)}, {formatRealGasVolume(step.volumeCuFt)}
+                              </div>
+                            </li>
+                          )
+                        ))}
+                      </ol>
+                      <div className="table-note">
+                        Stage temps default to Start Temp. Enter a measured cylinder temperature on a stop row to update that stop and any following unedited stops.
+                      </div>
+                      {hasStageTemperatureOverrides(gasSources) && (
+                        <button className="settings-button" type="button" onClick={resetStageTemperatures}>
+                          Reset stage temps
+                        </button>
+                      )}
+                      <div className="table-note">
+                        Initial reference: {formatPressure(selectedRealGasAlternative.startHotPressurePsi, settings.pressureUnit, 1)}
+                        {selectedRealGasAlternative.startZ !== undefined && <> (Z {formatNumber(selectedRealGasAlternative.startZ, 4)})</>}. Final stage stop: {formatPressure(selectedRealGasAlternative.finalHotPressurePsi, settings.pressureUnit, 1)} for settled target {formatPressure(selectedRealGasAlternative.settledPressurePsi, settings.pressureUnit, 1)} at {formatNumber(toDisplayTemperature(settledTemperatureF, settings.temperatureUnit), 1)} {temperatureLabel}.
+                      </div>
+                      <div className="table-note">
+                        Resulting mix ≈ {selectedRealGasAlternative.finalO2.toFixed(2)}% O2 / {selectedRealGasAlternative.finalHe.toFixed(2)}% He
+                      </div>
+                      {selectedRealGasAlternative.warnings.length > 0 && (
+                        <div className="warnings">
+                          {selectedRealGasAlternative.warnings.map((warning) => (
+                            <div key={warning} className="warning">{warning}</div>
+                          ))}
                         </div>
-                      ))}
+                      )}
+                      <div className="cost-summary">
+                        Estimated cost: {formatCost(selectedRealGasAlternative.estimatedCost)}
+                      </div>
+                      <div className="cost-breakdown">
+                        <div className="section-title">Cost Basis</div>
+                        <div className="grid two">
+                          {selectedRealGasAlternative.costBreakdown.map((line) => (
+                            <div key={costLineKey(line)} className="cost-line">
+                              <span>{line.gas}:</span>
+                              <span>{formatRealGasVolume(line.volumeCuFt)} = {formatCost(line.cost)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
+                        <div className="table-note">{formatFillCostBasis("gerg2008", settings.temperatureUnit)}</div>
+                      </div>
+                      {trainingPanel}
                     </div>
-                    <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
-                    <div className="table-note">{formatFillCostBasis("gerg2008", settings.temperatureUnit)}</div>
-                  </div>
-                  {trainingPanel}
+                  )}
+                </>
+              )}
+
+              {realGasResult.warnings.length > 0 && (
+                <div className="warnings">
+                  {realGasResult.warnings.map((warning) => (
+                    <div key={warning} className="warning">{warning}</div>
+                  ))}
                 </div>
               )}
             </>
-          )}
-
-          {realGasResult.warnings.length > 0 && (
-            <div className="warnings">
-              {realGasResult.warnings.map((warning) => (
-                <div key={warning} className="warning">{warning}</div>
-              ))}
-            </div>
-          )}
-        </AccordionItem>
-      )}
-
-      {!showRealGasPlan && blendResult && (
-        <AccordionItem title="Blend Options" defaultOpen={true}>
-          {planModel === "idealFallback" && realGasResult && !realGasResult.success && (
-            <div className="warnings">
-              {realGasResult.errors.map((error) => (
-                <div key={error} className="warning">{error}</div>
-              ))}
-              <div className="table-note">Showing the ideal partial-pressure plan instead.</div>
-            </div>
-          )}
-          {stageTemperatureRecovery}
-
-          {!blendResult.success && (
-            <div className="error">{blendResult.error}</div>
-          )}
-
-          {blendResult.success && blendResult.alternatives.length > 0 && (
+          ) : blendResult && (
             <>
-              <div className="alternatives-list">
-                {blendResult.alternatives.map((alt, index) => (
-                  <div
-                    key={blendAlternativeKey(alt)}
-                    className={`alternative-option ${index === selectedIndex ? 'selected' : ''}`}
-                    onClick={() => selectAlternative(index)}
-                  >
-                    <div className="alternative-header">
-                      <input
-                        type="radio"
-                        name="blend-alternative"
-                        aria-label={`Option ${index + 1}`}
-                        checked={index === selectedIndex}
-                        onChange={() => selectAlternative(index)}
-                      />
-                      <span className="alternative-title">Option {index + 1}</span>
-                      <span className="alternative-cost">{formatCost(alt.estimatedCost)}</span>
-                    </div>
-                    <div className="alternative-gases">
-                      {alt.costBreakdown.map((item) => (
-                        <span key={costLineKey(item)} className="alternative-gas">
-                          {item.gas}: {formatGasVolumeFromPressure(item.amount)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {!blendResult.success && (
+                <div className="error">{blendResult.error}</div>
+              )}
 
-              {selectedAlternative && (
-                <div className="fill-plan">
-                  <h4>Fill Order</h4>
-                  <ol className="result-list">
-                    {selectedAlternative.fillOrder.map((step, index) => {
-                      let runningTotal = startPressurePsi;
-                      for (let i = 0; i <= index; i++) {
-                        runningTotal += selectedAlternative.fillOrder[i].amount;
-                      }
-                      runningTotal = Math.max(0, runningTotal);
-                      const isBleed = step.amount < 0;
-                      const action = isBleed ? "Drain" : "Add";
-                      return (
-                        <li key={`${step.gas}-${step.amount.toFixed(6)}-${runningTotal.toFixed(6)}`} className={isBleed ? "bleed-step" : ""}>
-                          {index + 1}. {action} {step.gas}: {formatPressure(runningTotal, settings.pressureUnit)}
-                          <span className="result-step-total">
-                            ({formatSignedPressure(step.amount, settings.pressureUnit)}
-                            {!isBleed ? `, ${formatGasVolumeFromPressure(step.amount)}` : ""})
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                  <div className="table-note">
-                    Resulting mix ≈ {selectedAlternative.finalO2.toFixed(1)}% O2 / {selectedAlternative.finalHe.toFixed(1)}% He
-                  </div>
-                  <div className="cost-summary">
-                    Estimated cost: {formatCost(selectedAlternative.estimatedCost)}
-                  </div>
-                  <div className="cost-breakdown">
-                    <div className="section-title">Cost Basis</div>
-                    <div className="grid two">
-                      {selectedAlternative.costBreakdown.map((line) => (
-                        <div key={costLineKey(line)} className="cost-line">
-                          <span>{line.gas}:</span>
-                          <span>{formatGasVolumeFromPressure(line.amount)} = {formatCost(line.cost)}</span>
+              {blendResult.success && blendResult.alternatives.length > 0 && (
+                <>
+                  <div className="alternatives-list">
+                    {blendResult.alternatives.map((alt, index) => (
+                      <div
+                        key={blendAlternativeKey(alt)}
+                        className={`alternative-option ${index === selectedIndex ? 'selected' : ''}`}
+                        onClick={() => selectAlternative(index)}
+                      >
+                        <div className="alternative-header">
+                          <input
+                            type="radio"
+                            name="blend-alternative"
+                            aria-label={`Option ${index + 1}`}
+                            checked={index === selectedIndex}
+                            onChange={() => selectAlternative(index)}
+                          />
+                          <span className="alternative-title">Option {index + 1}</span>
+                          <span className="alternative-cost">{formatCost(alt.estimatedCost)}</span>
                         </div>
-                      ))}
-                    </div>
-                    <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
-                    {planModel === "idealFallback" && (
-                      <div className="table-note">{formatFillCostBasis("idealFallback", settings.temperatureUnit)}</div>
-                    )}
+                        <div className="alternative-gases">
+                          {alt.costBreakdown.map((item) => (
+                            <span key={costLineKey(item)} className="alternative-gas">
+                              {item.gas}: {formatGasVolumeFromPressure(item.amount)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  {trainingPanel}
+
+                  {selectedAlternative && (
+                    <div className="fill-plan">
+                      <h4>Fill Order</h4>
+                      <ol className="result-list">
+                        {selectedAlternative.fillOrder.map((step, index) => {
+                          let runningTotal = startPressurePsi;
+                          for (let i = 0; i <= index; i++) {
+                            runningTotal += selectedAlternative.fillOrder[i].amount;
+                          }
+                          runningTotal = Math.max(0, runningTotal);
+                          const isBleed = step.amount < 0;
+                          const action = isBleed ? "Drain" : "Add";
+                          return (
+                            <li key={`${step.gas}-${step.amount.toFixed(6)}-${runningTotal.toFixed(6)}`} className={isBleed ? "bleed-step" : ""}>
+                              {index + 1}. {action} {step.gas}: {formatPressure(runningTotal, settings.pressureUnit)}
+                              <span className="result-step-total">
+                                ({formatSignedPressure(step.amount, settings.pressureUnit)}
+                                {!isBleed ? `, ${formatGasVolumeFromPressure(step.amount)}` : ""})
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                      <div className="table-note">
+                        Resulting mix ≈ {selectedAlternative.finalO2.toFixed(1)}% O2 / {selectedAlternative.finalHe.toFixed(1)}% He
+                      </div>
+                      <div className="cost-summary">
+                        Estimated cost: {formatCost(selectedAlternative.estimatedCost)}
+                      </div>
+                      <div className="cost-breakdown">
+                        <div className="section-title">Cost Basis</div>
+                        <div className="grid two">
+                          {selectedAlternative.costBreakdown.map((line) => (
+                            <div key={costLineKey(line)} className="cost-line">
+                              <span>{line.gas}:</span>
+                              <span>{formatGasVolumeFromPressure(line.amount)} = {formatCost(line.cost)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
+                        {planModel === "idealFallback" && (
+                          <div className="table-note">{formatFillCostBasis("idealFallback", settings.temperatureUnit)}</div>
+                        )}
+                      </div>
+                      {trainingPanel}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {blendResult.warnings.length > 0 && (
+                <div className="warnings">
+                  {blendResult.warnings.map((warning) => (
+                    <div key={warning} className="warning">{warning}</div>
+                  ))}
                 </div>
               )}
             </>
-          )}
-
-          {blendResult.warnings.length > 0 && (
-            <div className="warnings">
-              {blendResult.warnings.map((warning) => (
-                <div key={warning} className="warning">{warning}</div>
-              ))}
-            </div>
           )}
         </AccordionItem>
       )}

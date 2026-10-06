@@ -608,8 +608,9 @@ export const calculateRealGasMultiGasBlend = (
     );
     const { ordered, simulation } = simulateAt(scale);
     if (!simulation.success) {
-      // Only a candidate no bank limit has ruled out counts as an envelope failure.
-      if (options.enforceCaps && exceedsCap(simulation.steps, 0)) {
+      // Only a candidate no bank limit has ruled out counts as an envelope failure, even in an
+      // uncapped probe: a failed probe is infeasible either way, and this keeps the reason right.
+      if (exceedsCap(simulation.steps, 0)) {
         return { rejected: "cap" };
       }
       return { rejected: "gerg", errors: simulation.errors };
@@ -696,13 +697,11 @@ export const calculateRealGasMultiGasBlend = (
       const amountScale = addedAmount > 0
         ? Math.max(0, (targetMoles - totalMoles(start.components)) * psiPerMole / addedAmount)
         : 1;
-      if (
-        options.enforceCaps &&
-        candidate.steps.some((step) => {
-          const cap = sourceById.get(step.gas.id)?.maxPressurePsi;
-          return cap !== undefined && step.amount * amountScale > cap * CAP_PREFILTER_FACTOR + CAP_TOLERANCE_PSI;
-        })
-      ) {
+      const capMiss = candidate.steps.some((step) => {
+        const cap = sourceById.get(step.gas.id)?.maxPressurePsi;
+        return cap !== undefined && step.amount * amountScale > cap * CAP_PREFILTER_FACTOR + CAP_TOLERANCE_PSI;
+      });
+      if (options.enforceCaps && capMiss) {
         outcome.capRejected += 1;
         continue;
       }
@@ -719,7 +718,12 @@ export const calculateRealGasMultiGasBlend = (
       } else if (result.rejected === "cap") {
         outcome.capRejected += 1;
       } else if (result.rejected === "gerg") {
-        outcome.gergErrors.push(...result.errors);
+        // An uncapped probe's envelope failure says nothing about a fill its bank limits rule out.
+        if (capMiss) {
+          outcome.capRejected += 1;
+        } else {
+          outcome.gergErrors.push(...result.errors);
+        }
       }
     }
     return outcome;
