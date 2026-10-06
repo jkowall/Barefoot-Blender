@@ -13,6 +13,7 @@ import {
   calculateMOD,
   calculateEAD,
   getRecommendedFillOrder,
+  listTopOffOptions,
   clampPressure,
   clampDepth,
   clampPercent,
@@ -25,6 +26,7 @@ import {
 } from "./calculations";
 import type { GasSelection, BlendResult } from "./calculations";
 import type { MultiGasInput, StandardBlendInput } from "../state/session";
+import type { GasDefinition } from "../state/settings";
 
 const air: GasSelection = { id: "air", name: "Air", o2: 21, he: 0 };
 const oxygen: GasSelection = { id: "oxygen", name: "Oxygen", o2: 100, he: 0 };
@@ -1180,6 +1182,37 @@ describe("calculateDensity", () => {
     // 0.800267 * 7 = 5.601869
     const result = calculateDensity(18, 45, 60, "m");
     expect(result).toBeCloseTo(5.602, 3);
+  });
+});
+
+describe("listTopOffOptions", () => {
+  const helium: GasSelection = { id: "helium", name: "Helium", o2: 0, he: 100 };
+
+  test("returns only the default gases when no custom gases are provided", () => {
+    expect(listTopOffOptions([])).toEqual([air, oxygen, helium]);
+  });
+
+  test("appends custom gases after the defaults in their saved order", () => {
+    const customGases: GasDefinition[] = [
+      { id: "ean32", name: "EAN32", o2: 32, he: 0 },
+      { id: "trimix-21-35", name: "21/35", o2: 21, he: 35 }
+    ];
+
+    expect(listTopOffOptions(customGases)).toEqual([
+      air,
+      oxygen,
+      helium,
+      { id: "ean32", name: "EAN32", o2: 32, he: 0 },
+      { id: "trimix-21-35", name: "21/35", o2: 21, he: 35 }
+    ]);
+  });
+
+  test("returns copies so callers cannot mutate saved custom gases", () => {
+    const customGas: GasDefinition = { id: "ean36", name: "EAN36", o2: 36, he: 0 };
+    const options = listTopOffOptions([customGas]);
+
+    expect(options[3]).toEqual(customGas);
+    expect(options[3]).not.toBe(customGas);
   });
 });
 
