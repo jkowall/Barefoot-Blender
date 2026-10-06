@@ -1606,7 +1606,32 @@ const tryTwoGasSolution = (
         finalHe: 0
       };
     }
-    return null;
+    if (h1 < tolerance && h2 < tolerance) return null;
+
+    // Helium-bearing gases with the same O2:He ratio (such as 10/25 and 20/50): solve the total with
+    // whichever fraction differs, then require the other balance within the pressure tolerance.
+    const solveOnO2 = Math.abs(o1 - o2) >= Math.abs(h1 - h2);
+    const [a1, a2, targetA] = solveOnO2 ? [o1, o2, targetO2] : [h1, h2, targetHe];
+    const [b1, b2, targetB] = solveOnO2 ? [h1, h2, targetHe] : [o1, o2, targetO2];
+    const denom = a1 - a2;
+    if (Math.abs(denom) < tolerance) return null;
+
+    const g1 = addedPressure * (targetA - a2) / denom;
+    const g2 = addedPressure - g1;
+    if (g1 < -tolerance || g2 < -tolerance) return null;
+
+    const sg1 = Math.max(0, g1);
+    const sg2 = Math.max(0, g2);
+    const pressureTolerancePsi = options.pressureTolerancePsi ?? MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI;
+    if (Math.abs(sg1 * b1 + sg2 * b2 - addedPressure * targetB) > pressureTolerancePsi) return null;
+
+    const totalPressure = sg1 + sg2;
+    return {
+      gas1Amount: sg1,
+      gas2Amount: sg2,
+      finalO2: totalPressure > 0 ? (sg1 * o1 + sg2 * o2) / totalPressure * 100 : 0,
+      finalHe: totalPressure > 0 ? (sg1 * h1 + sg2 * h2) / totalPressure * 100 : 0
+    };
   }
 
   // Solve the 2x2 system for O2 and He constraints
@@ -2219,12 +2244,27 @@ const collectBleedBreakpoints = (
       const o2 = fraction(gas2.o2), h2 = fraction(gas2.he);
       const det = o1 * h2 - o2 * h1;
       if (Math.abs(det) < tolerance) {
-        // Nitrox-only pair solved on O2 alone.
-        const denom = o1 - o2;
+        // Parallel pair solved on the fraction that differs (O2 for nitrox pairs); helium-bearing
+        // pairs must also meet the other balance within the pressure tolerance.
+        const solveOnO2 = Math.abs(o1 - o2) >= Math.abs(h1 - h2);
+        const denom = solveOnO2 ? o1 - o2 : h1 - h2;
         if (Math.abs(denom) < tolerance) continue;
-        const g1: BleedFunctional = [-o2 / denom, 1 / denom, 0];
+        const a2 = solveOnO2 ? o2 : h2;
+        const g1: BleedFunctional = solveOnO2 ? [-a2 / denom, 1 / denom, 0] : [-a2 / denom, 0, 1 / denom];
+        const g2: BleedFunctional = [1 - g1[0], -g1[1], -g1[2]];
         addAmount(g1, gas1);
-        addAmount([1 - g1[0], -g1[1], -g1[2]], gas2);
+        addAmount(g2, gas2);
+        if (h1 >= tolerance || h2 >= tolerance) {
+          const [b1, b2] = solveOnO2 ? [h1, h2] : [o1, o2];
+          const other: BleedFunctional = solveOnO2 ? [0, 0, 1] : [0, 1, 0];
+          const residual: BleedFunctional = [
+            b1 * g1[0] + b2 * g2[0] - other[0],
+            b1 * g1[1] + b2 * g2[1] - other[1],
+            b1 * g1[2] + b2 * g2[2] - other[2]
+          ];
+          addRoot(residual, -MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI);
+          addRoot(residual, MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI);
+        }
         continue;
       }
       const g1: BleedFunctional = [0, h2 / det, -o2 / det];

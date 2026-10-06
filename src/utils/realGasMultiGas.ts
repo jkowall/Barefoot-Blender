@@ -600,8 +600,9 @@ export const calculateRealGasMultiGasBlend = (
     // The scale refinement costs several GERG density solves, so reject clear bank-limit misses first.
     const hasCappedSource = additions.some((addition) => addition.source?.maxPressurePsi !== undefined);
     if (options.enforceCaps && hasCappedSource) {
+      // A failed simulation still lists the stages it finished, and those can already break a limit.
       const quick = simulateAt(initialScale);
-      if (quick.simulation.success && exceedsCap(quick.simulation.steps, QUICK_CAP_SLACK)) {
+      if (exceedsCap(quick.simulation.steps, QUICK_CAP_SLACK)) {
         return { rejected: "cap" };
       }
     }
@@ -616,6 +617,10 @@ export const calculateRealGasMultiGasBlend = (
     );
     const { ordered, simulation } = simulateAt(scale);
     if (!simulation.success) {
+      // Only a candidate no bank limit has ruled out counts as an envelope failure.
+      if (options.enforceCaps && exceedsCap(simulation.steps, 0)) {
+        return { rejected: "cap" };
+      }
       return { rejected: "gerg", errors: simulation.errors };
     }
     if (options.enforceCaps && exceedsCap(simulation.steps, 0)) {
@@ -1097,7 +1102,9 @@ export const calculateRealGasMultiGasBlend = (
     }
   }
 
-  if (gergErrors.length > 0 && capRejected === 0) {
+  // Envelope failures come only from candidates no bank limit ruled out, so GERG-2008 cannot say
+  // the fill is impossible, even when other candidates hit their limits.
+  if (gergErrors.length > 0) {
     return failure("gerg", waterVolumeLiters, warnings, [...new Set(gergErrors)]);
   }
   if (capRejected > 0) {

@@ -154,7 +154,7 @@ The Multi-Gas tab takes a start cylinder, a target mix and pressure, and 1 to 6 
    ```
 2. Try every subset of 1, 2, and 3 enabled sources:
    - One source matches when it is within 0.5 points of the needed O2 and He.
-   - Two sources solve the 2x2 O2/He system and must sum to the added pressure within 0.5 PSI (nitrox pairs use the one-axis Pearson balance).
+   - Two sources solve the 2x2 O2/He system and must sum to the added pressure within 0.5 PSI (nitrox pairs use the one-axis Pearson balance). Helium-bearing pairs with the same O2:He ratio, such as 10/25 and 20/50, solve the total with whichever fraction differs more and must meet the other balance within 0.5 PSI.
    - Three sources solve the 3x3 system `[1 1 1; O2; He] * amounts = P_added * [1; O2_needed; He_needed]`, which is unique when it exists.
    - Negative amounts and amounts above a source's bank limit are rejected.
 3. Rank the options by fill cost (section 5) and show up to five.
@@ -168,7 +168,7 @@ Module: `solveNGasBlend`
 
 When no 1-, 2-, or 3-source plan reaches the target from the current start pressure, the solver looks for the highest start pressure (smallest bleed) that works:
 - Bank caps (`maxPressurePsi`) can make the workable start range a set of intervals that excludes 0, and a window can be only a few PSI wide. Draining too far leaves more to add than a capped bank can supply. So the search does not assume that draining further always stays feasible.
-- Every check the 1-, 2-, and 3-source solvers make (needed-mix bounds, single-source match, source amounts, bank caps, and the 2-source 0.5 PSI pressure residual) is linear in the start pressure, so the solver computes every start pressure where one of them changes sign. Feasibility cannot change between two neighboring breakpoints.
+- Every check the 1-, 2-, and 3-source solvers make (needed-mix bounds, single-source match, source amounts, bank caps, and the 2-source 0.5 PSI pressure or balance residual) is linear in the start pressure, so the solver computes every start pressure where one of them changes sign. Feasibility cannot change between two neighboring breakpoints.
 - Walk those segments from the current pressure down to 0, testing each segment's midpoint and then its lower breakpoint. The first segment that works is bisected up toward its upper breakpoint to 0.001 PSI; a lone workable breakpoint is used as is. This finds the smallest possible bleed, however narrow the window.
 - The plan gets a leading `Bleed Tank` step, a `Bleed to ...` cost line, and the "Bleed-down required to achieve target mix." warning.
 
@@ -198,7 +198,7 @@ When no exact plan exists:
 - **Residual-adjusted plan**: when even 0 PSI cannot work because of the 1 atm left in the cylinder, plan the gases as if the cylinder were empty and scale them so the settled pressure lands on the target, as Standard Blend does (section 2). Only options whose gases alone make the target qualify, so a source that only nearly matches (EAN31.6 for EAN32) goes to the closest blend instead. A start above 0 PSI first drains to 0. The plan warns with the mix it actually reaches.
 - **Closest blend**: the same +/-1% O2 and +/-5% He search as ideal mode, in mole space, with the settled pressure held on the target. It searches from the current start first, and drains to 0 PSI only when no nearby mix is reachable from the current start.
 
-If GERG-2008 cannot evaluate the inputs (temperature below 250 K, pressure above 400 bar absolute at the target or at a hot stage), the tab shows the ideal plan labeled as a fallback. A GERG-2008 "no valid blend" result is shown as is, so a bank limit is never hidden behind an ideal plan.
+If GERG-2008 cannot evaluate the inputs (temperature below 250 K, pressure above 400 bar absolute at the target or at a hot stage), the tab shows the ideal plan labeled as a fallback. This includes a fill where some options break a bank limit and every other option breaks the envelope: a plan counts as a bank-limit miss only when a stage it completed went over its limit. A GERG-2008 "no valid blend" result, where bank limits rule out every option, is shown as is, so a bank limit is never hidden behind an ideal plan.
 
 For a fill from 0 PSI with Helium, Oxygen, and Air, GERG-2008 Multi-Gas reproduces Standard Blend's corrected stops and moles (21/35 to 3000 PSI in an 80 cu ft tank at 70 F: 987.0, 1267.9, and 3000 PSI).
 

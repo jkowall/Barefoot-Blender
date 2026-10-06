@@ -4,10 +4,10 @@
 
 ### Added
 
-- **GERG-2008 Multi-Gas**: Multi-Gas now follows the Gas model setting. In GERG-2008 mode it plans fills from any mix of sources in real-gas moles and shows corrected stops with the pressure rise, Z, and real-gas volume of each addition. A three-source fill such as Air, a trimix bank, and Helium into a 12/76 residual is solved in one pass instead of by repeated Top-Off and Standard Blend trials. With Helium, Oxygen, and Air it matches Standard Blend's corrected stops.
-- **Multi-Gas Temperatures**: GERG-2008 mode adds Start Temp, Settled Temp, and a Stage Temp input on each stop row. Stage temps default to Start Temp and carry forward to later unedited stops.
+- **GERG-2008 Multi-Gas**: Multi-Gas now follows the Gas model setting. In GERG-2008 mode it plans fills from any mix of sources in real-gas moles and shows corrected stops with the pressure rise, Z, and real-gas volume of each addition. A three-source fill such as Air, a trimix bank, and Helium into a 12/76 residual is solved in one pass instead of by repeated Top-Off and Standard Blend trials. With Helium, Oxygen, and Air it matches Standard Blend's corrected stops. If GERG-2008 cannot evaluate a fill (for example a hot stage above 400 bar), the tab shows the ideal plan labeled as a fallback.
+- **Multi-Gas Temperatures**: GERG-2008 mode adds Start Temp, Settled Temp, and a Stage Temp input on each stop row. Stage temps default to Start Temp and carry forward to later unedited stops. A Reset stage temps button clears them, and saved stage temps stay editable even when an edit leaves no corrected plan.
 - **Multi-Gas Fill Order**: A Fill Order control keeps the recommended order (helium, oxygen, richer mixes, then Air) or switches to "My order", where up/down buttons on each source row set the order. Amounts stay the same in any order; only the stop pressures change.
-- **Multi-Gas Bleed and Residual Plans**: GERG-2008 Multi-Gas finds the smallest bleed-down that still allows an exact fill, plans over the 1 atm left in an empty cylinder like Standard Blend, and falls back to the closest blend within +/-1% O2 and +/-5% He.
+- **Multi-Gas Bleed and Residual Plans**: GERG-2008 Multi-Gas finds the smallest bleed-down that still allows an exact fill, plans over the 1 atm left in an empty cylinder like Standard Blend, drains to the target pressure when the start already has the target mix, and falls back to the closest blend within +/-1% O2 and +/-5% He. Bank limits that leave only a narrow bleed window are solved exactly.
 
 ### Changed
 
@@ -20,6 +20,7 @@
 
 - **iOS Capacitor Runtime**: Native iOS builds now pin `capacitor-swift-pm` 8.5.2 to match `@capacitor/ios` 8.5.2. Earlier builds still linked 8.4.1, which is affected by GHSA-rvm3-566m-v7fv.
 - **Multi-Gas Bleed-Down With Bank Limits**: Ideal Multi-Gas now finds the bleed-down when a capped bank means the tank can be drained too far as well as not far enough. It previously returned "No valid blend found" (2000 psi of 10/70 into 21/35 at 3000 psi with Air capped at 1300 psi now bleeds to 1500 psi). The search now checks every start pressure where a bank cap or mix limit can change the result, from the current pressure down, and keeps the smallest workable bleed, even when capped banks leave a window narrower than 10 psi. Bleed-downs that already worked are unchanged, except a few where the old search drained more than needed. Those now bleed less.
+- **Multi-Gas Trimix Banks With the Same O2:He Ratio**: Ideal Multi-Gas now plans fills from two helium mixes with the same O2:He ratio, such as 10/25 and 20/50 into 15/37.5. It previously returned "No valid blend found". The new GERG-2008 Multi-Gas handles these pairs too.
 - **Calculation Docs**: The Multi-Gas section of the calculation model described a legacy two-gas nitrox solver; it now documents the optimizer the tab uses.
 
 ## [1.1.2] - 2026-10-05

@@ -890,6 +890,56 @@ describe("calculateRealGasMultiGasBlend fourth review cases", () => {
   });
 });
 
+describe("calculateRealGasMultiGasBlend fifth review cases", () => {
+  test("fills from two helium banks with the same O2:He ratio", () => {
+    // 10/25 and 20/50 are parallel in O2/He, so the pair is solved on the total and O2 and the
+    // helium balance is checked.
+    const input = multiGasInput({
+      startPressure: 0,
+      startO2: 15,
+      startHe: 37.5,
+      targetO2: 15,
+      targetHe: 37.5,
+      sources: [
+        { id: "custom-0", name: "10/25", o2: 10, he: 25 },
+        { id: "custom-1", name: "20/50", o2: 20, he: 50 }
+      ]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("exact");
+    const plan = result.alternatives[0];
+    const lean = plan.steps.find((step) => step.sourceId === "custom-0")?.molesAdded ?? 0;
+    const rich = plan.steps.find((step) => step.sourceId === "custom-1")?.molesAdded ?? 0;
+    expect(lean).toBeGreaterThan(0);
+    expect(rich / lean).toBeCloseTo(1, 9);
+    expectExactReplay(input, plan);
+  });
+
+  test("reports a GERG failure when the only cap-feasible candidates break the envelope", () => {
+    // A 21/35 bank capped at 0 psi is rejected by its limit while every Helium/Oxygen/Air plan
+    // passes 400 bar at a 200 F helium stage, so GERG-2008 cannot evaluate the fill.
+    const sources = [
+      { ...helium, stageTemperatureF: 200 },
+      oxygen,
+      air,
+      { id: "custom-0", name: "21/35", o2: 21, he: 35, maxPressurePsi: 0 }
+    ];
+    const result = calculateRealGasMultiGasBlend(psi, multiGasInput({ targetPressure: 5600, sources }), prices);
+
+    expect(result.success).toBe(false);
+    expect(result.failure).toBe("gerg");
+    expect(result.errors).toEqual(["GERG-2008 correction is limited to pressures at or below 400 bar absolute."]);
+
+    const capsOnly = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({ targetPressure: 5600, sources: [{ id: "custom-0", name: "21/35", o2: 21, he: 35, maxPressurePsi: 0 }] }),
+      prices
+    );
+    expect(capsOnly.failure).toBe("noBlend");
+  });
+});
+
 describe("resolveMultiGasStageTemperaturesF", () => {
   test("inherits the previous stage, then Start Temp", () => {
     expect(
