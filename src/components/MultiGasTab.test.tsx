@@ -6,6 +6,7 @@ import MultiGasTab, {
   clearStageTemperatures,
   findMatchingIdealAlternative,
   hasStageTemperatureOverrides,
+  realGasStepKey,
   showStageTemperatureRecovery,
   moveGasSource,
   resolveMultiGasSources,
@@ -233,5 +234,18 @@ describe("MultiGasTab plan options", () => {
     );
 
     expect(markup).toMatch(/<input[^>]*type="radio"[^>]*aria-label="Option 1"/);
+  });
+});
+
+describe("realGasStepKey", () => {
+  test("keeps a stop row's key when a recalculation changes its amounts", () => {
+    const before = { kind: "add" as const, sourceId: "oxygen-1", gasName: "Oxygen", molesAdded: 4.47 };
+    const after = { ...before, molesAdded: 4.52 };
+    expect(realGasStepKey(after)).toBe(realGasStepKey(before));
+    expect(realGasStepKey(before)).toBe("oxygen-1");
+  });
+
+  test("uses one key for the bleed row wherever it drains to", () => {
+    expect(realGasStepKey({ kind: "bleed", gasName: "Bleed Tank" })).toBe("bleed");
   });
 });

@@ -171,6 +171,7 @@ type StartState = {
   pressurePsi: number;
   components: ComponentMoles;
   z: number;
+  warnings: string[];
 };
 
 type RealizeOptions = {
@@ -474,7 +475,8 @@ export const calculateRealGasMultiGasBlend = (
     return {
       pressurePsi,
       components: componentMolesFromTotal(density.densityMolPerLiter * waterVolumeLiters, startFractions),
-      z: density.z
+      z: density.z,
+      warnings: density.warnings
     };
   };
 
@@ -484,6 +486,8 @@ export const calculateRealGasMultiGasBlend = (
     return failure("gerg", waterVolumeLiters, warnings, fullStart.errors);
   }
   const fullStartMoles = totalMoles(fullStart.components);
+  // Start Temp can be outside the normal fill range even when every stage temperature is not.
+  warnings.push(...fullStart.warnings);
 
   // The 1 atm left in a cylinder at 0 gauge cannot be bled off, so a target holding fewer moles than
   // that residual cannot be reached by any plan.

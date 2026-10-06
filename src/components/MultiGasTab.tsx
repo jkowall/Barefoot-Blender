@@ -24,6 +24,7 @@ import {
   calculateRealGasMultiGasBlend,
   type RealGasMultiGasAlternative,
   type RealGasMultiGasResult,
+  type RealGasMultiGasStep,
   type RealGasMultiGasSource
 } from "../utils/realGasMultiGas";
 import {
@@ -196,6 +197,13 @@ export const findMatchingIdealAlternative = (
     (alternative) => alternative.steps.map((step) => step.gas.id).sort().join("|") === key
   ) ?? null;
 };
+
+/**
+ * React key for a corrected stop row. Source ids are unique within a plan, and the key must not
+ * change when a recalculation changes the amounts, or the row's Stage Temp input loses focus mid-edit.
+ */
+export const realGasStepKey = (step: Pick<RealGasMultiGasStep, "kind" | "sourceId" | "gasName">): string =>
+  step.kind === "bleed" ? "bleed" : step.sourceId ?? step.gasName;
 
 export const hasStageTemperatureOverrides = (gasSources: GasSourceInput[]): boolean =>
   gasSources.some((source) => source.stageTemperatureF !== undefined);
@@ -1098,7 +1106,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                   <ol className="result-list">
                     {selectedRealGasAlternative.steps.map((step, index) => (
                       step.kind === "bleed" ? (
-                        <li key={`bleed-${step.stopPressurePsi.toFixed(6)}`} className="real-gas-step bleed-step">
+                        <li key={realGasStepKey(step)} className="real-gas-step bleed-step">
                           <div className="real-gas-step-main">
                             <span>
                               {index + 1}. Drain to <strong>{formatPressure(step.stopPressurePsi, settings.pressureUnit, 1)}</strong>
@@ -1109,7 +1117,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                           </div>
                         </li>
                       ) : (
-                        <li key={`${step.sourceId ?? step.gasName}-${step.molesAdded.toFixed(6)}`} className="real-gas-step">
+                        <li key={realGasStepKey(step)} className="real-gas-step">
                           <div className="real-gas-step-main">
                             <span>
                               {index + 1}. Add {step.gasName}: <strong>{formatPressure(step.stopPressurePsi, settings.pressureUnit, 1)}</strong>

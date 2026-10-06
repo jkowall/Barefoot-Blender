@@ -718,9 +718,10 @@ describe("calculateRealGasMultiGasBlend bleeds between two bank limits", () => {
 
     const heliumTriple = bleedSubsetSolutions(3000, { o2: 21, he: 35 }, { o2: 10, he: 0 }, [helium, oxygen, air]);
     expect(heliumTriple.some((solution) => solution.kind === "line" && solution.sources.length === 3)).toBe(true);
-    expect(bleedSubsetSolutions(3000, { o2: 32, he: 0 }, { o2: 21, he: 0 }, [ean36])).toEqual([
-      expect.objectContaining({ kind: "point", retained: expect.closeTo(800, 9) })
-    ]);
+    const single = bleedSubsetSolutions(3000, { o2: 32, he: 0 }, { o2: 21, he: 0 }, [ean36]);
+    expect(single).toHaveLength(1);
+    expect(single[0].kind).toBe("point");
+    expect(single[0].kind === "point" ? single[0].retained : 0).toBeCloseTo(800, 9);
   });
 
   test("finds a narrow window where an oxygen limit caps the bleed from above and an Air limit from below", () => {
@@ -768,6 +769,27 @@ describe("calculateRealGasMultiGasBlend bleeds between two bank limits", () => {
     expect(plan.steps.find((step) => step.sourceId === oxygen.id)?.pressureChangePsi ?? 0).toBeLessThanOrEqual(451.21);
     expect(plan.steps.find((step) => step.sourceId === air.id)?.pressureChangePsi ?? 0).toBeLessThanOrEqual(424.71);
     expectExactReplay(input, plan);
+  });
+});
+
+describe("calculateRealGasMultiGasBlend start temperature warnings", () => {
+  test("keeps the above-400 K warning for a hot start when every stage is at 70 F", () => {
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({
+        startPressure: 500,
+        startTemperatureF: 300,
+        sources: [
+          { ...helium, stageTemperatureF: 70 },
+          { ...oxygen, stageTemperatureF: 70 },
+          { ...air, stageTemperatureF: 70 }
+        ]
+      }),
+      prices
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.warnings).toContain("GERG-2008 correction is outside the normal scuba fill temperature range above 400 K.");
   });
 });
 
