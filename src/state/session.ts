@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { FillCostBasis } from "../utils/calculations";
+import type { FillCostBasis, MultiGasFillOrderMode } from "../utils/calculations";
 
 export type StandardBlendStageKind = "helium" | "oxygen" | "topoff";
 export type StandardBlendStageTemperaturesF = Partial<Record<StandardBlendStageKind, number>>;
@@ -29,6 +29,8 @@ export type GasSourceInput = {
   customHe?: number;
   maxPressure?: number;
   enabled: boolean;
+  // GERG-2008 stage temperature while this source is added; undefined inherits the previous stage.
+  stageTemperatureF?: number;
 };
 
 export type MultiGasInput = {
@@ -41,6 +43,10 @@ export type MultiGasInput = {
   startPressure?: number;
   tankSizeCuFt?: number;
   tankRatedPressurePsi?: number;
+  startTemperatureF?: number;
+  settledTemperatureF?: number;
+  // Undefined means "auto" (recommended order).
+  fillOrderMode?: MultiGasFillOrderMode;
   selectedAlternativeIndex: number;
 };
 
@@ -152,6 +158,9 @@ const defaultValues = {
     startO2: 21,
     startHe: 0,
     startPressure: 0,
+    startTemperatureF: 70,
+    settledTemperatureF: 70,
+    fillOrderMode: "auto" as MultiGasFillOrderMode,
     selectedAlternativeIndex: 0
   },
   utilities: {

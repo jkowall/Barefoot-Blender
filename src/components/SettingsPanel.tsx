@@ -139,7 +139,7 @@ const SettingsPanel = ({ onClose, onReportBug }: SettingsPanelProps): JSX.Elemen
                 ))}
               </SelectInput>
               <div className="table-note">
-                GERG-2008 is the new-user default and applies temperature-aware O2/N2/He molar corrections in Standard Blend and Top-Off, including fill-cost gas volumes. Ideal partial pressure remains available for training and comparison. Always analyze the finished mix.
+                GERG-2008 is the new-user default and applies temperature-aware O2/N2/He molar corrections in Standard Blend, Top-Off, and Multi-Gas, including fill-cost gas volumes. Ideal partial pressure remains available for training and comparison. Always analyze the finished mix.
               </div>
 
               <div className="section-title" style={{ marginTop: 16 }}>Defaults</div>

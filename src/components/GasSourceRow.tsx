@@ -14,7 +14,15 @@ type Props = {
   canRemove: boolean;
   showDivider: boolean;
   pressureUnit: PressureUnit;
+  // Up/down controls for a user-chosen fill order.
+  showMoveControls?: boolean;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMove?: (index: number, direction: -1 | 1) => void;
+  bankLimitNote?: string;
 };
+
+const DEFAULT_BANK_LIMIT_NOTE = "Limit this source to current bank pressure. Leave blank for no limit.";
 
 const sanitizeCustomMix = (o2: number, he: number): { o2: number; he: number } => {
   const nextO2 = clampPercent(o2);
@@ -31,7 +39,12 @@ export const GasSourceRow = memo(({
   onRemove,
   canRemove,
   showDivider,
-  pressureUnit
+  pressureUnit,
+  showMoveControls = false,
+  canMoveUp = false,
+  canMoveDown = false,
+  onMove,
+  bankLimitNote = DEFAULT_BANK_LIMIT_NOTE
 }: Props): JSX.Element => {
   const options = useMemo(() => {
     const custom: GasSelection = {
@@ -49,16 +62,44 @@ export const GasSourceRow = memo(({
         <SelectInput
           label={`Gas ${index + 1}`}
           labelAction={
-            canRemove && (
-              <button
-                type="button"
-                className="remove-gas-btn"
-                onClick={() => onRemove(index)}
-                title="Remove gas source"
-                aria-label={`Remove Gas ${index + 1}`}
-              >
-                ✕
-              </button>
+            (showMoveControls || canRemove) && (
+              <span className="gas-source-actions">
+                {showMoveControls && (
+                  <>
+                    <button
+                      type="button"
+                      className="move-gas-btn"
+                      onClick={() => onMove?.(index, -1)}
+                      disabled={!canMoveUp}
+                      title="Fill this gas earlier"
+                      aria-label={`Move Gas ${index + 1} up`}
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      className="move-gas-btn"
+                      onClick={() => onMove?.(index, 1)}
+                      disabled={!canMoveDown}
+                      title="Fill this gas later"
+                      aria-label={`Move Gas ${index + 1} down`}
+                    >
+                      ▼
+                    </button>
+                  </>
+                )}
+                {canRemove && (
+                  <button
+                    type="button"
+                    className="remove-gas-btn"
+                    onClick={() => onRemove(index)}
+                    title="Remove gas source"
+                    aria-label={`Remove Gas ${index + 1}`}
+                  >
+                    ✕
+                  </button>
+                )}
+              </span>
             )
           }
           value={source.id}
@@ -128,7 +169,7 @@ export const GasSourceRow = memo(({
         placeholder="Unlimited"
         onChange={(val) => onUpdate(index, { maxPressure: val === undefined ? undefined : Math.max(0, val) })}
       />
-      <div className="table-note">Limit this source to current bank pressure. Leave blank for no limit.</div>
+      <div className="table-note">{bankLimitNote}</div>
       {showDivider && <hr className="gas-source-divider" />}
     </div>
   );

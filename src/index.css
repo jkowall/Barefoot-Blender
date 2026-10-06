@@ -1460,6 +1460,34 @@ td {
   background: rgba(239, 68, 68, 0.4);
 }
 
+.gas-source-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.move-gas-btn {
+  min-width: 44px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.move-gas-btn:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.25);
+}
+
+.move-gas-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .add-gas-btn {
   width: 100%;
   padding: 10px 16px;
