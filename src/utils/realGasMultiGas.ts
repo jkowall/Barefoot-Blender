@@ -145,8 +145,8 @@ const CAP_PREFILTER_FACTOR = 2;
 // The closest-blend search can return thousands of near-duplicate options; at most this many are
 // evaluated with GERG-2008 per search so the tab stays responsive.
 const MAX_REALIZED_CANDIDATES = 400;
-// Slack for the quick bank-limit check made before the scale refinement, which moves amounts by
-// well under this fraction.
+// Slack for the quick bank-limit check made before the scale refinement. That check projects each
+// rise to the refined scale, and the projection is accurate to well under this fraction.
 const QUICK_CAP_SLACK = 0.02;
 
 /**
@@ -568,19 +568,33 @@ export const calculateRealGasMultiGasBlend = (
       );
       return { ordered, simulation };
     };
-    const exceedsCap = (stages: { key: string; pressureChangePsi: number }[], slack: number): boolean =>
+    const exceedsCap = (
+      stages: { key: string; pressureChangePsi: number }[],
+      slack: number,
+      riseScale = 1
+    ): boolean =>
       stages.some((stage) => {
         const cap = sourceById.get(stage.key)?.maxPressurePsi;
-        return cap !== undefined && stage.pressureChangePsi > cap * (1 + slack) + CAP_TOLERANCE_PSI;
+        return cap !== undefined && stage.pressureChangePsi * riseScale > cap * (1 + slack) + CAP_TOLERANCE_PSI;
       });
 
     // The scale refinement costs several GERG density solves, so reject clear bank-limit misses first.
+    // The refinement rescales every addition until the settled pressure meets the target, and a mix
+    // whose Z differs from the target's can need a sizable rescale of a small rise. So project each
+    // rise to the refined scale from the quick pass's settled pressure before comparing.
     const hasCappedSource = additions.some((addition) => addition.source?.maxPressurePsi !== undefined);
     if (options.enforceCaps && hasCappedSource) {
-      // A failed simulation still lists the stages it finished, and those can already break a limit.
       const quick = simulateAt(initialScale);
-      if (exceedsCap(quick.simulation.steps, QUICK_CAP_SLACK)) {
-        return { rejected: "cap" };
+      if (quick.simulation.success) {
+        const startSettled = stateFromComponents(settledTemperatureK, start.components, waterVolumeLiters);
+        const quickSettled = stateFromComponents(settledTemperatureK, quick.simulation.finalComponents, waterVolumeLiters);
+        const quickAdded = quickSettled.pressurePsi - startSettled.pressurePsi;
+        if (startSettled.success && quickSettled.success && quickAdded > MIN_ADDITION_PSI) {
+          const riseScale = Math.max(0, targetPressurePsi - startSettled.pressurePsi) / quickAdded;
+          if (exceedsCap(quick.simulation.steps, QUICK_CAP_SLACK, riseScale)) {
+            return { rejected: "cap" };
+          }
+        }
       }
     }
 
@@ -746,12 +760,20 @@ export const calculateRealGasMultiGasBlend = (
 
   const targetSafetyWarnings: string[] = [];
   appendMixSafetyWarnings(targetSafetyWarnings, input.targetO2);
+  // Exact plans can miss the target by up to 0.01 points, so also flag the mix each plan reaches.
+  const exactSafetyWarnings = (alternatives: RealGasMultiGasAlternative[]): string[] => {
+    const flags = [...targetSafetyWarnings];
+    for (const alternative of alternatives) {
+      appendMixSafetyWarnings(flags, alternative.finalO2);
+    }
+    return flags;
+  };
 
   // 1. Exact fill from the current start.
   const exactOutcome = realize(enumerate(fullStartMoles), fullStart, maxAlternatives, exactOptions);
   const exact = track(exactOutcome);
   if (exact.length > 0) {
-    return success("exact", exact, [...targetSafetyWarnings, ...exactOutcome.warnings]);
+    return success("exact", exact, [...exactSafetyWarnings(exact), ...exactOutcome.warnings]);
   }
 
   const bleedStep = (start: StartState): RealGasMultiGasStep => ({
@@ -799,7 +821,7 @@ export const calculateRealGasMultiGasBlend = (
         return success(
           "bleed",
           withBleed([drainOnly], drained),
-          [BLEED_REQUIRED_WARNING, ...targetSafetyWarnings, ...settled.warnings],
+          [BLEED_REQUIRED_WARNING, ...exactSafetyWarnings([drainOnly]), ...settled.warnings],
           drained.pressurePsi
         );
       }
@@ -999,7 +1021,7 @@ export const calculateRealGasMultiGasBlend = (
         return success(
           "bleed",
           withBleed(bled, bleedTo),
-          [BLEED_REQUIRED_WARNING, ...targetSafetyWarnings, ...bleedOutcome.warnings],
+          [BLEED_REQUIRED_WARNING, ...exactSafetyWarnings(bled), ...bleedOutcome.warnings],
           bleedTo.pressurePsi
         );
       }

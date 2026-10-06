@@ -1002,6 +1002,44 @@ describe("calculateRealGasMultiGasBlend sixth review cases", () => {
   });
 });
 
+describe("calculateRealGasMultiGasBlend seventh review cases", () => {
+  test.each([
+    [18, 17.995, "Hypoxic mix (<18% O2)."],
+    [40, 40.005, "High O2 - fire risk (>40% O2)."]
+  ])("flags the O2 an exact plan actually reaches: target %s, reached %s", (targetO2, reachedO2, flag) => {
+    const gas = { id: "custom-0", name: "Bank", o2: reachedO2, he: 0 };
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({ startO2: reachedO2, targetO2, targetHe: 0, sources: [gas] }),
+      prices
+    );
+
+    expect(result.match).toBe("exact");
+    expect(result.alternatives[0].finalO2).toBeCloseTo(reachedO2, 6);
+    expect(result.warnings).toContain(flag);
+  });
+
+  test("judges a bank limit at the refined scale, not the first estimate", () => {
+    // 15/75 over a 15/75 start cannot make 15/80, but it is within the closest-blend limits. Sized for
+    // 15/80's moles, the first estimate rises about 108 psi; settling at 3000 psi needs only 100.
+    const input = multiGasInput({
+      startPressure: 2900,
+      startO2: 15,
+      startHe: 75,
+      targetO2: 15,
+      targetHe: 80,
+      sources: [{ id: "custom-0", name: "15/75", o2: 15, he: 75, maxPressurePsi: 101 }]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("closest");
+    const plan = result.alternatives[0];
+    expect(plan.steps[0].pressureChangePsi).toBeLessThanOrEqual(101.01);
+    expect(plan.finalHe).toBeCloseTo(75, 6);
+    expect(plan.settledPressurePsi).toBeCloseTo(3000, 2);
+  });
+});
+
 describe("resolveMultiGasStageTemperaturesF", () => {
   test("inherits the previous stage, then Start Temp", () => {
     expect(

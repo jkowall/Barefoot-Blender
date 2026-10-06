@@ -185,8 +185,8 @@ Mixing is linear in moles, so the ideal optimizer's linear algebra also solves t
 3. Refine each option with a common scale so the final mix's GERG density at the target pressure and Settled Temp matches the cylinder contents. Exact options need almost no change; the step absorbs the subset search's small tolerances.
 4. Order the additions. Auto uses the recommended order (helium, then oxygen, then higher-helium and higher-oxygen mixes, with Air last). My order follows the source list from top to bottom. Amounts never depend on order.
 5. Walk the ordered additions through GERG-2008 to get each stop pressure, Z, and pressure rise at that stage's temperature. A stage temperature belongs to its source row; an unedited stage inherits the previous stage's temperature, then Start Temp.
-6. Check bank limits as each source's real pressure rise at its stage temperature in the fill order shown. A limit can therefore pass in one order and fail in another.
-7. Exact plans must reach the target within 0.01 percentage points. A single source that only nearly matches is not listed as exact.
+6. Check bank limits as each source's real pressure rise at its stage temperature in the fill order shown. A limit can therefore pass in one order and fail in another. Limits are judged on the refined plan; a quick check that skips clear misses first projects each rise to the refined scale.
+7. Exact plans must reach the target within 0.01 percentage points. A single source that only nearly matches is not listed as exact. Hypoxic and high-O2 flags cover both the target and the O2 each plan actually reaches, so a plan at 17.995% O2 for an 18% target is still flagged.
 8. Every plan must settle within 0.05 PSI of the target pressure at Settled Temp. A target that holds fewer moles than the 1 atm left in an empty cylinder (start mix at Start Temp) cannot be reached by any plan and is reported as an input error.
 
 When no exact plan exists:
