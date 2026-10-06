@@ -1211,6 +1211,62 @@ describe("calculateRealGasMultiGasBlend review follow-ups", () => {
   });
 });
 
+describe("calculateRealGasMultiGasBlend ninth review cases", () => {
+  test("ignores an out-of-range stage temperature on a source no plan uses", () => {
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({ targetO2: 21, targetHe: 0, sources: [air, { ...oxygen, stageTemperatureF: -20 }] }),
+      prices
+    );
+    expect(result.match).toBe("exact");
+    expect(result.alternatives[0].sourceIds).toEqual([air.id]);
+  });
+
+  test("sizes a closest blend's bank-limit check for its own mix", () => {
+    // Sized for 15/80's moles the 15/75 top-up looks like 10.5 psi; settling at 3000 psi needs 5.
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({
+        startPressure: 2995,
+        startO2: 15,
+        startHe: 75,
+        targetO2: 15,
+        targetHe: 80,
+        sources: [{ id: "custom-0", name: "15/75", o2: 15, he: 75, maxPressurePsi: 5.1 }]
+      }),
+      prices
+    );
+    expect(result.match).toBe("closest");
+    const plan = result.alternatives[0];
+    expect(plan.steps[0].pressureChangePsi).toBeLessThanOrEqual(5.11);
+    expect(plan.finalHe).toBeCloseTo(75, 6);
+  });
+
+  test("finds a bleed inside a range whose top end breaks the envelope", () => {
+    // At the top of the range Oxygen's amount reaches zero, so Air inherits Helium's 200 F and passes
+    // 400 bar; a little lower, Air inherits Oxygen's 70 F and the fill works.
+    const input = multiGasInput({
+      startPressure: 2000,
+      startO2: 40,
+      startHe: 0,
+      targetPressure: 5600,
+      sources: [
+        { ...helium, stageTemperatureF: 200, maxPressurePsi: 2221.268 },
+        { ...oxygen, stageTemperatureF: 70 },
+        { ...air, maxPressurePsi: 2961.35 }
+      ]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+    expect(result.match).toBe("bleed");
+    expect(result.bleedToPsi ?? 0).toBeGreaterThan(450);
+    expect(result.bleedToPsi ?? 0).toBeLessThan(550);
+    const plan = result.alternatives[0];
+    expect(plan.steps.find((step) => step.sourceId === helium.id)?.pressureChangePsi ?? 0).toBeLessThanOrEqual(2221.278);
+    expect(plan.steps.find((step) => step.sourceId === air.id)?.pressureChangePsi ?? 0).toBeLessThanOrEqual(2961.36);
+    expectExactReplay(input, plan);
+  });
+});
+
 describe("resolveMultiGasStageTemperaturesF", () => {
   test("inherits the previous stage, then Start Temp", () => {
     expect(

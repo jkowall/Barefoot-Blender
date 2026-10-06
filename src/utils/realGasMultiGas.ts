@@ -130,6 +130,10 @@ const CAP_TOLERANCE_PSI = 0.01;
 const BLEED_SCAN_POINTS = 32;
 const CAPPED_BLEED_SCAN_POINTS = 64;
 const BLEED_PRESSURE_TOLERANCE_PSI = 0.01;
+// Margin on the closest-blend window's corner mole spread, which bounds any mix inside the window.
+const CLOSEST_WINDOW_SLACK_MARGIN = 1.5;
+// Points tried inward from an unevaluable end of a bleed range before giving up on it.
+const ENDPOINT_SEARCH_POINTS = 16;
 const PERCENT_TOLERANCE = 1e-6;
 // Exact and bleed plans must reach the target within this many percentage points. The ideal
 // optimizer accepts a single source within 0.5 points, which hides a real-gas or residual shift.
@@ -182,6 +186,10 @@ type RealizeOptions = {
   enforceCaps: boolean;
   // Reject options whose reached mix is further than this from the target (percentage points).
   mixTolerance?: { o2: number; he: number };
+  // Options are closest blends, whose mix (and so moles at the target pressure) differs from the
+  // target's. The bank-limit prefilter then discounts each amount by the most that difference can
+  // remove, so a small top-up sized for the target's moles is not rejected.
+  closestWindow?: boolean;
 };
 
 type RealizeOutcome = {
@@ -437,12 +445,10 @@ export const calculateRealGasMultiGasBlend = (
     ]);
   }
 
-  const temperaturesF = [
-    input.startTemperatureF,
-    input.settledTemperatureF,
-    ...input.sources.flatMap((source) => (source.stageTemperatureF === undefined ? [] : [source.stageTemperatureF]))
-  ];
-  if (temperaturesF.some((temperatureF) => !isValidTemperatureF(temperatureF))) {
+  // Start and Settled Temp apply to every plan. A stage temperature only matters to plans that use
+  // that stage, so an out-of-range one fails just those plans (and the whole fill falls back to the
+  // ideal plan only when every option needs it).
+  if (![input.startTemperatureF, input.settledTemperatureF].every(isValidTemperatureF)) {
     return failure("gerg", waterVolumeLiters, warnings, [GERG_MIN_TEMPERATURE_ERROR]);
   }
 
@@ -685,6 +691,27 @@ export const calculateRealGasMultiGasBlend = (
     };
   };
 
+  // How far any mix in the closest-blend window (+/-1 O2, +/-5 He) can be from the target in moles at
+  // the target pressure: from the window's corners, with margin, since moles change smoothly with mix.
+  const closestWindowMolesSlack = (() => {
+    let worst = 0;
+    for (const o2 of [input.targetO2 - MULTI_GAS_O2_TOLERANCE, input.targetO2 + MULTI_GAS_O2_TOLERANCE]) {
+      for (const he of [input.targetHe - MULTI_GAS_HE_TOLERANCE, input.targetHe + MULTI_GAS_HE_TOLERANCE]) {
+        const cornerO2 = Math.min(100, Math.max(0, o2));
+        const cornerHe = Math.min(100 - cornerO2, Math.max(0, he));
+        const density = gergDensityFromPressure(
+          settledTemperatureK,
+          gaugePsiToAbsoluteKpa(targetPressurePsi),
+          gasFractionsFromPercents(cornerO2, cornerHe)
+        );
+        if (density.success) {
+          worst = Math.max(worst, Math.abs(density.densityMolPerLiter * waterVolumeLiters - targetMoles));
+        }
+      }
+    }
+    return worst * CLOSEST_WINDOW_SLACK_MARGIN;
+  })();
+
   const realize = (
     candidates: BlendAlternative[],
     start: StartState,
@@ -702,12 +729,14 @@ export const calculateRealGasMultiGasBlend = (
       // Compare the amounts after the same scaling the realization applies: residual-adjusted options
       // are planned for an empty cylinder and shrink by the moles already in it.
       const addedAmount = candidate.steps.reduce((sum, step) => sum + Math.max(0, step.amount), 0);
-      const amountScale = addedAmount > 0
-        ? Math.max(0, (targetMoles - totalMoles(start.components)) * psiPerMole / addedAmount)
+      const neededMoles = targetMoles - totalMoles(start.components);
+      const amountScale = addedAmount > 0 ? Math.max(0, neededMoles * psiPerMole / addedAmount) : 1;
+      const windowFactor = options.closestWindow
+        ? (neededMoles > 0 ? Math.max(0, 1 - closestWindowMolesSlack / neededMoles) : 0)
         : 1;
       const capMiss = candidate.steps.some((step) => {
         const cap = sourceById.get(step.gas.id)?.maxPressurePsi;
-        return cap !== undefined && step.amount * amountScale > cap * CAP_PREFILTER_FACTOR + CAP_TOLERANCE_PSI;
+        return cap !== undefined && step.amount * amountScale * windowFactor > cap * CAP_PREFILTER_FACTOR + CAP_TOLERANCE_PSI;
       });
       if (options.enforceCaps && capMiss) {
         outcome.capRejected += 1;
@@ -744,7 +773,8 @@ export const calculateRealGasMultiGasBlend = (
   // The settled-pressure refinement can move a closest blend slightly, so recheck its limits.
   const closestOptions: RealizeOptions = {
     enforceCaps: true,
-    mixTolerance: { o2: MULTI_GAS_O2_TOLERANCE + PERCENT_TOLERANCE, he: MULTI_GAS_HE_TOLERANCE + PERCENT_TOLERANCE }
+    mixTolerance: { o2: MULTI_GAS_O2_TOLERANCE + PERCENT_TOLERANCE, he: MULTI_GAS_HE_TOLERANCE + PERCENT_TOLERANCE },
+    closestWindow: true
   };
 
   let capRejected = 0;
@@ -944,8 +974,8 @@ export const calculateRealGasMultiGasBlend = (
       .sort((a, b) => b.maxRetained - a.maxRetained);
     const bestRetained = (): number => (bleedTo ? totalMoles(bleedTo.components) * psiPerMole : -1);
     for (const line of lines) {
-      const low = Math.max(line.minRetained, residualAmount);
-      const high = Math.min(line.maxRetained, startAmount - BLEED_PRESSURE_TOLERANCE_PSI);
+      let low = Math.max(line.minRetained, residualAmount);
+      let high = Math.min(line.maxRetained, startAmount - BLEED_PRESSURE_TOLERANCE_PSI);
       if (low > high || high <= bestRetained()) {
         continue;
       }
@@ -983,21 +1013,55 @@ export const calculateRealGasMultiGasBlend = (
       };
       const exceeds = (rises: Map<string, number>, limit: { id: string; cap: number }): boolean =>
         (rises.get(limit.id) ?? 0) > limit.cap + CAP_TOLERANCE_PSI;
+      // An end of the range may not be evaluable while points inside are: at an end one source's
+      // amount reaches zero, its stage drops out, and the next stage inherits a hotter temperature
+      // that can pass 400 bar. Step inward to the nearest evaluable point, then bisect back out.
+      const evaluableFrom = (from: number, toward: number): { retained: number; rises: Map<string, number> } | null => {
+        const direct = risesAt(from);
+        if (direct) {
+          return { retained: from, rises: direct };
+        }
+        let failing = from;
+        for (let point = 1; point <= ENDPOINT_SEARCH_POINTS; point += 1) {
+          const retained = from + (toward - from) * (point / ENDPOINT_SEARCH_POINTS);
+          const rises = risesAt(retained);
+          if (!rises) {
+            failing = retained;
+            continue;
+          }
+          let found = { retained, rises };
+          while (Math.abs(found.retained - failing) > BLEED_PRESSURE_TOLERANCE_PSI) {
+            const mid = (found.retained + failing) / 2;
+            const atMid = risesAt(mid);
+            if (atMid) {
+              found = { retained: mid, rises: atMid };
+            } else {
+              failing = mid;
+            }
+          }
+          return found;
+        }
+        return null;
+      };
 
-      const atHigh = risesAt(high);
-      if (!atHigh) {
+      const top = evaluableFrom(high, low);
+      if (!top) {
         continue;
       }
+      const atHigh = top.rises;
+      high = top.retained;
       if (!limits.some((limit) => exceeds(atHigh, limit))) {
         if (high > bestRetained()) {
           tryDrainTo(high);
         }
         continue;
       }
-      const atLow = high > low ? risesAt(low) : null;
-      if (!atLow) {
+      const bottom = high > low ? evaluableFrom(low, high) : null;
+      if (!bottom) {
         continue;
       }
+      const atLow = bottom.rises;
+      low = bottom.retained;
       const upperLimits = limits.filter(
         (limit) => (atHigh.get(limit.id) ?? 0) > (atLow.get(limit.id) ?? 0) + RISE_DIRECTION_TOLERANCE_PSI
       );
