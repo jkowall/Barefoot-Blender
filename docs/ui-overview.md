@@ -39,11 +39,14 @@ Order of content:
 
 ### Multi-Gas Blend
 
-1. **Start Tank** card – Starting mix and pressure for partial fills.
+1. **Start Tank** card – Starting mix and pressure for partial fills. When `GERG-2008` is selected it also has Start Temp.
 2. **Tank Context** card – Per-fill tank volume and rated pressure.
-3. **Source Gases** card – Selectors with optional custom source gases and bank pressure limits.
-4. **Target Blend** card – Oxygen, helium, and final pressure fields.
-5. **Blend Options** card – Ranked alternatives, fill order, added PSI, cu ft, free gas liters, and estimated cost. When `Training Mode` is on, it shows visual formula cards for the needed added gas worksheet and a Pearson-square style check for two-source nitrox cases, falling back to pressure-percent source checks for more complex mixes.
+3. **Source Gases** card – A Fill Order selector, then 1 to 6 source rows with optional custom mixes and bank pressure limits. `Auto (recommended)` fills helium, then oxygen, then richer mixes, with Air last. `My order (top to bottom)` adds up/down buttons to each row and fills in list order; amounts stay the same in any order and only the stop pressures change. In `GERG-2008` mode a bank limit caps the source's real-gas pressure rise at its stage temperature and fill position.
+4. **Target Blend** card – Oxygen, helium, and final pressure fields. When `GERG-2008` is selected it also has Settled Temp, and the target pressure is the settled pressure at that temperature.
+5. **Blend Options** card – Ranked alternatives with estimated cost, then the selected fill plan.
+   - Ideal mode: fill order with running stop pressures, added PSI, cu ft, free gas liters, and cost.
+   - `GERG-2008` mode: "GERG-2008 Corrected Stops" with each stop pressure, pressure change, Z, and real-gas volume, plus a Stage Temp input on each stop row (stage temps default to Start Temp and carry forward to later unedited stops). Bleed steps read "Drain to" at Start Temp. Residual-adjusted and closest-blend plans state the mix they actually reach. If GERG-2008 cannot evaluate the inputs, the ideal plan is shown with the GERG-2008 error and a fallback label.
+   - When `Training Mode` is on, it shows visual formula cards for the needed added gas worksheet and a Pearson-square style check for two-source nitrox cases, falling back to pressure-percent source checks for more complex mixes. In `GERG-2008` mode the hand check uses the ideal option with the same source gases.
 
 ### Utilities
 
@@ -61,8 +64,8 @@ When `Training Mode` is on, the utility cards show the formulas and current subs
 ## Settings Panel
 
 Sections:
-1. **Units** – Pressure (PSI/bar) and depth (ft/m).
-2. **Calculation Model** – Defaults new installs to GERG-2008 real-gas corrections for Standard Blend and Top-Off. Ideal partial-pressure math remains selectable for training and comparison, and saved user choices are preserved.
+1. **Units** – Pressure (PSI/bar), depth (ft/m), and temperature (F/C).
+2. **Calculation Model** – Defaults new installs to GERG-2008 real-gas corrections for Standard Blend, Top-Off, and Multi-Gas. Ideal partial-pressure math remains selectable for training and comparison, and saved user choices are preserved.
 3. **Defaults** – Max and contingency PPO₂.
 4. **Equivalent Narcotic Gas** – Toggle for oxygen narcotic behavior.
 5. **Custom Banked Gases** – Editable list with name, O₂ %, He %, and delete/add controls.
