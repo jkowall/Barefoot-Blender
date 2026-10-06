@@ -10,7 +10,7 @@
 ### Fixed
 
 - **iOS Capacitor Runtime**: Native iOS builds now pin `capacitor-swift-pm` 8.5.2 to match `@capacitor/ios` 8.5.2. Earlier builds still linked 8.4.1, which is affected by GHSA-rvm3-566m-v7fv.
-- **Multi-Gas Bleed-Down With Bank Limits**: Ideal Multi-Gas now finds the bleed-down when a capped bank means the tank can be drained too far as well as not far enough. It previously returned "No valid blend found" (2000 psi of 10/70 into 21/35 at 3000 psi with Air capped at 1300 psi now bleeds to 1500 psi). The search now scans start pressures from the current pressure down before refining, and keeps the smallest bleed it finds. Bleed-downs that already worked are unchanged, except a few where the old search drained more than needed. Those now bleed less.
+- **Multi-Gas Bleed-Down With Bank Limits**: Ideal Multi-Gas now finds the bleed-down when a capped bank means the tank can be drained too far as well as not far enough. It previously returned "No valid blend found" (2000 psi of 10/70 into 21/35 at 3000 psi with Air capped at 1300 psi now bleeds to 1500 psi). The search now checks every start pressure where a bank cap or mix limit can change the result, from the current pressure down, and keeps the smallest workable bleed, even when capped banks leave a window narrower than 10 psi. Bleed-downs that already worked are unchanged, except a few where the old search drained more than needed. Those now bleed less.
 
 ## [1.1.2] - 2026-10-05
 
