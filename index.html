@@ -2,9 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Native app builds have no server headers, so this tag is their only CSP. It mirrors
+      public/_headers minus frame-ancestors (ignored in meta tags). Rationale and checks live in
+      src/contentSecurityPolicy.test.ts; the Vite dev server relaxes it (vite.config.ts).
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests;"
+      content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; manifest-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"
     />
     <link rel="icon" type="image/png" sizes="32x32" href="/logo-64.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/logo-192.png" />
