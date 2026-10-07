@@ -19,7 +19,7 @@ describe("clearable number fields", () => {
     expect(clearableDisplayValue(cleared, "startTemperatureF", -5)).toBe(-5);
   });
 
-  it("shows the default again when focus leaves an emptied field", () => {
+  it("shows the saved value again when focus leaves an emptied field", () => {
     const cleared = updateClearedKeys<Key>(["settledTemperatureF"], "startTemperatureF", undefined);
     const afterBlur = endClearedKeyEdit(cleared, "startTemperatureF");
     expect(afterBlur).toEqual(["settledTemperatureF"]);

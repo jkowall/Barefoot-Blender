@@ -24,16 +24,26 @@ export const clearableDisplayValue = <K extends string>(
  * Lets controlled number fields with an inherited default stay empty while being edited. Without it,
  * emptying a field (or typing a leading "-", which a number input reports as empty) stores undefined
  * and the field immediately refills with its default.
+ *
+ * An emptied field is a local draft: the saved value is kept (so results that use it stay on screen)
+ * until a number is typed, which is saved, or focus leaves the field empty, which clears it.
  */
 export const useClearableNumber = <K extends string>(): {
   display: (key: K, resolvedValue: number | undefined) => number | undefined;
-  track: (key: K, value: number | undefined) => void;
-  endEdit: (key: K) => void;
+  change: (key: K, value: number | undefined, save: (value: number | undefined) => void) => void;
+  endEdit: (key: K, save: (value: number | undefined) => void) => void;
 } => {
   const [clearedKeys, setClearedKeys] = useState<K[]>([]);
   return {
     display: (key, resolvedValue) => clearableDisplayValue(clearedKeys, key, resolvedValue),
-    track: (key, value) => setClearedKeys((keys) => updateClearedKeys(keys, key, value)),
-    endEdit: (key) => setClearedKeys((keys) => endClearedKeyEdit(keys, key))
+    change: (key, value, save) => {
+      setClearedKeys((keys) => updateClearedKeys(keys, key, value));
+      if (value !== undefined) save(value);
+    },
+    endEdit: (key, save) => {
+      if (!clearedKeys.includes(key)) return;
+      setClearedKeys((keys) => endClearedKeyEdit(keys, key));
+      save(undefined);
+    }
   };
 };
