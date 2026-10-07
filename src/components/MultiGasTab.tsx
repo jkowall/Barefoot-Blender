@@ -30,8 +30,10 @@ import {
   DEFAULT_START_TEMPERATURE_F,
   fromDisplayTemperature,
   temperatureUnitLabel,
-  toDisplayTemperature
+  toDisplayTemperature,
+  toDisplayTemperatureInput
 } from "../utils/temperature";
+import { useClearableNumber } from "./useClearableNumber";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { logger } from "../utils/logger";
 import { AccordionItem } from "./Accordion";
@@ -185,7 +187,7 @@ export const StageTemperatureRecovery = ({
               key={rowKeys[rowIndex] ?? source.id}
               label={`Gas ${rowIndex + 1} Stage Temp (${temperatureLabel})`}
               step={1}
-              value={source.stageTemperatureF === undefined ? undefined : toDisplayTemperature(source.stageTemperatureF, temperatureUnit)}
+              value={source.stageTemperatureF === undefined ? undefined : toDisplayTemperatureInput(source.stageTemperatureF, temperatureUnit)}
               onChange={(val) => onChange(rowIndex, val === undefined ? undefined : fromDisplayTemperature(val, temperatureUnit))}
               onKeyDown={selectTempOnEnter}
             />
@@ -265,7 +267,17 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     updateField({ gasSources: moved.sources });
   };
 
+  // Start/Settled Temp fields the user has emptied stay empty until a number is typed or focus
+  // leaves, instead of refilling with the default mid-edit (which made a leading "-" impossible).
+  // The saved temperature is kept meanwhile and cleared only if the field is left empty.
+  const clearableTemperatures = useClearableNumber<"startTemperatureF" | "settledTemperatureF">();
   const updateTemperatureField = (
+    key: "startTemperatureF" | "settledTemperatureF",
+    value: number | undefined
+  ): void => {
+    clearableTemperatures.change(key, value, (saved) => saveTemperatureField(key, saved));
+  };
+  const saveTemperatureField = (
     key: "startTemperatureF" | "settledTemperatureF",
     value: number | undefined
   ): void => {
@@ -310,7 +322,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     }
     const rowIndex = sourceId === undefined ? undefined : sourceResolution.rowIndexById.get(sourceId);
     const ownTemperatureF = rowIndex === undefined ? undefined : gasSources[rowIndex]?.stageTemperatureF;
-    return toDisplayTemperature(ownTemperatureF ?? resolvedTemperatureF, settings.temperatureUnit);
+    return toDisplayTemperatureInput(ownTemperatureF ?? resolvedTemperatureF, settings.temperatureUnit);
   };
 
   // Cost settings from app settings
@@ -926,7 +938,8 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
             <NumberInput
               label={`Start Temp (${temperatureLabel})`}
               step={1}
-              value={toDisplayTemperature(startTemperatureF, settings.temperatureUnit)}
+              value={clearableTemperatures.display("startTemperatureF", toDisplayTemperatureInput(startTemperatureF, settings.temperatureUnit))}
+              onBlur={() => clearableTemperatures.endEdit("startTemperatureF", (saved) => saveTemperatureField("startTemperatureF", saved))}
               onChange={(val) => updateTemperatureField("startTemperatureF", val)}
               onKeyDown={selectTempOnEnter}
             />
@@ -1016,7 +1029,8 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
             <NumberInput
               label={`Settled Temp (${temperatureLabel})`}
               step={1}
-              value={toDisplayTemperature(settledTemperatureF, settings.temperatureUnit)}
+              value={clearableTemperatures.display("settledTemperatureF", toDisplayTemperatureInput(settledTemperatureF, settings.temperatureUnit))}
+              onBlur={() => clearableTemperatures.endEdit("settledTemperatureF", (saved) => saveTemperatureField("settledTemperatureF", saved))}
               onChange={(val) => updateTemperatureField("settledTemperatureF", val)}
               onKeyDown={selectTempOnEnter}
             />

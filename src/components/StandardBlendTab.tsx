@@ -44,8 +44,9 @@ import {
   DEFAULT_START_TEMPERATURE_F,
   fromDisplayTemperature,
   temperatureUnitLabel,
-  toDisplayTemperature
+  toDisplayTemperatureInput
 } from "../utils/temperature";
+import { useClearableNumber } from "./useClearableNumber";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
@@ -547,7 +548,17 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     }
   };
 
+  // Start/Settled Temp fields the user has emptied stay empty until a number is typed or focus
+  // leaves, instead of refilling with the default mid-edit (which made a leading "-" impossible).
+  // The saved temperature is kept meanwhile and cleared only if the field is left empty.
+  const clearableTemperatures = useClearableNumber<"startTemperatureF" | "settledTemperatureF">();
   const updateTemperatureField = (
+    key: "startTemperatureF" | "settledTemperatureF",
+    value: number | undefined
+  ): void => {
+    clearableTemperatures.change(key, value, (saved) => saveTemperatureField(key, saved));
+  };
+  const saveTemperatureField = (
     key: "startTemperatureF" | "settledTemperatureF",
     value: number | undefined
   ): void => {
@@ -582,7 +593,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       startTemperatureF,
       standardBlend.fillTemperatureF
     );
-    return temperatureF === undefined ? undefined : toDisplayTemperature(temperatureF, settings.temperatureUnit);
+    return temperatureF === undefined ? undefined : toDisplayTemperatureInput(temperatureF, settings.temperatureUnit);
   };
 
   const selectTempOnEnter = (event: KeyboardEvent<HTMLInputElement>): void => {
@@ -1165,14 +1176,16 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                 <NumberInput
                   label={`Initial Temp (${temperatureLabel})`}
                   step={1}
-                  value={toDisplayTemperature(startTemperatureF, settings.temperatureUnit)}
+                  value={clearableTemperatures.display("startTemperatureF", toDisplayTemperatureInput(startTemperatureF, settings.temperatureUnit))}
+                  onBlur={() => clearableTemperatures.endEdit("startTemperatureF", (saved) => saveTemperatureField("startTemperatureF", saved))}
                   onChange={(val) => updateTemperatureField("startTemperatureF", val)}
                   onKeyDown={selectTempOnEnter}
                 />
                 <NumberInput
                   label={`Settled Temp (${temperatureLabel})`}
                   step={1}
-                  value={toDisplayTemperature(settledTemperatureF, settings.temperatureUnit)}
+                  value={clearableTemperatures.display("settledTemperatureF", toDisplayTemperatureInput(settledTemperatureF, settings.temperatureUnit))}
+                  onBlur={() => clearableTemperatures.endEdit("settledTemperatureF", (saved) => saveTemperatureField("settledTemperatureF", saved))}
                   onChange={(val) => updateTemperatureField("settledTemperatureF", val)}
                   onKeyDown={selectTempOnEnter}
                 />

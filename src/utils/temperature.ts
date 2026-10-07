@@ -19,6 +19,14 @@ export const toDisplayTemperature = (valueF: number, unit: TemperatureUnit): num
   return fahrenheitToCelsius(valueF);
 };
 
+/**
+ * Temperature for an editable input, rounded to 0.01 degrees. Converting a typed Celsius value to
+ * the stored Fahrenheit and back adds float noise (12 C reads back as 12.000000000000002), which
+ * would otherwise show in the field and rewrite it mid-typing.
+ */
+export const toDisplayTemperatureInput = (valueF: number, unit: TemperatureUnit): number =>
+  Math.round(toDisplayTemperature(valueF, unit) * 100) / 100;
+
 export const fromDisplayTemperature = (value: number, unit: TemperatureUnit): number => {
   if (unit === "f") {
     return value;

@@ -7,6 +7,7 @@ import {
   celsiusToFahrenheit,
   fahrenheitToKelvin,
   toDisplayTemperature,
+  toDisplayTemperatureInput,
   fromDisplayTemperature,
   temperatureUnitLabel,
 } from "./temperature";
@@ -80,5 +81,19 @@ describe("Display Temperatures", () => {
     it("should return 'C' for celsius", () => {
       expect(temperatureUnitLabel("c")).toBe("C");
     });
+  });
+});
+
+describe("toDisplayTemperatureInput", () => {
+  it("drops Celsius round-trip float noise from typed values", () => {
+    for (const typedC of [12, 21.5, -0.5, -5, 0, 21.11]) {
+      expect(toDisplayTemperatureInput(fromDisplayTemperature(typedC, "c"), "c")).toBe(typedC);
+    }
+  });
+
+  it("rounds the default to 0.01 degrees and leaves Fahrenheit values alone", () => {
+    expect(toDisplayTemperatureInput(70, "c")).toBe(21.11);
+    expect(toDisplayTemperatureInput(70, "f")).toBe(70);
+    expect(toDisplayTemperatureInput(-9.5, "f")).toBe(-9.5);
   });
 });
