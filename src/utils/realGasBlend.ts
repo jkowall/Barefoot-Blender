@@ -81,7 +81,7 @@ type RealGasBlendSettings = {
   pressureUnit: PressureUnit;
 };
 
-type ComponentMoles = {
+export type ComponentMoles = {
   o2: number;
   he: number;
   n2: number;
@@ -95,7 +95,7 @@ type StepPlan = {
 };
 
 const CUFT_TO_LITERS = 28.316846592;
-const MOLE_TOLERANCE = 1e-8;
+export const MOLE_TOLERANCE = 1e-8;
 const ATM_PRESSURE_KPA = ATM_PRESSURE_PSI * KPA_PER_PSI;
 
 // Ideal free-gas liters per mole at 1 atm and the free-gas reference temperature.
@@ -105,21 +105,21 @@ export const FREE_GAS_LITERS_PER_MOLE =
 const pureOxygenFractions: GergGasFractions = { o2: 1, he: 0, n2: 0 };
 const pureHeliumFractions: GergGasFractions = { o2: 0, he: 1, n2: 0 };
 
-const componentMolesFromTotal = (totalMoles: number, fractions: GergGasFractions): ComponentMoles => ({
+export const componentMolesFromTotal = (totalMoles: number, fractions: GergGasFractions): ComponentMoles => ({
   o2: totalMoles * fractions.o2,
   he: totalMoles * fractions.he,
   n2: totalMoles * fractions.n2
 });
 
-const addGasMoles = (components: ComponentMoles, moles: number, fractions: GergGasFractions): ComponentMoles => ({
+export const addGasMoles = (components: ComponentMoles, moles: number, fractions: GergGasFractions): ComponentMoles => ({
   o2: components.o2 + moles * fractions.o2,
   he: components.he + moles * fractions.he,
   n2: components.n2 + moles * fractions.n2
 });
 
-const totalMoles = (components: ComponentMoles): number => components.o2 + components.he + components.n2;
+export const totalMoles = (components: ComponentMoles): number => components.o2 + components.he + components.n2;
 
-const fractionsFromMoles = (components: ComponentMoles): GergGasFractions => {
+export const fractionsFromMoles = (components: ComponentMoles): GergGasFractions => {
   const total = totalMoles(components);
   if (total <= MOLE_TOLERANCE) {
     return { o2: 0.21, he: 0, n2: 0.79 };
@@ -197,7 +197,7 @@ const splitAdditionMoles = (delta: ComponentMoles, topFractions: GergGasFraction
   return { topoff: 0, helium: delta.he, oxygen: delta.o2 };
 };
 
-const stateFromComponents = (
+export const stateFromComponents = (
   temperatureK: number,
   components: ComponentMoles,
   waterVolumeLiters: number
@@ -217,18 +217,203 @@ const stateFromComponents = (
   };
 };
 
-const invalidGergMix = (...mixes: GergGasFractions[]): boolean =>
+export const invalidGergMix = (...mixes: GergGasFractions[]): boolean =>
   mixes.some((mix) => mix.o2 < -MOLE_TOLERANCE || mix.he < -MOLE_TOLERANCE || mix.n2 < -MOLE_TOLERANCE);
 
-const percentFromFraction = (value: number): number => Math.max(0, Math.min(100, value * 100));
+export const percentFromFraction = (value: number): number => Math.max(0, Math.min(100, value * 100));
 
-const appendMixSafetyWarnings = (warnings: string[], o2Percent: number): void => {
+export const appendMixSafetyWarnings = (warnings: string[], o2Percent: number): void => {
   if (o2Percent < 18) {
     warnings.push("Hypoxic mix (<18% O2).");
   }
   if (o2Percent > 40) {
     warnings.push("High O2 - fire risk (>40% O2).");
   }
+};
+
+const TARGET_SAFETY_FLAGS = ["Hypoxic mix (<18% O2).", "High O2 - fire risk (>40% O2)."];
+
+// Safety flags follow the mix a plan actually reaches, not an unreachable target.
+export const replaceSafetyWarningsWithReachedMix = (warnings: string[], reachedO2Percent: number): void => {
+  for (const targetFlag of TARGET_SAFETY_FLAGS) {
+    const index = warnings.indexOf(targetFlag);
+    if (index >= 0) {
+      warnings.splice(index, 1);
+    }
+  }
+  appendMixSafetyWarnings(warnings, reachedO2Percent);
+};
+
+export const residualAdjustedMixWarning = (mix: { o2: number; he: number }): string => {
+  const heliumText = mix.he > 0.005 ? ` / ${mix.he.toFixed(2)}% He` : "";
+  return `An empty cylinder still holds 1 atm of the start mix, so this plan ends at ${mix.o2.toFixed(2)}% O2${heliumText} instead of the exact target. Purge the cylinder and set the start mix to the purge gas to reach the target exactly.`;
+};
+
+/**
+ * Ideal-equivalent gauge PSI per mole: the pressure n moles would add at the 70 F free-gas reference
+ * if Z were 1. Mixing is linear in moles, so the ideal pressure-point solvers can run on moles
+ * expressed in these units, and pressureToCuFt of the result equals realGasMolesToFreeGasCuFt.
+ */
+export const idealEquivalentPsiPerMole = (waterVolumeLiters: number): number => {
+  if (!Number.isFinite(waterVolumeLiters) || waterVolumeLiters <= 0) {
+    return 0;
+  }
+  return R_GERG * fahrenheitToKelvin(FREE_GAS_REFERENCE_TEMPERATURE_F) / (waterVolumeLiters * KPA_PER_PSI);
+};
+
+export type RealGasStagePlan<K extends string = string> = {
+  key: K;
+  gasName: string;
+  moles: number;
+  fractions: GergGasFractions;
+  temperatureF: number;
+};
+
+export type RealGasStageState<K extends string = string> = {
+  key: K;
+  gasName: string;
+  molesAdded: number;
+  stopPressurePsi: number;
+  pressureChangePsi: number;
+  temperatureF: number;
+  z: number;
+};
+
+export type RealGasStageSimulation<K extends string = string> = {
+  success: boolean;
+  steps: RealGasStageState<K>[];
+  startHotPressurePsi: number;
+  // Z of the cylinder contents before the first addition, at the first stage temperature.
+  startZ?: number;
+  finalHotPressurePsi: number;
+  finalComponents: ComponentMoles;
+  warnings: string[];
+  errors: string[];
+};
+
+/**
+ * Add each stage's moles in order and report the gauge stop pressure at that stage's temperature.
+ * Pressure change is measured at the stage temperature, so it is not simply the difference between
+ * consecutive stops when stage temperatures differ. On a GERG failure the completed stages are kept.
+ */
+export const simulateRealGasStages = <K extends string>(
+  startComponents: ComponentMoles,
+  stages: RealGasStagePlan<K>[],
+  waterVolumeLiters: number,
+  startPressurePsi: number
+): RealGasStageSimulation<K> => {
+  const warnings: string[] = [];
+  const steps: RealGasStageState<K>[] = [];
+  let runningComponents = startComponents;
+  let startZ: number | undefined;
+  let startHotPressurePsi = startPressurePsi;
+  let previousPressurePsi = startPressurePsi;
+
+  for (const stage of stages) {
+    const temperatureK = fahrenheitToKelvin(stage.temperatureF);
+    const beforeState = stateFromComponents(temperatureK, runningComponents, waterVolumeLiters);
+    warnings.push(...beforeState.warnings);
+    if (!beforeState.success) {
+      return {
+        success: false,
+        steps,
+        startHotPressurePsi,
+        startZ,
+        finalHotPressurePsi: previousPressurePsi,
+        finalComponents: runningComponents,
+        warnings,
+        errors: beforeState.errors
+      };
+    }
+    if (steps.length === 0) {
+      startHotPressurePsi = beforeState.pressurePsi;
+      startZ = beforeState.z;
+    }
+
+    const nextComponents = addGasMoles(runningComponents, stage.moles, stage.fractions);
+    const state = stateFromComponents(temperatureK, nextComponents, waterVolumeLiters);
+    warnings.push(...state.warnings);
+    if (!state.success) {
+      return {
+        success: false,
+        steps,
+        startHotPressurePsi,
+        startZ,
+        finalHotPressurePsi: previousPressurePsi,
+        finalComponents: runningComponents,
+        warnings,
+        errors: state.errors
+      };
+    }
+
+    runningComponents = nextComponents;
+    steps.push({
+      key: stage.key,
+      gasName: stage.gasName,
+      molesAdded: stage.moles,
+      stopPressurePsi: state.pressurePsi,
+      pressureChangePsi: state.pressurePsi - beforeState.pressurePsi,
+      temperatureF: stage.temperatureF,
+      z: state.z
+    });
+    previousPressurePsi = state.pressurePsi;
+  }
+
+  return {
+    success: true,
+    steps,
+    startHotPressurePsi,
+    startZ,
+    finalHotPressurePsi: previousPressurePsi,
+    finalComponents: runningComponents,
+    warnings,
+    errors: []
+  };
+};
+
+/**
+ * Refine a common scale on a set of additions so the final mix's GERG density at the target
+ * pressure and settled temperature matches the cylinder contents (start moles plus scaled additions).
+ * Evaluating at the target pressure keeps every pass inside the GERG envelope. The mix barely moves
+ * with the scale, so this converges in a few passes; a density failure keeps the last scale.
+ */
+export const refineAdditionScaleToSettledTarget = (
+  startComponents: ComponentMoles,
+  additions: { moles: number; fractions: GergGasFractions }[],
+  targetPressurePsi: number,
+  settledTemperatureK: number,
+  waterVolumeLiters: number,
+  initialScale: number
+): number => {
+  const additionsTotal = additions.reduce((sum, addition) => sum + addition.moles, 0);
+  if (additionsTotal <= MOLE_TOLERANCE) {
+    return initialScale;
+  }
+  const residualMoles = totalMoles(startComponents);
+  const withScaledAdditions = (scale: number): ComponentMoles =>
+    additions.reduce(
+      (components, addition) => addGasMoles(components, addition.moles * scale, addition.fractions),
+      startComponents
+    );
+
+  let scale = initialScale;
+  for (let pass = 0; pass < 8 && scale > 0; pass += 1) {
+    const density = gergDensityFromPressure(
+      settledTemperatureK,
+      gaugePsiToAbsoluteKpa(targetPressurePsi),
+      fractionsFromMoles(withScaledAdditions(scale))
+    );
+    if (!density.success) {
+      break;
+    }
+    const nextScale = Math.max(0, (density.densityMolPerLiter * waterVolumeLiters - residualMoles) / additionsTotal);
+    const converged = Math.abs(nextScale - scale) * additionsTotal <= MOLE_TOLERANCE;
+    scale = nextScale;
+    if (converged) {
+      break;
+    }
+  }
+  return scale;
 };
 
 const realGasTopOffFailure = (
@@ -746,33 +931,21 @@ export const calculateRealGasStandardBlend = (
     }
     const targetTotal = totalMoles(targetComponents);
     const residualMoles = totalMoles(startComponents);
-    const withScaledAdditions = (scale: number): ComponentMoles =>
-      addGasMoles(
-        addGasMoles(addGasMoles(startComponents, vacuumSplit.helium * scale, pureHeliumFractions), vacuumSplit.oxygen * scale, pureOxygenFractions),
-        vacuumSplit.topoff * scale,
-        topFractions
-      );
-    let scale = targetTotal > MOLE_TOLERANCE ? Math.max(0, (targetTotal - residualMoles) / targetTotal) : 0;
+    const initialScale = targetTotal > MOLE_TOLERANCE ? Math.max(0, (targetTotal - residualMoles) / targetTotal) : 0;
     // The residual shifts the final mix slightly, so refine the scale until the final mix's density at
-    // the target pressure and settled temperature matches the cylinder contents. Evaluating at the
-    // target pressure keeps every pass inside the GERG envelope; the mix barely moves, so this
-    // converges in a few passes.
-    for (let pass = 0; pass < 8 && scale > 0; pass += 1) {
-      const density = gergDensityFromPressure(
-        settledTemperatureK,
-        gaugePsiToAbsoluteKpa(targetPressurePsi),
-        fractionsFromMoles(withScaledAdditions(scale))
-      );
-      if (!density.success) {
-        break;
-      }
-      const nextScale = Math.max(0, (density.densityMolPerLiter * waterVolumeLiters - residualMoles) / targetTotal);
-      const converged = Math.abs(nextScale - scale) * targetTotal <= MOLE_TOLERANCE;
-      scale = nextScale;
-      if (converged) {
-        break;
-      }
-    }
+    // the target pressure and settled temperature matches the cylinder contents.
+    const scale = refineAdditionScaleToSettledTarget(
+      startComponents,
+      [
+        { moles: vacuumSplit.helium, fractions: pureHeliumFractions },
+        { moles: vacuumSplit.oxygen, fractions: pureOxygenFractions },
+        { moles: vacuumSplit.topoff, fractions: topFractions }
+      ],
+      targetPressurePsi,
+      settledTemperatureK,
+      waterVolumeLiters,
+      initialScale
+    );
     split = {
       helium: vacuumSplit.helium * scale,
       oxygen: vacuumSplit.oxygen * scale,
@@ -810,93 +983,44 @@ export const calculateRealGasStandardBlend = (
       he: percentFromFraction(finalFractions.he),
       n2: percentFromFraction(finalFractions.n2)
     };
-    // Safety flags follow the mix the plan actually reaches, not the unreachable target.
-    for (const targetFlag of ["Hypoxic mix (<18% O2).", "High O2 - fire risk (>40% O2)."]) {
-      const index = warnings.indexOf(targetFlag);
-      if (index >= 0) {
-        warnings.splice(index, 1);
-      }
-    }
-    appendMixSafetyWarnings(warnings, residualAdjustedMix.o2);
-    const heliumText = residualAdjustedMix.he > 0.005 ? ` / ${residualAdjustedMix.he.toFixed(2)}% He` : "";
-    warnings.push(
-      `An empty cylinder still holds 1 atm of the start mix, so this plan ends at ${residualAdjustedMix.o2.toFixed(2)}% O2${heliumText} instead of the exact target. Purge the cylinder and set the start mix to the purge gas to reach the target exactly.`
-    );
+    replaceSafetyWarningsWithReachedMix(warnings, residualAdjustedMix.o2);
+    warnings.push(residualAdjustedMixWarning(residualAdjustedMix));
   }
 
-  let runningComponents = startComponents;
-  let startZ: number | undefined;
-  let startHotPressurePsi = startPressurePsi;
-  let previousPressurePsi = startPressurePsi;
-  const steps: RealGasBlendStep[] = [];
-  for (const step of plannedSteps) {
-    const temperatureF = stepTemperatureF(inputs, step.kind, startTemperatureF);
-    const temperatureK = fahrenheitToKelvin(temperatureF);
-    const beforeState = stateFromComponents(temperatureK, runningComponents, waterVolumeLiters);
-    warnings.push(...beforeState.warnings);
-    if (!beforeState.success) {
-      return {
-        success: false,
-        steps,
-        startHotPressurePsi,
-        finalHotPressurePsi: previousPressurePsi,
-        targetSettledPressurePsi: targetPressurePsi,
-        additions,
-        waterVolumeLiters,
-        startZ,
-        residualAdjustedMix,
-        warnings,
-        errors: beforeState.errors
-      };
-    }
-    if (steps.length === 0) {
-      startHotPressurePsi = beforeState.pressurePsi;
-      startZ = beforeState.z;
-    }
-
-    const nextComponents = addGasMoles(runningComponents, step.moles, step.fractions);
-    const state = stateFromComponents(temperatureK, nextComponents, waterVolumeLiters);
-    warnings.push(...state.warnings);
-    if (!state.success) {
-      return {
-        success: false,
-        steps,
-        startHotPressurePsi,
-        finalHotPressurePsi: previousPressurePsi,
-        targetSettledPressurePsi: targetPressurePsi,
-        additions,
-        waterVolumeLiters,
-        startZ,
-        residualAdjustedMix,
-        warnings,
-        errors: state.errors
-      };
-    }
-
-    runningComponents = nextComponents;
-    steps.push({
-      kind: step.kind,
+  const simulation = simulateRealGasStages(
+    startComponents,
+    plannedSteps.map((step) => ({
+      key: step.kind,
       gasName: step.gasName,
-      molesAdded: step.moles,
-      stopPressurePsi: state.pressurePsi,
-      pressureChangePsi: state.pressurePsi - beforeState.pressurePsi,
-      temperatureF,
-      z: state.z
-    });
-    previousPressurePsi = state.pressurePsi;
-  }
+      moles: step.moles,
+      fractions: step.fractions,
+      temperatureF: stepTemperatureF(inputs, step.kind, startTemperatureF)
+    })),
+    waterVolumeLiters,
+    startPressurePsi
+  );
+  warnings.push(...simulation.warnings);
+  const steps: RealGasBlendStep[] = simulation.steps.map((step) => ({
+    kind: step.key,
+    gasName: step.gasName,
+    molesAdded: step.molesAdded,
+    stopPressurePsi: step.stopPressurePsi,
+    pressureChangePsi: step.pressureChangePsi,
+    temperatureF: step.temperatureF,
+    z: step.z
+  }));
 
   return {
-    success: true,
+    success: simulation.success,
     steps,
-    startHotPressurePsi,
-    finalHotPressurePsi: previousPressurePsi,
+    startHotPressurePsi: simulation.startHotPressurePsi,
+    finalHotPressurePsi: simulation.finalHotPressurePsi,
     targetSettledPressurePsi: targetPressurePsi,
     additions,
     waterVolumeLiters,
-    startZ,
+    startZ: simulation.startZ,
     residualAdjustedMix,
-    warnings: [...new Set(warnings)],
-    errors
+    warnings: simulation.success ? [...new Set(warnings)] : warnings,
+    errors: simulation.success ? errors : simulation.errors
   };
 };

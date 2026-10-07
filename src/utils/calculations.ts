@@ -941,14 +941,18 @@ const solveTwoGasBlend = (
   };
 };
 
-const MULTI_GAS_O2_TOLERANCE = 1;
-const MULTI_GAS_HE_TOLERANCE = 5;
+export const MULTI_GAS_O2_TOLERANCE = 1;
+export const MULTI_GAS_HE_TOLERANCE = 5;
 const MULTI_GAS_O2_STEP = 0.1;
 const MULTI_GAS_HE_STEP = 0.5;
 const MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI = 0.5;
 // Bleed-down search: bisect inside the highest workable breakpoint segment to 0.001 psi.
 const MULTI_GAS_BLEED_SEARCH_PRECISION_PSI = 0.001;
-const MULTI_GAS_SIMILAR_BLEND_WARNING =
+export const MULTI_GAS_BANK_LIMIT_ERROR =
+  "No valid blend found with the selected gases and bank pressure limits. Increase availability or adjust the target.";
+export const MULTI_GAS_NO_BLEND_ERROR =
+  "No valid blend found with available gases. Try adding more gas sources or adjusting target.";
+export const MULTI_GAS_SIMILAR_BLEND_WARNING =
   "Exact target cannot be made; showing closest blend within +/-1% O2 / +/-5% He.";
 
 const buildSearchValues = (
@@ -1452,7 +1456,7 @@ const getGasCostRank = (gas: GasSelection): number => {
  * Estimate cost for using a gas at a given pressure.
  * If He price is 0/undefined, uses heuristic ranking.
  */
-const estimateGasPressureCost = (
+export const estimateGasPressureCost = (
   gas: OptimizerGasSource,
   pressurePsi: number,
   costSettings: CostSettings
@@ -1602,7 +1606,32 @@ const tryTwoGasSolution = (
         finalHe: 0
       };
     }
-    return null;
+    if (h1 < tolerance && h2 < tolerance) return null;
+
+    // Helium-bearing gases with the same O2:He ratio (such as 10/25 and 20/50): solve the total with
+    // whichever fraction differs, then require the other balance within the pressure tolerance.
+    const solveOnO2 = Math.abs(o1 - o2) >= Math.abs(h1 - h2);
+    const [a1, a2, targetA] = solveOnO2 ? [o1, o2, targetO2] : [h1, h2, targetHe];
+    const [b1, b2, targetB] = solveOnO2 ? [h1, h2, targetHe] : [o1, o2, targetO2];
+    const denom = a1 - a2;
+    if (Math.abs(denom) < tolerance) return null;
+
+    const g1 = addedPressure * (targetA - a2) / denom;
+    const g2 = addedPressure - g1;
+    if (g1 < -tolerance || g2 < -tolerance) return null;
+
+    const sg1 = Math.max(0, g1);
+    const sg2 = Math.max(0, g2);
+    const pressureTolerancePsi = options.pressureTolerancePsi ?? MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI;
+    if (Math.abs(sg1 * b1 + sg2 * b2 - addedPressure * targetB) > pressureTolerancePsi) return null;
+
+    const totalPressure = sg1 + sg2;
+    return {
+      gas1Amount: sg1,
+      gas2Amount: sg2,
+      finalO2: totalPressure > 0 ? (sg1 * o1 + sg2 * o2) / totalPressure * 100 : 0,
+      finalHe: totalPressure > 0 ? (sg1 * h1 + sg2 * h2) / totalPressure * 100 : 0
+    };
   }
 
   // Solve the 2x2 system for O2 and He constraints
@@ -1674,30 +1703,81 @@ const trySingleGasSolution = (
 };
 
 /**
+ * Recommended fill-order comparator: pure He first, then pure O2, then by He content descending,
+ * then by O2 content descending, so Air and other diluents go last.
+ */
+export const compareRecommendedFillOrder = (
+  a: { gas: GasSelection },
+  b: { gas: GasSelection }
+): number => {
+  // Pure He comes first
+  if (a.gas.he === 100 && b.gas.he !== 100) return -1;
+  if (b.gas.he === 100 && a.gas.he !== 100) return 1;
+  // Then pure O2
+  if (a.gas.o2 === 100 && b.gas.o2 !== 100) return -1;
+  if (b.gas.o2 === 100 && a.gas.o2 !== 100) return 1;
+  // Then by He content (higher He first)
+  if (a.gas.he !== b.gas.he) return b.gas.he - a.gas.he;
+  // Then by O2 content (higher O2 first)
+  if (a.gas.o2 !== b.gas.o2) return b.gas.o2 - a.gas.o2;
+  // Air/diluent last
+  return 0;
+};
+
+/**
  * Get recommended fill order for a blend (He first, then O2, then diluent/Air).
  */
 export const getRecommendedFillOrder = (
   steps: { gas: OptimizerGasSource; amount: number }[]
 ): { gas: string; amount: number }[] => {
-  // Sort by: pure He first, then by He content descending, then by O2 content descending
   const sorted = [...steps]
     .filter(s => s.amount > tolerance)
-    .sort((a, b) => {
-      // Pure He comes first
-      if (a.gas.he === 100 && b.gas.he !== 100) return -1;
-      if (b.gas.he === 100 && a.gas.he !== 100) return 1;
-      // Then pure O2
-      if (a.gas.o2 === 100 && b.gas.o2 !== 100) return -1;
-      if (b.gas.o2 === 100 && a.gas.o2 !== 100) return 1;
-      // Then by He content (higher He first)
-      if (a.gas.he !== b.gas.he) return b.gas.he - a.gas.he;
-      // Then by O2 content (higher O2 first)  
-      if (a.gas.o2 !== b.gas.o2) return b.gas.o2 - a.gas.o2;
-      // Air/diluent last
-      return 0;
-    });
+    .sort(compareRecommendedFillOrder);
 
   return sorted.map(s => ({ gas: s.gas.name, amount: s.amount }));
+};
+
+// "auto" uses the recommended order; "manual" follows the user's source list from top to bottom.
+export type MultiGasFillOrderMode = "auto" | "manual";
+
+/**
+ * Order blend steps for filling. Amounts never change with order; only the stop pressures do.
+ * Manual mode sorts by each step's position in sourceOrderIds; unknown ids go last.
+ */
+export const orderBlendStepsForFill = <T extends { gas: GasSelection; amount: number }>(
+  steps: T[],
+  mode: MultiGasFillOrderMode,
+  sourceOrderIds: readonly string[]
+): T[] => {
+  const positive = steps.filter((step) => step.amount > tolerance);
+  if (mode === "auto") {
+    return [...positive].sort(compareRecommendedFillOrder);
+  }
+  const position = (id: string): number => {
+    const index = sourceOrderIds.indexOf(id);
+    return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  return [...positive].sort((a, b) => position(a.gas.id) - position(b.gas.id));
+};
+
+/**
+ * Apply a fill-order mode to an ideal blend alternative. Auto returns the alternative unchanged;
+ * manual rebuilds fillOrder from the source list, keeping any bleed step first.
+ */
+export const applyFillOrderToAlternative = (
+  alternative: BlendAlternative,
+  mode: MultiGasFillOrderMode,
+  sourceOrderIds: readonly string[]
+): BlendAlternative => {
+  if (mode === "auto") {
+    return alternative;
+  }
+  const bleedSteps = alternative.fillOrder.filter((step) => step.amount < 0);
+  const ordered = orderBlendStepsForFill(alternative.steps, mode, sourceOrderIds);
+  return {
+    ...alternative,
+    fillOrder: [...bleedSteps, ...ordered.map((step) => ({ gas: step.gas.name, amount: step.amount }))]
+  };
 };
 
 /**
@@ -2004,7 +2084,7 @@ const blendAlternativeCompositionDistance = (alternative: BlendAlternative): num
   return o2Distance + heDistance;
 };
 
-const findSimilarNGasAlternatives = (
+export const findSimilarNGasAlternatives = (
   targetPressurePsi: number,
   targetO2: number,
   targetHe: number,
@@ -2013,7 +2093,10 @@ const findSimilarNGasAlternatives = (
   startHe: number,
   availableGases: OptimizerGasSource[],
   costSettings: CostSettings,
-  maxAlternatives: number = 5
+  maxAlternatives: number = 5,
+  // Pressure each trial mix needs to hold the target amount of gas. Ideal mode uses the requested
+  // target pressure for every trial; real-gas callers size each trial for its own moles.
+  trialTargetPressurePsi: (o2: number, he: number) => number = () => targetPressurePsi
 ): BlendAlternative[] => {
   const scoredAlternatives: {
     alternative: BlendAlternative;
@@ -2027,8 +2110,9 @@ const findSimilarNGasAlternatives = (
     const heMax = Math.max(0, 100 - o2);
     const heCandidates = buildSearchValues(targetHe, MULTI_GAS_HE_TOLERANCE, MULTI_GAS_HE_STEP, 0, heMax);
     for (const he of heCandidates) {
+      const trialTargetPsi = trialTargetPressurePsi(o2, he);
       const alternatives = generateBlendAlternatives(
-        targetPressurePsi,
+        trialTargetPsi,
         o2,
         he,
         startPressurePsi,
@@ -2056,7 +2140,7 @@ const findSimilarNGasAlternatives = (
 
         scoredAlternatives.push({
           alternative: adjustedAlternative,
-          pressureDelta: blendAlternativePressureDelta(adjustedAlternative, startPressurePsi, targetPressurePsi),
+          pressureDelta: blendAlternativePressureDelta(adjustedAlternative, startPressurePsi, trialTargetPsi),
           isRequestedTargetCandidate: Math.abs(o2 - targetO2) < 1e-6 && Math.abs(he - targetHe) < 1e-6,
           compositionDistance: blendAlternativeCompositionDistance(adjustedAlternative)
         });
@@ -2164,12 +2248,27 @@ const collectBleedBreakpoints = (
       const o2 = fraction(gas2.o2), h2 = fraction(gas2.he);
       const det = o1 * h2 - o2 * h1;
       if (Math.abs(det) < tolerance) {
-        // Nitrox-only pair solved on O2 alone.
-        const denom = o1 - o2;
+        // Parallel pair solved on the fraction that differs (O2 for nitrox pairs); helium-bearing
+        // pairs must also meet the other balance within the pressure tolerance.
+        const solveOnO2 = Math.abs(o1 - o2) >= Math.abs(h1 - h2);
+        const denom = solveOnO2 ? o1 - o2 : h1 - h2;
         if (Math.abs(denom) < tolerance) continue;
-        const g1: BleedFunctional = [-o2 / denom, 1 / denom, 0];
+        const a2 = solveOnO2 ? o2 : h2;
+        const g1: BleedFunctional = solveOnO2 ? [-a2 / denom, 1 / denom, 0] : [-a2 / denom, 0, 1 / denom];
+        const g2: BleedFunctional = [1 - g1[0], -g1[1], -g1[2]];
         addAmount(g1, gas1);
-        addAmount([1 - g1[0], -g1[1], -g1[2]], gas2);
+        addAmount(g2, gas2);
+        if (h1 >= tolerance || h2 >= tolerance) {
+          const [b1, b2] = solveOnO2 ? [h1, h2] : [o1, o2];
+          const other: BleedFunctional = solveOnO2 ? [0, 0, 1] : [0, 1, 0];
+          const residual: BleedFunctional = [
+            b1 * g1[0] + b2 * g2[0] - other[0],
+            b1 * g1[1] + b2 * g2[1] - other[1],
+            b1 * g1[2] + b2 * g2[2] - other[2]
+          ];
+          addRoot(residual, -MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI);
+          addRoot(residual, MULTI_GAS_EXACT_PRESSURE_TOLERANCE_PSI);
+        }
         continue;
       }
       const g1: BleedFunctional = [0, h2 / det, -o2 / det];
@@ -2368,8 +2467,8 @@ export const solveNGasBlend = (
       success: false,
       alternatives: [],
       error: availableGases.some((gas) => gas.maxPressurePsi !== undefined)
-        ? "No valid blend found with the selected gases and bank pressure limits. Increase availability or adjust the target."
-        : "No valid blend found with available gases. Try adding more gas sources or adjusting target.",
+        ? MULTI_GAS_BANK_LIMIT_ERROR
+        : MULTI_GAS_NO_BLEND_ERROR,
       warnings
     };
   }

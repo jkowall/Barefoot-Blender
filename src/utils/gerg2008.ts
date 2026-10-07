@@ -58,6 +58,7 @@ export const ATM_PRESSURE_PSI = 14.6959488;
 export const KPA_PER_PSI = 6.894757293168;
 export const PSI_PER_KPA = 1 / KPA_PER_PSI;
 export const GERG_MIN_TEMPERATURE_K = 250;
+export const GERG_MIN_TEMPERATURE_ERROR = "GERG-2008 correction is limited to temperatures at or above 250 K.";
 export const GERG_MAX_PRESSURE_KPA = 40000;
 
 export const R_GERG = 8.314472;
@@ -240,7 +241,7 @@ const validateEnvelope = (temperatureK: number, pressureKpa: number): { warnings
   if (!Number.isFinite(temperatureK) || temperatureK <= 0) {
     errors.push("Temperature must be a positive absolute temperature.");
   } else if (temperatureK < GERG_MIN_TEMPERATURE_K) {
-    errors.push("GERG-2008 correction is limited to temperatures at or above 250 K.");
+    errors.push(GERG_MIN_TEMPERATURE_ERROR);
   } else if (temperatureK > 400) {
     warnings.push("GERG-2008 correction is outside the normal scuba fill temperature range above 400 K.");
   }

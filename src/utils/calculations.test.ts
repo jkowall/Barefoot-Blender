@@ -13,6 +13,8 @@ import {
   calculateMOD,
   calculateEAD,
   getRecommendedFillOrder,
+  orderBlendStepsForFill,
+  applyFillOrderToAlternative,
   listTopOffOptions,
   clampPressure,
   clampDepth,
@@ -24,7 +26,7 @@ import {
   pressureToCuFt,
   summarizeBlendVolumes
 } from "./calculations";
-import type { GasSelection, BlendResult } from "./calculations";
+import type { GasSelection, BlendResult, BlendAlternative } from "./calculations";
 import type { MultiGasInput, StandardBlendInput } from "../state/session";
 import type { GasDefinition } from "../state/settings";
 
@@ -1173,6 +1175,47 @@ describe("solveNGasBlend bleed-down search", () => {
   });
 });
 
+describe("solveNGasBlend helium pairs with the same O2:He ratio", () => {
+  const settings = { pressureUnit: "psi" as const };
+  const costSettings = {
+    tankSizeCuFt: 80,
+    tankRatedPressure: 3000,
+    pricePerCuFtO2: 1,
+    pricePerCuFtHe: 3.5,
+    pricePerCuFtTopOff: 0.1
+  };
+  const parallelBanks = [
+    { id: "lean", name: "10/25", o2: 10, he: 25 },
+    { id: "rich", name: "20/50", o2: 20, he: 50 }
+  ];
+
+  test("fills 15/37.5 from equal parts of 10/25 and 20/50", () => {
+    const result = solveNGasBlend(settings, 3000, 15, 37.5, 0, 21, 0, parallelBanks, costSettings);
+
+    expect(result.success).toBe(true);
+    expect(result.warnings).toEqual(["Hypoxic mix (<18% O2)."]);
+    const [alternative] = result.alternatives;
+    expect(alternative.steps.find((step) => step.gas.id === "lean")?.amount).toBeCloseTo(1500, 6);
+    expect(alternative.steps.find((step) => step.gas.id === "rich")?.amount).toBeCloseTo(1500, 6);
+    expect(alternative.finalO2).toBeCloseTo(15, 6);
+    expect(alternative.finalHe).toBeCloseTo(37.5, 6);
+  });
+
+  test("bleeds an off-ratio start to the edge of the helium balance tolerance", () => {
+    // Air is off the 10/25-20/50 line. The pair is solved on helium, which differs more, and only
+    // starts up to 0.5 / 0.21 = 2.38 psi keep the O2 balance within 0.5 psi.
+    const result = solveNGasBlend(settings, 3000, 15, 37.5, 2000, 21, 0, parallelBanks, costSettings);
+
+    expect(result.success).toBe(true);
+    expect(result.warnings).toContain("Bleed-down required to achieve target mix.");
+    const [alternative] = result.alternatives;
+    const bleedToPsi = 2000 + alternative.fillOrder[0].amount;
+    expect(bleedToPsi).toBeCloseTo(0.5 / 0.21, 2);
+    expect(alternative.finalO2).toBeCloseTo(15, 1);
+    expect(alternative.finalHe).toBeCloseTo(37.5, 1);
+  });
+});
+
 describe("generateBlendAlternatives deduplication", () => {
   const costSettings = {
     tankSizeCuFt: 80,
@@ -1593,5 +1636,64 @@ describe("summarizeBlendVolumes", () => {
     expect(summary.helium).toBe(150);
     expect(summary.oxygen).toBe(50);
     expect(summary.topoff).toBe(250);
+  });
+});
+
+describe("Multi-Gas fill order modes", () => {
+  const pureHe = { id: "he-0", name: "Helium", o2: 0, he: 100 };
+  const pureO2 = { id: "o2-1", name: "Oxygen", o2: 100, he: 0 };
+  const airSource = { id: "air-2", name: "Air", o2: 21, he: 0 };
+  const steps = [
+    { gas: airSource, amount: 1700 },
+    { gas: pureO2, amount: 250 },
+    { gas: pureHe, amount: 1050 },
+    { gas: { id: "ean32-3", name: "EAN32", o2: 32, he: 0 }, amount: 0 }
+  ];
+
+  test("auto order matches the recommended fill order and drops zero amounts", () => {
+    const ordered = orderBlendStepsForFill(steps, "auto", []);
+    expect(ordered.map((step) => ({ gas: step.gas.name, amount: step.amount }))).toEqual(getRecommendedFillOrder(steps));
+  });
+
+  test("manual order follows the source list and leaves unknown ids last", () => {
+    const ordered = orderBlendStepsForFill(steps, "manual", ["air-2", "he-0"]);
+    expect(ordered.map((step) => step.gas.name)).toEqual(["Air", "Helium", "Oxygen"]);
+    expect(ordered.map((step) => step.amount)).toEqual([1700, 1050, 250]);
+  });
+
+  test("applyFillOrderToAlternative returns the same alternative in auto mode", () => {
+    const alternative: BlendAlternative = {
+      steps,
+      finalO2: 21,
+      finalHe: 35,
+      deviationO2: 0,
+      deviationHe: 0,
+      estimatedCost: 10,
+      costBreakdown: [],
+      fillOrder: [{ gas: "Bleed Tank", amount: -500 }, ...getRecommendedFillOrder(steps)]
+    };
+    expect(applyFillOrderToAlternative(alternative, "auto", ["air-2"])).toBe(alternative);
+  });
+
+  test("manual mode keeps the bleed step first and the amounts unchanged", () => {
+    const alternative: BlendAlternative = {
+      steps,
+      finalO2: 21,
+      finalHe: 35,
+      deviationO2: 0,
+      deviationHe: 0,
+      estimatedCost: 10,
+      costBreakdown: [],
+      fillOrder: [{ gas: "Bleed Tank", amount: -500 }, ...getRecommendedFillOrder(steps)]
+    };
+    const reordered = applyFillOrderToAlternative(alternative, "manual", ["o2-1", "air-2", "he-0"]);
+    expect(reordered.fillOrder).toEqual([
+      { gas: "Bleed Tank", amount: -500 },
+      { gas: "Oxygen", amount: 250 },
+      { gas: "Air", amount: 1700 },
+      { gas: "Helium", amount: 1050 }
+    ]);
+    expect(reordered.steps).toBe(alternative.steps);
+    expect(alternative.fillOrder[1]).toEqual({ gas: "Helium", amount: 1050 });
   });
 });

@@ -1,28 +1,55 @@
-import { useMemo, useState } from "react";
-import type { SettingsSnapshot } from "../state/settings";
+import { useMemo, useState, type KeyboardEvent } from "react";
+import type { GasModel, SettingsSnapshot, TemperatureUnit } from "../state/settings";
 import { useSessionStore, type MultiGasInput, type GasSourceInput } from "../state/session";
 import {
+  applyFillOrderToAlternative,
   solveNGasBlend,
   type GasSelection,
   type BlendAlternative,
   type CostSettings,
+  type MultiGasFillOrderMode,
   type OptimizerGasSource,
-  clampPercent,
   cuFtToLiters,
   pressureToCuFt
 } from "../utils/calculations";
-import { formatGasVolume, formatNumber, formatPressure, formatSignedPressure } from "../utils/format";
+import {
+  formatFillCostBasis,
+  formatGasVolume,
+  formatNumber,
+  formatPressure,
+  formatSignedPressure
+} from "../utils/format";
+import {
+  calculateRealGasMultiGasBlend,
+  type RealGasMultiGasAlternative,
+  type RealGasMultiGasResult,
+  type RealGasMultiGasStep
+} from "../utils/realGasMultiGas";
+import {
+  DEFAULT_SETTLED_TEMPERATURE_F,
+  DEFAULT_START_TEMPERATURE_F,
+  fromDisplayTemperature,
+  temperatureUnitLabel,
+  toDisplayTemperature
+} from "../utils/temperature";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 import { logger } from "../utils/logger";
 import { AccordionItem } from "./Accordion";
 import ErrorBoundary from "./ErrorBoundary";
 import { NumberInput } from "./NumberInput";
 import { GasSourceRow } from "./GasSourceRow";
+import { SelectInput } from "./SelectInput";
 import TankContextFields from "./TankContextFields";
 import TrainingMathPanel from "./TrainingMathPanel";
+import {
+  findMatchingIdealAlternative,
+  moveGasSource,
+  resolveMultiGasSources,
+  selectMultiGasPlanModel
+} from "../utils/multiGasPlan";
 
 
-const MAX_GAS_SOURCES = 4;
+export const MAX_GAS_SOURCES = 6;
 const EMPTY_GAS_SOURCES: GasSourceInput[] = [];
 
 const trimixPresets: GasSelection[] = [
@@ -56,8 +83,121 @@ const blendAlternativeKey = (alternative: BlendAlternative): string => {
   ].join(":");
 };
 
+const realGasAlternativeKey = (alternative: RealGasMultiGasAlternative): string =>
+  alternative.steps.map((step) => `${step.sourceId ?? step.kind}:${step.molesAdded.toFixed(6)}`).join("|");
+
 const costLineKey = (line: { gas: string; amount: number; cost: number }): string =>
   `${line.gas}-${line.amount.toFixed(6)}-${line.cost.toFixed(2)}`;
+
+/**
+ * React key for a corrected stop row. Source ids are unique within a plan, and the key must not
+ * change when a recalculation changes the amounts, or the row's Stage Temp input loses focus mid-edit.
+ */
+export const realGasStepKey = (step: Pick<RealGasMultiGasStep, "kind" | "sourceId" | "gasName">): string =>
+  step.kind === "bleed" ? "bleed" : step.sourceId ?? step.gasName;
+
+export const hasStageTemperatureOverrides = (gasSources: GasSourceInput[]): boolean =>
+  gasSources.some((source) => source.stageTemperatureF !== undefined);
+
+/** Clear every source's stage temperature so all stages inherit Start Temp again. */
+export const clearStageTemperatures = (gasSources: GasSourceInput[]): GasSourceInput[] =>
+  gasSources.map((source) => (source.stageTemperatureF === undefined ? source : { ...source, stageTemperatureF: undefined }));
+
+const selectTempOnEnter = (event: KeyboardEvent<HTMLInputElement>): void => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    event.currentTarget.select();
+  }
+};
+
+/**
+ * Stage temperatures are saved on their source rows but edited on corrected stop rows. When GERG-2008
+ * shows no corrected plan (an out-of-range stage temperature, or a bank limit no option meets), the
+ * saved values still need an editor so a bad one can be fixed or cleared. Inputs commit on every
+ * keystroke, so once someone is editing there the editor stays until focus leaves it: otherwise the
+ * first digit that makes the plan valid (7 of 70) would close it.
+ */
+export const showStageTemperatureRecovery = (
+  gasModel: GasModel,
+  gasSources: GasSourceInput[],
+  hasCorrectedPlan: boolean,
+  editing = false
+): boolean =>
+  gasModel === "gerg2008" &&
+  (editing || (!hasCorrectedPlan && gasSources.some((source) => source.enabled && source.stageTemperatureF !== undefined)));
+
+/**
+ * Rows the recovery editor lists: enabled rows with a saved stage temperature (the solver ignores
+ * disabled rows), plus rows being edited that were just cleared.
+ */
+export const stageTemperatureRecoveryRows = (
+  gasSources: GasSourceInput[],
+  rowKeys: string[],
+  editKeys: string[] | null
+): number[] =>
+  gasSources.flatMap((source, rowIndex) =>
+    (source.enabled && source.stageTemperatureF !== undefined) || (editKeys?.includes(rowKeys[rowIndex] ?? source.id) ?? false)
+      ? [rowIndex]
+      : []
+  );
+
+type StageTemperatureRecoveryProps = {
+  gasSources: GasSourceInput[];
+  rowKeys: string[];
+  temperatureUnit: TemperatureUnit;
+  onChange: (rowIndex: number, temperatureF: number | undefined) => void;
+  onReset: () => void;
+  editKeys?: string[] | null;
+  onEditStart?: () => void;
+  onEditEnd?: () => void;
+};
+
+export const StageTemperatureRecovery = ({
+  gasSources,
+  rowKeys,
+  temperatureUnit,
+  onChange,
+  onReset,
+  editKeys = null,
+  onEditStart,
+  onEditEnd
+}: StageTemperatureRecoveryProps): JSX.Element => {
+  const temperatureLabel = temperatureUnitLabel(temperatureUnit);
+  return (
+    <div
+      className="cost-breakdown stage-temperature-recovery"
+      onFocus={() => onEditStart?.()}
+      onBlur={(event) => {
+        if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+          onEditEnd?.();
+        }
+      }}
+    >
+      <div className="section-title">Stage Temperatures</div>
+      <div className="table-note">
+        These stage temperatures are saved on their source gases. If one is out of range, correct or clear it here.
+      </div>
+      <div className="real-gas-temperature-grid">
+        {stageTemperatureRecoveryRows(gasSources, rowKeys, editKeys).map((rowIndex) => {
+          const source = gasSources[rowIndex];
+          return (
+            <NumberInput
+              key={rowKeys[rowIndex] ?? source.id}
+              label={`Gas ${rowIndex + 1} Stage Temp (${temperatureLabel})`}
+              step={1}
+              value={source.stageTemperatureF === undefined ? undefined : toDisplayTemperature(source.stageTemperatureF, temperatureUnit)}
+              onChange={(val) => onChange(rowIndex, val === undefined ? undefined : fromDisplayTemperature(val, temperatureUnit))}
+              onKeyDown={selectTempOnEnter}
+            />
+          );
+        })}
+      </div>
+      <button className="settings-button" type="button" onClick={onReset}>
+        Reset stage temps
+      </button>
+    </div>
+  );
+};
 
 const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
   const multiGas = useSessionStore((state) => state.multiGas);
@@ -70,6 +210,11 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
   const tankRatedPressurePsi = multiGas.tankRatedPressurePsi ?? settings.tankRatedPressure ?? 3000;
   const startPressurePsi = fromDisplayPressure(multiGas.startPressure ?? 0, settings.pressureUnit);
   const targetHeRequested = (multiGas.targetHe ?? 0) > 0.000001;
+  const useRealGas = settings.gasModel === "gerg2008";
+  const fillOrderMode: MultiGasFillOrderMode = multiGas.fillOrderMode ?? "auto";
+  const startTemperatureF = multiGas.startTemperatureF ?? DEFAULT_START_TEMPERATURE_F;
+  const settledTemperatureF = multiGas.settledTemperatureF ?? DEFAULT_SETTLED_TEMPERATURE_F;
+  const temperatureLabel = temperatureUnitLabel(settings.temperatureUnit);
 
   // Build available gas options from presets and custom banks
   const gasOptions = useMemo(() => {
@@ -79,45 +224,14 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     ];
   }, [topOffOptions]);
 
+  const sourceResolution = useMemo(
+    () => resolveMultiGasSources(gasSources, gasOptions, settings.pressureUnit),
+    [gasSources, gasOptions, settings.pressureUnit]
+  );
+
   // Check if helium is available from any source
-  const hasHeliumAvailable = useMemo(() => {
-    const resolveGas = (source: GasSourceInput, index: number): OptimizerGasSource | null => {
-      if (source.id === "custom") {
-        const o2Val = clampPercent(source.customO2 ?? 32);
-        const heVal = Math.min(100 - o2Val, Math.max(0, source.customHe ?? 0));
-        return {
-          id: `custom-${index}`,
-          name: "Custom",
-          o2: o2Val,
-          he: heVal,
-          maxPressurePsi: source.maxPressure === undefined
-            ? undefined
-            : fromDisplayPressure(Math.max(0, source.maxPressure), settings.pressureUnit)
-        };
-      }
-      const option = gasOptions.find((entry) => entry.id === source.id);
-      if (!option) {
-        return null;
-      }
-      return {
-        ...option,
-        id: `${option.id}-${index}`,
-        maxPressurePsi: source.maxPressure === undefined
-          ? undefined
-          : fromDisplayPressure(Math.max(0, source.maxPressure), settings.pressureUnit)
-      };
-    };
-
-    if ((multiGas.startHe ?? 0) > 0) return true;
-
-    for (const [index, source] of gasSources.entries()) {
-      if (!source.enabled) continue;
-      const gas = resolveGas(source, index);
-      if (gas && gas.he > 0) return true;
-    }
-
-    return false;
-  }, [multiGas.startHe, gasSources, gasOptions, settings.pressureUnit]);
+  const hasHeliumAvailable = (multiGas.startHe ?? 0) > 0 ||
+    sourceResolution.idealSources.some((gas) => gas.he > 0);
 
   const updateField = (patch: Partial<MultiGasInput>): void => {
     setMultiGas({ ...multiGas, ...patch });
@@ -144,6 +258,61 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     updateField({ gasSources: newSources });
   };
 
+  const moveSource = (index: number, direction: -1 | 1): void => {
+    const moved = moveGasSource(gasSources, gasSourceRowKeys, index, direction);
+    if (moved.sources === gasSources) return;
+    setGasSourceRowKeys(moved.rowKeys);
+    updateField({ gasSources: moved.sources });
+  };
+
+  const updateTemperatureField = (
+    key: "startTemperatureF" | "settledTemperatureF",
+    value: number | undefined
+  ): void => {
+    updateField({ [key]: value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit) });
+  };
+
+  // Stop-row Stage Temp fields the user has emptied. An emptied field is a local draft: it stays
+  // empty until a number is typed or focus leaves, instead of refilling with the inherited
+  // temperature mid-edit (which also made a leading "-" impossible to type). The saved temperature
+  // is kept meanwhile, so a plan that needs it stays on screen while its replacement is typed; it
+  // is cleared only if the field is left empty.
+  const [clearedStageTemperatureIds, setClearedStageTemperatureIds] = useState<string[]>([]);
+  const updateStageTemperature = (sourceId: string | undefined, value: number | undefined): void => {
+    const rowIndex = sourceId === undefined ? undefined : sourceResolution.rowIndexById.get(sourceId);
+    if (sourceId === undefined || rowIndex === undefined) return;
+    if (value === undefined) {
+      setClearedStageTemperatureIds((ids) => [...ids.filter((id) => id !== sourceId), sourceId]);
+      return;
+    }
+    setClearedStageTemperatureIds((ids) => ids.filter((id) => id !== sourceId));
+    updateGasSource(rowIndex, { stageTemperatureF: fromDisplayTemperature(value, settings.temperatureUnit) });
+  };
+  const endStageTemperatureEdit = (sourceId: string | undefined): void => {
+    if (sourceId === undefined || !clearedStageTemperatureIds.includes(sourceId)) return;
+    setClearedStageTemperatureIds((ids) => ids.filter((id) => id !== sourceId));
+    const rowIndex = sourceResolution.rowIndexById.get(sourceId);
+    if (rowIndex !== undefined) {
+      updateGasSource(rowIndex, { stageTemperatureF: undefined });
+    }
+  };
+
+  // Row keys of the recovery editor's rows while someone is editing there; null otherwise.
+  const [recoveryEditKeys, setRecoveryEditKeys] = useState<string[] | null>(null);
+  const resetStageTemperatures = (): void => {
+    setRecoveryEditKeys(null);
+    updateField({ gasSources: clearStageTemperatures(gasSources) });
+  };
+
+  const stageTemperatureDisplay = (sourceId: string | undefined, resolvedTemperatureF: number): number | undefined => {
+    if (sourceId !== undefined && clearedStageTemperatureIds.includes(sourceId)) {
+      return undefined;
+    }
+    const rowIndex = sourceId === undefined ? undefined : sourceResolution.rowIndexById.get(sourceId);
+    const ownTemperatureF = rowIndex === undefined ? undefined : gasSources[rowIndex]?.stageTemperatureF;
+    return toDisplayTemperature(ownTemperatureF ?? resolvedTemperatureF, settings.temperatureUnit);
+  };
+
   // Cost settings from app settings
   const costSettings = useMemo<CostSettings>(() => ({
     pricePerCuFtO2: settings.pricePerCuFtO2 ?? 1.0,
@@ -159,40 +328,16 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     tankSizeCuFt
   ]);
 
-  // Compute blend result
+  const targetHeForSolve = hasHeliumAvailable ? (multiGas.targetHe ?? 0) : 0;
+
+  // Compute blend result. The ideal plan always runs: it is the plan in ideal mode, the fallback when
+  // GERG-2008 cannot evaluate the inputs, and the Training Mode hand check.
+  // Stage temperatures change the rows but not the ideal sources, so key the ideal solve on the
+  // sources' content: typing a Stage Temp then does not rerun the ideal search.
+  const idealSourcesKey = JSON.stringify(sourceResolution.idealSources);
+  const idealSources = useMemo(() => JSON.parse(idealSourcesKey) as OptimizerGasSource[], [idealSourcesKey]);
   const blendResult = useMemo(() => {
-    const resolveGas = (source: GasSourceInput, index: number): OptimizerGasSource | null => {
-      if (source.id === "custom") {
-        const o2Val = clampPercent(source.customO2 ?? 32);
-        const heVal = Math.min(100 - o2Val, Math.max(0, source.customHe ?? 0));
-        return {
-          id: `custom-${index}`,
-          name: `Custom (${o2Val.toFixed(1)} O2 / ${heVal.toFixed(1)} He)`,
-          o2: o2Val,
-          he: heVal,
-          maxPressurePsi: source.maxPressure === undefined
-            ? undefined
-            : fromDisplayPressure(Math.max(0, source.maxPressure), settings.pressureUnit)
-        };
-      }
-      const option = gasOptions.find((entry) => entry.id === source.id);
-      if (!option) {
-        return null;
-      }
-      return {
-        ...option,
-        id: `${option.id}-${index}`,
-        maxPressurePsi: source.maxPressure === undefined
-          ? undefined
-          : fromDisplayPressure(Math.max(0, source.maxPressure), settings.pressureUnit)
-      };
-    };
-
-    const enabledGases = gasSources
-      .filter(s => s.enabled)
-      .map((source, index) => resolveGas(source, index))
-      .filter((g): g is OptimizerGasSource => g !== null);
-
+    const enabledGases = idealSources;
     if (enabledGases.length === 0) {
       return null;
     }
@@ -202,7 +347,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
         { pressureUnit: settings.pressureUnit },
         multiGas.targetPressure ?? 0,
         multiGas.targetO2 ?? 32,
-        hasHeliumAvailable ? (multiGas.targetHe ?? 0) : 0,
+        targetHeForSolve,
         multiGas.startPressure ?? 0,
         multiGas.startO2 ?? 21,
         multiGas.startHe ?? 0,
@@ -218,17 +363,104 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
         warnings: []
       };
     }
-  }, [multiGas, settings.pressureUnit, costSettings, hasHeliumAvailable, gasOptions, gasSources]);
+  }, [
+    idealSources,
+    settings.pressureUnit,
+    multiGas.targetPressure,
+    multiGas.targetO2,
+    targetHeForSolve,
+    multiGas.startPressure,
+    multiGas.startO2,
+    multiGas.startHe,
+    costSettings
+  ]);
+
+  const realGasResult = useMemo((): RealGasMultiGasResult | null => {
+    if (!useRealGas || sourceResolution.realGasSources.length === 0) {
+      return null;
+    }
+    try {
+      return calculateRealGasMultiGasBlend(
+        { pressureUnit: settings.pressureUnit },
+        {
+          startPressure: multiGas.startPressure ?? 0,
+          targetPressure: multiGas.targetPressure ?? 0,
+          startO2: multiGas.startO2 ?? 21,
+          startHe: multiGas.startHe ?? 0,
+          targetO2: multiGas.targetO2 ?? 32,
+          targetHe: targetHeForSolve,
+          tankSizeCuFt,
+          tankRatedPressurePsi,
+          startTemperatureF,
+          settledTemperatureF,
+          sources: sourceResolution.realGasSources,
+          fillOrderMode
+        },
+        costSettings
+      );
+    } catch (err) {
+      logger.error("MultiGas GERG-2008 calculation error:", err);
+      return {
+        success: false,
+        failure: "gerg",
+        alternatives: [],
+        waterVolumeLiters: 0,
+        warnings: [],
+        errors: [`GERG-2008 calculation error: ${err instanceof Error ? err.message : String(err)}`]
+      };
+    }
+  }, [
+    useRealGas,
+    sourceResolution,
+    settings.pressureUnit,
+    multiGas.startPressure,
+    multiGas.targetPressure,
+    multiGas.startO2,
+    multiGas.startHe,
+    multiGas.targetO2,
+    targetHeForSolve,
+    tankSizeCuFt,
+    tankRatedPressurePsi,
+    startTemperatureF,
+    settledTemperatureF,
+    fillOrderMode,
+    costSettings
+  ]);
+
+  const planModel = selectMultiGasPlanModel(settings.gasModel, realGasResult);
+  const showRealGasPlan = planModel === "gerg2008" && realGasResult !== null;
 
   const selectedIndex = useMemo(() => {
-    if (!blendResult?.success || blendResult.alternatives.length === 0) return 0;
-    return Math.min(multiGas.selectedAlternativeIndex ?? 0, blendResult.alternatives.length - 1);
-  }, [blendResult, multiGas.selectedAlternativeIndex]);
+    const count = showRealGasPlan
+      ? (realGasResult.success ? realGasResult.alternatives.length : 0)
+      : (blendResult?.success ? blendResult.alternatives.length : 0);
+    if (count === 0) return 0;
+    return Math.min(multiGas.selectedAlternativeIndex ?? 0, count - 1);
+  }, [blendResult, realGasResult, showRealGasPlan, multiGas.selectedAlternativeIndex]);
 
   const selectedAlternative: BlendAlternative | null = useMemo(() => {
-    if (!blendResult?.success || blendResult.alternatives.length === 0) return null;
-    return blendResult.alternatives[selectedIndex] ?? null;
-  }, [blendResult, selectedIndex]);
+    if (showRealGasPlan || !blendResult?.success || blendResult.alternatives.length === 0) return null;
+    const alternative = blendResult.alternatives[selectedIndex] ?? null;
+    return alternative
+      ? applyFillOrderToAlternative(alternative, fillOrderMode, sourceResolution.idealSources.map((gas) => gas.id))
+      : null;
+  }, [blendResult, selectedIndex, showRealGasPlan, fillOrderMode, sourceResolution]);
+
+  const selectedRealGasAlternative: RealGasMultiGasAlternative | null = useMemo(() => {
+    if (!showRealGasPlan || !realGasResult.success) return null;
+    return realGasResult.alternatives[selectedIndex] ?? null;
+  }, [realGasResult, selectedIndex, showRealGasPlan]);
+
+  // The hand check always uses ideal pressure points; in GERG-2008 mode it checks the ideal option
+  // that adds the same gases as the selected corrected plan.
+  const trainingAlternative: BlendAlternative | null = useMemo(() => {
+    if (selectedRealGasAlternative) {
+      return blendResult?.success
+        ? findMatchingIdealAlternative(blendResult.alternatives, selectedRealGasAlternative)
+        : null;
+    }
+    return selectedAlternative;
+  }, [blendResult, selectedAlternative, selectedRealGasAlternative]);
 
   const selectAlternative = (index: number): void => {
     updateField({ selectedAlternativeIndex: index });
@@ -244,19 +476,21 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     return formatGasVolume(volumeCuFt, volumeLiters);
   };
 
+  const formatRealGasVolume = (volumeCuFt: number): string => formatGasVolume(volumeCuFt, cuFtToLiters(volumeCuFt));
+
   const trainingMath = useMemo(() => {
-    if (!trainingModeEnabled || !selectedAlternative) {
+    if (!trainingModeEnabled || !trainingAlternative) {
       return null;
     }
 
     const targetPressurePsi = fromDisplayPressure(multiGas.targetPressure ?? 0, settings.pressureUnit);
-    const bleedStep = selectedAlternative.fillOrder.find((step) => step.amount < 0);
+    const bleedStep = trainingAlternative.fillOrder.find((step) => step.amount < 0);
     const effectiveStartPressurePsi = Math.max(0, startPressurePsi + (bleedStep?.amount ?? 0));
     const startO2Fraction = (multiGas.startO2 ?? 21) / 100;
     const startHeFraction = (multiGas.startHe ?? 0) / 100;
     const startN2Fraction = Math.max(0, 1 - startO2Fraction - startHeFraction);
 
-    const sourceRows = selectedAlternative.steps.map((step) => {
+    const sourceRows = trainingAlternative.steps.map((step) => {
       const o2Fraction = step.gas.o2 / 100;
       const heFraction = step.gas.he / 100;
       const n2Fraction = Math.max(0, 1 - o2Fraction - heFraction);
@@ -289,8 +523,8 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     const totalHePsi = sourceRows.reduce((sum, row) => sum + row.hePsi, startHePsi);
     const totalN2Psi = sourceRows.reduce((sum, row) => sum + row.n2Psi, startN2Psi);
     const addedPressurePsi = targetPressurePsi - effectiveStartPressurePsi;
-    const targetO2Percent = selectedAlternative.finalO2;
-    const targetHePercent = selectedAlternative.finalHe;
+    const targetO2Percent = trainingAlternative.finalO2;
+    const targetHePercent = trainingAlternative.finalHe;
     const startO2Percent = multiGas.startO2 ?? 21;
     const startHePercent = multiGas.startHe ?? 0;
     const startO2Points = effectiveStartPressurePsi * startO2Percent;
@@ -368,6 +602,7 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
         sourceRows.some((row) => row.hePercent > 0.000001));
 
     return {
+      alternative: trainingAlternative,
       bleedStep,
       effectiveStartPressurePsi,
       targetPressurePsi,
@@ -410,195 +645,35 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     multiGas.startHe,
     multiGas.startO2,
     multiGas.targetPressure,
-    selectedAlternative,
+    trainingAlternative,
     settings.pressureUnit,
     startPressurePsi,
     trainingModeEnabled
   ]);
 
-  return (
-    <ErrorBoundary fallback={<div className="error">MultiGasTab crashed. Please check the console for details.</div>}>
-      <AccordionItem title="Start Tank" defaultOpen={true}>
-        <div className="grid two">
-          <NumberInput
-            label="Start O2 %"
-            min={0}
-            max={100}
-            step={0.1}
-            value={multiGas.startO2}
-            onChange={(val) => updateField({ startO2: val })}
-          />
-          <NumberInput
-            label="Start He %"
-            min={0}
-            max={100}
-            step={0.1}
-            value={multiGas.startHe}
-            onChange={(val) => updateField({ startHe: val })}
-          />
-          <NumberInput
-            label={`Start Pressure (${settings.pressureUnit.toUpperCase()})`}
-            min={0}
-            step={settings.pressureUnit === "psi" ? 10 : 1}
-            value={multiGas.startPressure}
-            onChange={(val) => updateField({ startPressure: val })}
-          />
+  const fillOrderNote = fillOrderMode === "manual"
+    ? "Gases are added from the top of the list down. Amounts stay the same in any order; only the stop pressures change."
+    : "Gases are added in the recommended order: helium, then oxygen, then richer mixes, then Air.";
+  const bankLimitNote = useRealGas
+    ? "Limits the real-gas pressure rise this source adds, at its stage temperature and fill position. Leave blank for no limit."
+    : undefined;
+
+  const trainingPanel = trainingModeEnabled && (trainingMath || selectedRealGasAlternative) ? (
+    <TrainingMathPanel
+      title="Multi-Gas Hand Check"
+      note="This shows the classroom pressure-percent check for the selected option. The app may search more combinations, but the selected fill can still be checked by hand."
+    >
+      {useRealGas && (
+        <div className="training-math-note">
+          {selectedRealGasAlternative && !trainingMath
+            ? "GERG-2008 is selected. No ideal option uses the same source gases as this corrected plan, so there is no hand check for it."
+            : selectedRealGasAlternative
+              ? "GERG-2008 is selected. The corrected stops above include compressibility and stage temperatures; this hand check uses the ideal pressure-point balance for the same source gases, so its pressures differ."
+              : "GERG-2008 is selected. This hand check uses the ideal pressure-point balance."}
         </div>
-      </AccordionItem>
-
-      <AccordionItem title="Tank Context" defaultOpen={false}>
-        <TankContextFields
-          tankSizeCuFt={multiGas.tankSizeCuFt}
-          tankRatedPressurePsi={multiGas.tankRatedPressurePsi}
-          defaultTankSizeCuFt={settings.defaultTankSizeCuFt}
-          defaultTankRatedPressurePsi={settings.tankRatedPressure}
-          onChange={(patch) => setMultiGas({ ...multiGas, ...patch })}
-        />
-      </AccordionItem>
-
-      <AccordionItem title="Source Gases" defaultOpen={true}>
-        {gasSources.map((source, index) => (
-          <GasSourceRow
-            key={gasSourceRowKeys[index] ?? source.id}
-            index={index}
-            source={source}
-            baseOptions={gasOptions}
-            onUpdate={updateGasSource}
-            onRemove={removeGasSource}
-            canRemove={gasSources.length > 1}
-            showDivider={index < gasSources.length - 1}
-            pressureUnit={settings.pressureUnit}
-          />
-        ))}
-        <div className="table-note">Set bank pressure limits per source to constrain optimization to currently available gas.</div>
-        {gasSources.length < MAX_GAS_SOURCES && (
-          <button type="button" className="add-gas-btn" onClick={addGasSource}>
-            + Add Gas Source
-          </button>
-        )}
-      </AccordionItem>
-
-      <AccordionItem title="Target Blend" defaultOpen={true}>
-        <div className="grid two">
-          <NumberInput
-            label="Target O2 %"
-            min={0}
-            max={100}
-            step={0.1}
-            value={multiGas.targetO2}
-            onChange={(val) => updateField({ targetO2: val })}
-          />
-          <div>
-            <NumberInput
-              label="Target He %"
-              min={0}
-              max={100}
-              step={0.1}
-              value={hasHeliumAvailable ? multiGas.targetHe : 0}
-              disabled={!hasHeliumAvailable}
-              onChange={(val) => updateField({ targetHe: val })}
-            />
-            {!hasHeliumAvailable && targetHeRequested && (
-              <div className="table-note">No helium source available. Add a trimix gas or helium to the start tank.</div>
-            )}
-          </div>
-          <NumberInput
-            label={`Target Pressure (${settings.pressureUnit.toUpperCase()})`}
-            min={0}
-            step={settings.pressureUnit === "psi" ? 10 : 1}
-            value={multiGas.targetPressure}
-            onChange={(val) => updateField({ targetPressure: val })}
-          />
-        </div>
-      </AccordionItem>
-
-      {blendResult && (
-        <AccordionItem title="Blend Options" defaultOpen={true}>
-          {!blendResult.success && (
-            <div className="error">{blendResult.error}</div>
-          )}
-
-          {blendResult.success && blendResult.alternatives.length > 0 && (
-            <>
-              <div className="alternatives-list">
-                {blendResult.alternatives.map((alt, index) => (
-                  <div
-                    key={blendAlternativeKey(alt)}
-                    className={`alternative-option ${index === selectedIndex ? 'selected' : ''}`}
-                    onClick={() => selectAlternative(index)}
-                  >
-                    <div className="alternative-header">
-                      <input
-                        type="radio"
-                        name="blend-alternative"
-                        checked={index === selectedIndex}
-                        onChange={() => selectAlternative(index)}
-                      />
-                      <span className="alternative-title">Option {index + 1}</span>
-                      <span className="alternative-cost">{formatCost(alt.estimatedCost)}</span>
-                    </div>
-                    <div className="alternative-gases">
-                      {alt.costBreakdown.map((item) => (
-                        <span key={costLineKey(item)} className="alternative-gas">
-                          {item.gas}: {formatGasVolumeFromPressure(item.amount)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {selectedAlternative && (
-                <div className="fill-plan">
-                  <h4>Fill Order</h4>
-                  <ol className="result-list">
-                    {selectedAlternative.fillOrder.map((step, index) => {
-                      let runningTotal = startPressurePsi;
-                      for (let i = 0; i <= index; i++) {
-                        runningTotal += selectedAlternative.fillOrder[i].amount;
-                      }
-                      runningTotal = Math.max(0, runningTotal);
-                      const isBleed = step.amount < 0;
-                      const action = isBleed ? "Drain" : "Add";
-                      return (
-                        <li key={`${step.gas}-${step.amount.toFixed(6)}-${runningTotal.toFixed(6)}`} className={isBleed ? "bleed-step" : ""}>
-                          {index + 1}. {action} {step.gas}: {formatPressure(runningTotal, settings.pressureUnit)}
-                          <span className="result-step-total">
-                            ({formatSignedPressure(step.amount, settings.pressureUnit)}
-                            {!isBleed ? `, ${formatGasVolumeFromPressure(step.amount)}` : ""})
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                  <div className="table-note">
-                    Resulting mix ≈ {selectedAlternative.finalO2.toFixed(1)}% O2 / {selectedAlternative.finalHe.toFixed(1)}% He
-                  </div>
-                  <div className="cost-summary">
-                    Estimated cost: {formatCost(selectedAlternative.estimatedCost)}
-                  </div>
-                  <div className="cost-breakdown">
-                    <div className="section-title">Cost Basis</div>
-                    <div className="grid two">
-                      {selectedAlternative.costBreakdown.map((line) => (
-                        <div key={costLineKey(line)} className="cost-line">
-                          <span>{line.gas}:</span>
-                          <span>{formatGasVolumeFromPressure(line.amount)} = {formatCost(line.cost)}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
-                  </div>
-                  {trainingMath && (
-                    <TrainingMathPanel
-                      title="Multi-Gas Hand Check"
-                      note="This shows the classroom pressure-percent check for the selected option. The app may search more combinations, but the selected fill can still be checked by hand."
-                    >
-                      {settings.gasModel === "gerg2008" && (
-                        <div className="training-math-note">
-                          GERG-2008 is selected for Standard Blend. Multi-Gas uses the ideal pressure-point balance shown below.
-                        </div>
-                      )}
+      )}
+      {trainingMath && (
+        <>
                       {trainingMath.bleedStep !== undefined && (
                         <p>
                           This option starts with a bleed-down from {formatPressure(startPressurePsi, settings.pressureUnit)} to {formatPressure(trainingMath.effectiveStartPressurePsi, settings.pressureUnit)} before adding source gases.
@@ -772,9 +847,9 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                             <ul>
                               <li>Needed added O2% = ({formatNumber(trainingMath.targetO2PointsDisplay, 0)} - {formatNumber(trainingMath.startO2PointsDisplay, 0)}) / {formatNumber(trainingMath.addedPressureDisplay, 1)} = {formatNumber(trainingMath.neededAddedO2Percent, 1)}%</li>
                               <li>Needed added He% = ({formatNumber(trainingMath.targetHePointsDisplay, 0)} - {formatNumber(trainingMath.startHePointsDisplay, 0)}) / {formatNumber(trainingMath.addedPressureDisplay, 1)} = {formatNumber(trainingMath.neededAddedHePercent, 1)}%</li>
-                              <li>Final O2% = total O2 points / target pressure = {formatNumber(trainingMath.totalO2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(selectedAlternative.finalO2, 1)}%</li>
-                              <li>Final He% = total He points / target pressure = {formatNumber(trainingMath.totalHePointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(selectedAlternative.finalHe, 1)}%</li>
-                              <li>Final N2% = total N2 points / target pressure = {formatNumber(trainingMath.totalN2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(Math.max(0, 100 - selectedAlternative.finalO2 - selectedAlternative.finalHe), 1)}%</li>
+                              <li>Final O2% = total O2 points / target pressure = {formatNumber(trainingMath.totalO2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(trainingMath.alternative.finalO2, 1)}%</li>
+                              <li>Final He% = total He points / target pressure = {formatNumber(trainingMath.totalHePointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(trainingMath.alternative.finalHe, 1)}%</li>
+                              <li>Final N2% = total N2 points / target pressure = {formatNumber(trainingMath.totalN2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(Math.max(0, 100 - trainingMath.alternative.finalO2 - trainingMath.alternative.finalHe), 1)}%</li>
                             </ul>
                           </>
                         ) : (
@@ -786,26 +861,411 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
                                   {row.name}: {formatPressure(row.amountPsi, settings.pressureUnit)} x {formatNumber(row.o2Percent, 1)}% O2 / {formatNumber(row.hePercent, 1)}% He / {formatNumber(row.n2Percent, 1)}% N2
                                 </li>
                               ))}
-                              <li>Final O2% = total O2 points / target pressure = {formatNumber(trainingMath.totalO2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(selectedAlternative.finalO2, 1)}%</li>
-                              <li>Final He% = total He points / target pressure = {formatNumber(trainingMath.totalHePointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(selectedAlternative.finalHe, 1)}%</li>
-                              <li>Final N2% = total N2 points / target pressure = {formatNumber(trainingMath.totalN2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(Math.max(0, 100 - selectedAlternative.finalO2 - selectedAlternative.finalHe), 1)}%</li>
+                              <li>Final O2% = total O2 points / target pressure = {formatNumber(trainingMath.totalO2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(trainingMath.alternative.finalO2, 1)}%</li>
+                              <li>Final He% = total He points / target pressure = {formatNumber(trainingMath.totalHePointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(trainingMath.alternative.finalHe, 1)}%</li>
+                              <li>Final N2% = total N2 points / target pressure = {formatNumber(trainingMath.totalN2PointsDisplay, 0)} / {formatNumber(trainingMath.targetPressureDisplay, 1)} = {formatNumber(Math.max(0, 100 - trainingMath.alternative.finalO2 - trainingMath.alternative.finalHe), 1)}%</li>
                             </ul>
                           </>
                         )}
                       </div>
-                    </TrainingMathPanel>
+        </>
+      )}
+    </TrainingMathPanel>
+  ) : null;
+
+  const stageTemperatureRecovery = showStageTemperatureRecovery(
+    settings.gasModel,
+    gasSources,
+    selectedRealGasAlternative !== null,
+    recoveryEditKeys !== null
+  ) ? (
+    <StageTemperatureRecovery
+      gasSources={gasSources}
+      rowKeys={gasSourceRowKeys}
+      temperatureUnit={settings.temperatureUnit}
+      onChange={(rowIndex, temperatureF) => updateGasSource(rowIndex, { stageTemperatureF: temperatureF })}
+      onReset={resetStageTemperatures}
+      editKeys={recoveryEditKeys}
+      onEditStart={() =>
+        setRecoveryEditKeys((keys) =>
+          keys ?? stageTemperatureRecoveryRows(gasSources, gasSourceRowKeys, null).map((rowIndex) => gasSourceRowKeys[rowIndex] ?? gasSources[rowIndex].id)
+        )
+      }
+      onEditEnd={() => setRecoveryEditKeys(null)}
+    />
+  ) : null;
+
+  return (
+    <ErrorBoundary fallback={<div className="error">MultiGasTab crashed. Please check the console for details.</div>}>
+      <AccordionItem title="Start Tank" defaultOpen={true}>
+        <div className="grid two">
+          <NumberInput
+            label="Start O2 %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={multiGas.startO2}
+            onChange={(val) => updateField({ startO2: val })}
+          />
+          <NumberInput
+            label="Start He %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={multiGas.startHe}
+            onChange={(val) => updateField({ startHe: val })}
+          />
+          <NumberInput
+            label={`Start Pressure (${settings.pressureUnit.toUpperCase()})`}
+            min={0}
+            step={settings.pressureUnit === "psi" ? 10 : 1}
+            value={multiGas.startPressure}
+            onChange={(val) => updateField({ startPressure: val })}
+          />
+          {useRealGas && (
+            <NumberInput
+              label={`Start Temp (${temperatureLabel})`}
+              step={1}
+              value={toDisplayTemperature(startTemperatureF, settings.temperatureUnit)}
+              onChange={(val) => updateTemperatureField("startTemperatureF", val)}
+              onKeyDown={selectTempOnEnter}
+            />
+          )}
+        </div>
+      </AccordionItem>
+
+      <AccordionItem title="Tank Context" defaultOpen={false}>
+        <TankContextFields
+          tankSizeCuFt={multiGas.tankSizeCuFt}
+          tankRatedPressurePsi={multiGas.tankRatedPressurePsi}
+          defaultTankSizeCuFt={settings.defaultTankSizeCuFt}
+          defaultTankRatedPressurePsi={settings.tankRatedPressure}
+          onChange={(patch) => setMultiGas({ ...multiGas, ...patch })}
+        />
+      </AccordionItem>
+
+      <AccordionItem title="Source Gases" defaultOpen={true}>
+        <SelectInput
+          label="Fill Order"
+          value={fillOrderMode}
+          onChange={(event) => updateField({ fillOrderMode: event.target.value === "manual" ? "manual" : "auto" })}
+        >
+          <option value="auto">Auto (recommended)</option>
+          <option value="manual">My order (top to bottom)</option>
+        </SelectInput>
+        <div className="table-note">{fillOrderNote}</div>
+        <hr className="gas-source-divider" />
+        {gasSources.map((source, index) => (
+          <GasSourceRow
+            key={gasSourceRowKeys[index] ?? source.id}
+            index={index}
+            source={source}
+            baseOptions={gasOptions}
+            onUpdate={updateGasSource}
+            onRemove={removeGasSource}
+            canRemove={gasSources.length > 1}
+            showDivider={index < gasSources.length - 1}
+            pressureUnit={settings.pressureUnit}
+            showMoveControls={fillOrderMode === "manual" && gasSources.length > 1}
+            canMoveUp={index > 0}
+            canMoveDown={index < gasSources.length - 1}
+            onMove={moveSource}
+            bankLimitNote={bankLimitNote}
+          />
+        ))}
+        <div className="table-note">Set bank pressure limits per source to constrain optimization to currently available gas.</div>
+        {gasSources.length < MAX_GAS_SOURCES && (
+          <button type="button" className="add-gas-btn" onClick={addGasSource}>
+            + Add Gas Source
+          </button>
+        )}
+      </AccordionItem>
+
+      <AccordionItem title="Target Blend" defaultOpen={true}>
+        <div className="grid two">
+          <NumberInput
+            label="Target O2 %"
+            min={0}
+            max={100}
+            step={0.1}
+            value={multiGas.targetO2}
+            onChange={(val) => updateField({ targetO2: val })}
+          />
+          <div>
+            <NumberInput
+              label="Target He %"
+              min={0}
+              max={100}
+              step={0.1}
+              value={hasHeliumAvailable ? multiGas.targetHe : 0}
+              disabled={!hasHeliumAvailable}
+              onChange={(val) => updateField({ targetHe: val })}
+            />
+            {!hasHeliumAvailable && targetHeRequested && (
+              <div className="table-note">No helium source available. Add a trimix gas or helium to the start tank.</div>
+            )}
+          </div>
+          <NumberInput
+            label={`Target Pressure (${settings.pressureUnit.toUpperCase()})`}
+            min={0}
+            step={settings.pressureUnit === "psi" ? 10 : 1}
+            value={multiGas.targetPressure}
+            onChange={(val) => updateField({ targetPressure: val })}
+          />
+          {useRealGas && (
+            <NumberInput
+              label={`Settled Temp (${temperatureLabel})`}
+              step={1}
+              value={toDisplayTemperature(settledTemperatureF, settings.temperatureUnit)}
+              onChange={(val) => updateTemperatureField("settledTemperatureF", val)}
+              onKeyDown={selectTempOnEnter}
+            />
+          )}
+        </div>
+        {useRealGas && (
+          <div className="table-note">Target pressure is the settled pressure once the cylinder reaches Settled Temp.</div>
+        )}
+      </AccordionItem>
+
+      {(showRealGasPlan || blendResult) && (
+        // One section for both models, with the recovery editor in a fixed slot: switching from the
+        // ideal fallback to the corrected plan mid-edit must not remount the input being typed in.
+        <AccordionItem title="Blend Options" defaultOpen={true}>
+          {showRealGasPlan ? (
+            !realGasResult.success && realGasResult.errors.map((error) => (
+              <div key={error} className="error">{error}</div>
+            ))
+          ) : (
+            planModel === "idealFallback" && realGasResult && !realGasResult.success && (
+              <div className="warnings">
+                {realGasResult.errors.map((error) => (
+                  <div key={error} className="warning">{error}</div>
+                ))}
+                <div className="table-note">Showing the ideal partial-pressure plan instead.</div>
+              </div>
+            )
+          )}
+          {stageTemperatureRecovery}
+
+          {showRealGasPlan ? (
+            <>
+              {realGasResult.success && realGasResult.alternatives.length > 0 && (
+                <>
+                  <div className="alternatives-list">
+                    {realGasResult.alternatives.map((alt, index) => (
+                      <div
+                        key={realGasAlternativeKey(alt)}
+                        className={`alternative-option ${index === selectedIndex ? 'selected' : ''}`}
+                        onClick={() => selectAlternative(index)}
+                      >
+                        <div className="alternative-header">
+                          <input
+                            type="radio"
+                            name="blend-alternative"
+                            aria-label={`Option ${index + 1}`}
+                            checked={index === selectedIndex}
+                            onChange={() => selectAlternative(index)}
+                          />
+                          <span className="alternative-title">Option {index + 1}</span>
+                          <span className="alternative-cost">{formatCost(alt.estimatedCost)}</span>
+                        </div>
+                        <div className="alternative-gases">
+                          {alt.costBreakdown.map((item) => (
+                            <span key={costLineKey(item)} className="alternative-gas">
+                              {item.gas}: {formatRealGasVolume(item.volumeCuFt)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {selectedRealGasAlternative && (
+                    <div className="fill-plan">
+                      <h4>GERG-2008 Corrected Stops</h4>
+                      <ol className="result-list">
+                        {selectedRealGasAlternative.steps.map((step, index) => (
+                          step.kind === "bleed" ? (
+                            <li key={realGasStepKey(step)} className="real-gas-step bleed-step">
+                              <div className="real-gas-step-main">
+                                <span>
+                                  {index + 1}. Drain to <strong>{formatPressure(step.stopPressurePsi, settings.pressureUnit, 1)}</strong>
+                                </span>
+                              </div>
+                              <div className="real-gas-step-detail">
+                                {formatSignedPressure(step.pressureChangePsi, settings.pressureUnit, 1)} at Start Temp, Z {formatNumber(step.z, 4)}
+                              </div>
+                            </li>
+                          ) : (
+                            <li key={realGasStepKey(step)} className="real-gas-step">
+                              <div className="real-gas-step-main">
+                                <span>
+                                  {index + 1}. Add {step.gasName}: <strong>{formatPressure(step.stopPressurePsi, settings.pressureUnit, 1)}</strong>
+                                </span>
+                                <NumberInput
+                                  className="stage-temperature-field"
+                                  label={`Stage Temp (${temperatureLabel})`}
+                                  step={1}
+                                  value={stageTemperatureDisplay(step.sourceId, step.temperatureF)}
+                                  onChange={(val) => updateStageTemperature(step.sourceId, val)}
+                                  onBlur={() => endStageTemperatureEdit(step.sourceId)}
+                                  onKeyDown={selectTempOnEnter}
+                                />
+                              </div>
+                              <div className="real-gas-step-detail">
+                                {formatSignedPressure(step.pressureChangePsi, settings.pressureUnit, 1)}, Z {formatNumber(step.z, 4)}, {formatRealGasVolume(step.volumeCuFt)}
+                              </div>
+                            </li>
+                          )
+                        ))}
+                      </ol>
+                      <div className="table-note">
+                        Stage temps default to Start Temp. Enter a measured cylinder temperature on a stop row to update that stop and any following unedited stops.
+                      </div>
+                      {hasStageTemperatureOverrides(gasSources) && (
+                        <button className="settings-button" type="button" onClick={resetStageTemperatures}>
+                          Reset stage temps
+                        </button>
+                      )}
+                      <div className="table-note">
+                        Initial reference: {formatPressure(selectedRealGasAlternative.startHotPressurePsi, settings.pressureUnit, 1)}
+                        {selectedRealGasAlternative.startZ !== undefined && <> (Z {formatNumber(selectedRealGasAlternative.startZ, 4)})</>}. Final stage stop: {formatPressure(selectedRealGasAlternative.finalHotPressurePsi, settings.pressureUnit, 1)} for settled target {formatPressure(selectedRealGasAlternative.settledPressurePsi, settings.pressureUnit, 1)} at {formatNumber(toDisplayTemperature(settledTemperatureF, settings.temperatureUnit), 1)} {temperatureLabel}.
+                      </div>
+                      <div className="table-note">
+                        Resulting mix ≈ {selectedRealGasAlternative.finalO2.toFixed(2)}% O2 / {selectedRealGasAlternative.finalHe.toFixed(2)}% He
+                      </div>
+                      {selectedRealGasAlternative.warnings.length > 0 && (
+                        <div className="warnings">
+                          {selectedRealGasAlternative.warnings.map((warning) => (
+                            <div key={warning} className="warning">{warning}</div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="cost-summary">
+                        Estimated cost: {formatCost(selectedRealGasAlternative.estimatedCost)}
+                      </div>
+                      <div className="cost-breakdown">
+                        <div className="section-title">Cost Basis</div>
+                        <div className="grid two">
+                          {selectedRealGasAlternative.costBreakdown.map((line) => (
+                            <div key={costLineKey(line)} className="cost-line">
+                              <span>{line.gas}:</span>
+                              <span>{formatRealGasVolume(line.volumeCuFt)} = {formatCost(line.cost)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
+                        <div className="table-note">{formatFillCostBasis("gerg2008", settings.temperatureUnit)}</div>
+                      </div>
+                      {trainingPanel}
+                    </div>
                   )}
+                </>
+              )}
+
+              {realGasResult.warnings.length > 0 && (
+                <div className="warnings">
+                  {realGasResult.warnings.map((warning) => (
+                    <div key={warning} className="warning">{warning}</div>
+                  ))}
                 </div>
               )}
             </>
-          )}
+          ) : blendResult && (
+            <>
+              {!blendResult.success && (
+                <div className="error">{blendResult.error}</div>
+              )}
 
-          {blendResult.warnings.length > 0 && (
-            <div className="warnings">
-              {blendResult.warnings.map((warning) => (
-                <div key={warning} className="warning">{warning}</div>
-              ))}
-            </div>
+              {blendResult.success && blendResult.alternatives.length > 0 && (
+                <>
+                  <div className="alternatives-list">
+                    {blendResult.alternatives.map((alt, index) => (
+                      <div
+                        key={blendAlternativeKey(alt)}
+                        className={`alternative-option ${index === selectedIndex ? 'selected' : ''}`}
+                        onClick={() => selectAlternative(index)}
+                      >
+                        <div className="alternative-header">
+                          <input
+                            type="radio"
+                            name="blend-alternative"
+                            aria-label={`Option ${index + 1}`}
+                            checked={index === selectedIndex}
+                            onChange={() => selectAlternative(index)}
+                          />
+                          <span className="alternative-title">Option {index + 1}</span>
+                          <span className="alternative-cost">{formatCost(alt.estimatedCost)}</span>
+                        </div>
+                        <div className="alternative-gases">
+                          {alt.costBreakdown.map((item) => (
+                            <span key={costLineKey(item)} className="alternative-gas">
+                              {item.gas}: {formatGasVolumeFromPressure(item.amount)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {selectedAlternative && (
+                    <div className="fill-plan">
+                      <h4>Fill Order</h4>
+                      <ol className="result-list">
+                        {selectedAlternative.fillOrder.map((step, index) => {
+                          let runningTotal = startPressurePsi;
+                          for (let i = 0; i <= index; i++) {
+                            runningTotal += selectedAlternative.fillOrder[i].amount;
+                          }
+                          runningTotal = Math.max(0, runningTotal);
+                          const isBleed = step.amount < 0;
+                          const action = isBleed ? "Drain" : "Add";
+                          return (
+                            <li key={`${step.gas}-${step.amount.toFixed(6)}-${runningTotal.toFixed(6)}`} className={isBleed ? "bleed-step" : ""}>
+                              {index + 1}. {action} {step.gas}: {formatPressure(runningTotal, settings.pressureUnit)}
+                              <span className="result-step-total">
+                                ({formatSignedPressure(step.amount, settings.pressureUnit)}
+                                {!isBleed ? `, ${formatGasVolumeFromPressure(step.amount)}` : ""})
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                      <div className="table-note">
+                        Resulting mix ≈ {selectedAlternative.finalO2.toFixed(1)}% O2 / {selectedAlternative.finalHe.toFixed(1)}% He
+                      </div>
+                      <div className="cost-summary">
+                        Estimated cost: {formatCost(selectedAlternative.estimatedCost)}
+                      </div>
+                      <div className="cost-breakdown">
+                        <div className="section-title">Cost Basis</div>
+                        <div className="grid two">
+                          {selectedAlternative.costBreakdown.map((line) => (
+                            <div key={costLineKey(line)} className="cost-line">
+                              <span>{line.gas}:</span>
+                              <span>{formatGasVolumeFromPressure(line.amount)} = {formatCost(line.cost)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="table-note">Tank basis: {formatNumber(tankSizeCuFt, 2)} cu ft @ {formatNumber(tankRatedPressurePsi, 0)} PSI.</div>
+                        {planModel === "idealFallback" && (
+                          <div className="table-note">{formatFillCostBasis("idealFallback", settings.temperatureUnit)}</div>
+                        )}
+                      </div>
+                      {trainingPanel}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {blendResult.warnings.length > 0 && (
+                <div className="warnings">
+                  {blendResult.warnings.map((warning) => (
+                    <div key={warning} className="warning">{warning}</div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </AccordionItem>
       )}

@@ -35,7 +35,7 @@ Barefoot Blender is an offline-first Progressive Web App (PWA) and Capacitor-bas
 src/
 ├── components/          # UI components (one per tab)
 │   ├── StandardBlendTab.tsx    # Main blend calculator
-│   ├── MultiGasTab.tsx         # Two-gas Nitrox solver
+│   ├── MultiGasTab.tsx         # N-gas blend optimizer (ideal + GERG-2008)
 │   ├── TopOffTab.tsx           # Top-off projections
 │   ├── UtilitiesTab.tsx        # MOD/EAD/Best Mix/END/Density
 │   ├── SettingsPanel.tsx       # User preferences
@@ -46,6 +46,11 @@ src/
 │   └── session.ts       # Per-tab input persistence
 ├── utils/               # Pure calculation functions
 │   ├── calculations.ts  # Core blending/dive math
+│   ├── gerg2008.ts      # GERG-2008 O2/N2/He equation of state
+│   ├── realGasBlend.ts  # GERG-2008 Standard Blend and Top-Off
+│   ├── realGasMultiGas.ts # GERG-2008 Multi-Gas planner
+│   ├── multiGasPlan.ts  # Multi-Gas source resolution, reorder, and plan-model selection
+│   ├── temperature.ts   # Temperature conversions and defaults
 │   ├── format.ts        # Number formatting helpers
 │   └── units.ts         # Unit conversion utilities
 ├── services/
