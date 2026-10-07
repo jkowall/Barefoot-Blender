@@ -1242,6 +1242,50 @@ describe("calculateRealGasMultiGasBlend ninth review cases", () => {
     expect(plan.finalHe).toBeCloseTo(75, 6);
   });
 
+  test("sizes a closest-blend top-up for its own mix when the target holds fewer moles than the start", () => {
+    // 15/75 at 3000 psi holds fewer moles than the 15/80 start at 2995, so sized for the target's moles
+    // every top-up from the start is negative. 15/80 at 3000 psi holds more, and needs a 5 psi rise.
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({
+        startPressure: 2995,
+        startO2: 15,
+        startHe: 80,
+        targetO2: 15,
+        targetHe: 75,
+        sources: [{ id: "custom-0", name: "15/80", o2: 15, he: 80, maxPressurePsi: 5.1 }]
+      }),
+      prices
+    );
+    expect(result.match).toBe("closest");
+    expect(result.bleedToPsi).toBeUndefined();
+    const plan = result.alternatives[0];
+    expect(plan.steps).toHaveLength(1);
+    expect(plan.steps[0].pressureChangePsi).toBeGreaterThan(4.9);
+    expect(plan.steps[0].pressureChangePsi).toBeLessThanOrEqual(5.11);
+    expect(plan.finalHe).toBeCloseTo(80, 6);
+    expect(plan.settledPressurePsi).toBeCloseTo(3000, 1);
+  });
+
+  test("does not blame bank limits when no source can make the exact mix", () => {
+    // EAN31.6 is capped, but neither it nor EAN31.9 makes EAN32 even without limits.
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({
+        targetO2: 32,
+        targetHe: 0,
+        sources: [
+          { id: "ean316", name: "EAN31.6", o2: 31.6, he: 0, maxPressurePsi: 1 },
+          { id: "ean319", name: "EAN31.9", o2: 31.9, he: 0 }
+        ]
+      }),
+      prices
+    );
+    expect(result.match).toBe("closest");
+    expect(result.warnings).toContain(MULTI_GAS_SIMILAR_BLEND_WARNING);
+    expect(result.warnings).not.toContain(BANK_LIMITS_BLOCK_EXACT_WARNING);
+  });
+
   test("splits a bleed range where a tiny stage drops out and the next inherits another temperature", () => {
     // Near the top of the range Oxygen's amount is too small to meter, so Air inherits 70 F instead of
     // Oxygen's 0 F and rises about 846 psi; just below, the 0 F Oxygen stage keeps Air under 697.37.

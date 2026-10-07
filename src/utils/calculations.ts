@@ -2093,7 +2093,10 @@ export const findSimilarNGasAlternatives = (
   startHe: number,
   availableGases: OptimizerGasSource[],
   costSettings: CostSettings,
-  maxAlternatives: number = 5
+  maxAlternatives: number = 5,
+  // Pressure each trial mix needs to hold the target amount of gas. Ideal mode uses the requested
+  // target pressure for every trial; real-gas callers size each trial for its own moles.
+  trialTargetPressurePsi: (o2: number, he: number) => number = () => targetPressurePsi
 ): BlendAlternative[] => {
   const scoredAlternatives: {
     alternative: BlendAlternative;
@@ -2107,8 +2110,9 @@ export const findSimilarNGasAlternatives = (
     const heMax = Math.max(0, 100 - o2);
     const heCandidates = buildSearchValues(targetHe, MULTI_GAS_HE_TOLERANCE, MULTI_GAS_HE_STEP, 0, heMax);
     for (const he of heCandidates) {
+      const trialTargetPsi = trialTargetPressurePsi(o2, he);
       const alternatives = generateBlendAlternatives(
-        targetPressurePsi,
+        trialTargetPsi,
         o2,
         he,
         startPressurePsi,
@@ -2136,7 +2140,7 @@ export const findSimilarNGasAlternatives = (
 
         scoredAlternatives.push({
           alternative: adjustedAlternative,
-          pressureDelta: blendAlternativePressureDelta(adjustedAlternative, startPressurePsi, targetPressurePsi),
+          pressureDelta: blendAlternativePressureDelta(adjustedAlternative, startPressurePsi, trialTargetPsi),
           isRequestedTargetCandidate: Math.abs(o2 - targetO2) < 1e-6 && Math.abs(he - targetHe) < 1e-6,
           compositionDistance: blendAlternativeCompositionDistance(adjustedAlternative)
         });

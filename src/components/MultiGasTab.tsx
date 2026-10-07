@@ -277,22 +277,29 @@ const MultiGasTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): J
     updateField({ [key]: value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit) });
   };
 
-  // Stop-row Stage Temp fields the user has emptied. They stay empty until a number is typed or
-  // focus leaves, instead of refilling with the inherited temperature mid-edit (which also made a
-  // leading "-" impossible to type).
+  // Stop-row Stage Temp fields the user has emptied. An emptied field is a local draft: it stays
+  // empty until a number is typed or focus leaves, instead of refilling with the inherited
+  // temperature mid-edit (which also made a leading "-" impossible to type). The saved temperature
+  // is kept meanwhile, so a plan that needs it stays on screen while its replacement is typed; it
+  // is cleared only if the field is left empty.
   const [clearedStageTemperatureIds, setClearedStageTemperatureIds] = useState<string[]>([]);
   const updateStageTemperature = (sourceId: string | undefined, value: number | undefined): void => {
     const rowIndex = sourceId === undefined ? undefined : sourceResolution.rowIndexById.get(sourceId);
     if (sourceId === undefined || rowIndex === undefined) return;
-    setClearedStageTemperatureIds((ids) =>
-      value === undefined ? [...ids.filter((id) => id !== sourceId), sourceId] : ids.filter((id) => id !== sourceId)
-    );
-    updateGasSource(rowIndex, {
-      stageTemperatureF: value === undefined ? undefined : fromDisplayTemperature(value, settings.temperatureUnit)
-    });
+    if (value === undefined) {
+      setClearedStageTemperatureIds((ids) => [...ids.filter((id) => id !== sourceId), sourceId]);
+      return;
+    }
+    setClearedStageTemperatureIds((ids) => ids.filter((id) => id !== sourceId));
+    updateGasSource(rowIndex, { stageTemperatureF: fromDisplayTemperature(value, settings.temperatureUnit) });
   };
   const endStageTemperatureEdit = (sourceId: string | undefined): void => {
+    if (sourceId === undefined || !clearedStageTemperatureIds.includes(sourceId)) return;
     setClearedStageTemperatureIds((ids) => ids.filter((id) => id !== sourceId));
+    const rowIndex = sourceResolution.rowIndexById.get(sourceId);
+    if (rowIndex !== undefined) {
+      updateGasSource(rowIndex, { stageTemperatureF: undefined });
+    }
   };
 
   // Row keys of the recovery editor's rows while someone is editing there; null otherwise.
