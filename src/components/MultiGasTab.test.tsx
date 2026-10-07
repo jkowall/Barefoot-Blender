@@ -51,6 +51,19 @@ describe("resolveMultiGasSources", () => {
     expect(resolved.rowIndexById.get("custom-1")).toBe(2);
     expect(resolved.rowIndexById.get("air-3")).toBe(4);
   });
+
+  test("treats a bank limit that is not a finite number as no pressure available", () => {
+    const resolved = resolveMultiGasSources(
+      [
+        { id: "helium", enabled: true, maxPressure: Number.NaN },
+        { id: "air", enabled: true, maxPressure: Number.POSITIVE_INFINITY }
+      ],
+      gasOptions,
+      "psi"
+    );
+
+    expect(resolved.idealSources.map((gas) => gas.maxPressurePsi)).toEqual([0, 0]);
+  });
 });
 
 describe("moveGasSource", () => {
