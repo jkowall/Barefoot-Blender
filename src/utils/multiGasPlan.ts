@@ -33,9 +33,13 @@ export const resolveMultiGasSources = (
     }
     const index = enabledIndex;
     enabledIndex += 1;
+    // A limit that is not a finite number (a corrupted saved value) leaves the bank unusable rather
+    // than unlimited.
     const maxPressurePsi = source.maxPressure === undefined
       ? undefined
-      : fromDisplayPressure(Math.max(0, source.maxPressure), pressureUnit);
+      : Number.isFinite(source.maxPressure)
+        ? fromDisplayPressure(Math.max(0, source.maxPressure), pressureUnit)
+        : 0;
 
     let resolved: OptimizerGasSource | null = null;
     if (source.id === "custom") {

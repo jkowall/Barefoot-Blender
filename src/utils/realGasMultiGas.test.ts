@@ -262,7 +262,7 @@ describe("calculateRealGasMultiGasBlend", () => {
     expect(result.match).toBe("bleed");
     expect(uncapped.match).toBe("bleed");
     expect(uncapped.bleedToPsi ?? 0).toBeGreaterThan(2200);
-    expect(result.bleedToPsi ?? 0).toBeCloseTo(1466.54, 0);
+    expect(result.bleedToPsi ?? 0).toBeCloseTo(1466.54, 2);
     const plan = result.alternatives[0];
     const oxygenStep = plan.steps.find((step) => step.sourceId === oxygen.id);
     const airStep = plan.steps.find((step) => step.sourceId === air.id);
@@ -542,12 +542,32 @@ describe("calculateRealGasMultiGasBlend", () => {
     test.each([
       [{ tankSizeCuFt: 0 }, "Tank size and rated pressure are required for GERG-2008 correction."],
       [{ startTemperatureF: -400 }, "GERG-2008 correction is limited to temperatures at or above 250 K."],
-      [{ sources: [{ ...helium, stageTemperatureF: -20 }, oxygen, air] }, "GERG-2008 correction is limited to temperatures at or above 250 K."]
+      [{ sources: [{ ...helium, stageTemperatureF: -20 }, oxygen, air] }, "Stage Temp for Helium is outside the GERG-2008 range (at or above 250 K)."]
     ])("cannot evaluate %o", (overrides, error) => {
       const result = calculateRealGasMultiGasBlend(psi, multiGasInput(overrides), prices);
       expect(result.success).toBe(false);
       expect(result.failure).toBe("gerg");
-      expect(result.errors).toEqual([error]);
+      expect(result.errors[0]).toBe(error);
+    });
+
+    test("names a Stage Temp that is not a number", () => {
+      const result = calculateRealGasMultiGasBlend(
+        psi,
+        multiGasInput({ sources: [{ ...helium, stageTemperatureF: Number.NaN }, oxygen, air] }),
+        prices
+      );
+      expect(result.failure).toBe("gerg");
+      expect(result.errors[0]).toBe("Stage Temp for Helium is outside the GERG-2008 range (at or above 250 K).");
+    });
+
+    test.each([Number.NaN, Number.POSITIVE_INFINITY])("rejects a bank limit of %s", (maxPressurePsi) => {
+      const result = calculateRealGasMultiGasBlend(
+        psi,
+        multiGasInput({ sources: [{ ...helium, maxPressurePsi }, oxygen, air] }),
+        prices
+      );
+      expect(result.failure).toBe("input");
+      expect(result.errors).toEqual(["Bank limit for Helium must be a finite value."]);
     });
 
     test("fails on targets above 400 bar", () => {
@@ -822,7 +842,7 @@ describe("calculateRealGasMultiGasBlend fourth review cases", () => {
     const result = calculateRealGasMultiGasBlend(psi, input, prices);
 
     expect(result.match).toBe("bleed");
-    expect(result.bleedToPsi ?? 0).toBeCloseTo(1000, 0);
+    expect(result.bleedToPsi ?? 0).toBeCloseTo(1000.08, 2);
     const plan = result.alternatives[0];
     expect(plan.steps.find((step) => step.sourceId === "custom-0")?.pressureChangePsi ?? 0).toBeLessThanOrEqual(343.698);
     expect(plan.steps.find((step) => step.sourceId === "custom-1")?.pressureChangePsi ?? 0).toBeLessThanOrEqual(1656.362);

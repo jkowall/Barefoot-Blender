@@ -433,6 +433,13 @@ export const calculateRealGasMultiGasBlend = (
   if (input.sources.length === 0) {
     return failure("input", waterVolumeLiters, warnings, ["No gas sources available."]);
   }
+  // A bank limit that is not a finite number would compare as no limit at all.
+  const badLimit = input.sources.find(
+    (source) => source.maxPressurePsi !== undefined && !Number.isFinite(source.maxPressurePsi)
+  );
+  if (badLimit) {
+    return failure("input", waterVolumeLiters, warnings, [`Bank limit for ${badLimit.name} must be a finite value.`]);
+  }
   if (waterVolumeLiters <= 0) {
     // GERG-2008 cannot evaluate without a volume, but the ideal plan can still be shown.
     return failure("gerg", waterVolumeLiters, warnings, ["Tank size and rated pressure are required for GERG-2008 correction."]);
@@ -1234,7 +1241,11 @@ export const calculateRealGasMultiGasBlend = (
   // Like ideal mode, flag a hypoxic or high-O2 target even when no plan is shown.
   warnings.push(...targetSafetyWarnings);
   if (gergErrors.length > 0) {
-    return failure("gerg", waterVolumeLiters, warnings, [...new Set(gergErrors)]);
+    // Name any Stage Temp outside the GERG-2008 range, which the envelope error alone does not.
+    const stageTemperatureErrors = input.sources
+      .filter((source) => source.stageTemperatureF !== undefined && !isValidTemperatureF(source.stageTemperatureF))
+      .map((source) => `Stage Temp for ${source.name} is outside the GERG-2008 range (at or above 250 K).`);
+    return failure("gerg", waterVolumeLiters, warnings, [...new Set([...stageTemperatureErrors, ...gergErrors])]);
   }
   if (capRejected > 0) {
     warnings.push(BANK_LIMITS_EXCLUDE_ALL_WARNING);
