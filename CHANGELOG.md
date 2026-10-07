@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **Clearable Temperature Fields**: Start Temp (Initial Temp in Standard Blend) and Settled Temp in Standard Blend and Multi-Gas no longer refill with their default while being cleared, so negative temperatures such as -5 C can be typed. A cleared field keeps its saved temperature until it is left empty, which restores the default. Celsius temperature inputs now round to 0.01 degrees instead of showing conversion noise such as 12.000000000000002.
+
 ## [1.2.0] - 2026-10-06
 
 ### Added
