@@ -195,6 +195,8 @@ type RealizeOptions = {
 type RealizeOutcome = {
   alternatives: RealGasMultiGasAlternative[];
   capRejected: number;
+  // Bank-limit rejections of options whose gases make the exact target mix.
+  exactCapRejected: number;
   gergErrors: string[];
   warnings: string[];
 };
@@ -716,7 +718,13 @@ export const calculateRealGasMultiGasBlend = (
     limit: number,
     options: RealizeOptions
   ): RealizeOutcome => {
-    const outcome: RealizeOutcome = { alternatives: [], capRejected: 0, gergErrors: [], warnings: [] };
+    const outcome: RealizeOutcome = {
+      alternatives: [],
+      capRejected: 0,
+      exactCapRejected: 0,
+      gergErrors: [],
+      warnings: []
+    };
     // Dropping unmeterable additions can make two candidates identical.
     const seen = new Set<string>();
     let evaluated = 0;
@@ -734,8 +742,20 @@ export const calculateRealGasMultiGasBlend = (
         const cap = sourceById.get(step.gas.id)?.maxPressurePsi;
         return cap !== undefined && step.amount * amountScale > cap * CAP_PREFILTER_FACTOR + CAP_TOLERANCE_PSI;
       });
-      if (options.enforceCaps && capMiss) {
+      // Only an option that makes the exact target shows bank limits blocked the exact mix; the
+      // ideal optimizer also lists near matches, which miss the target without any limit.
+      const makesTarget =
+        !options.sizeForReachedMix &&
+        Math.abs(candidate.finalO2 - input.targetO2) <= EXACT_MIX_TOLERANCE_PERCENT &&
+        Math.abs(candidate.finalHe - input.targetHe) <= EXACT_MIX_TOLERANCE_PERCENT;
+      const countCapRejection = (): void => {
         outcome.capRejected += 1;
+        if (makesTarget) {
+          outcome.exactCapRejected += 1;
+        }
+      };
+      if (options.enforceCaps && capMiss) {
+        countCapRejection();
         continue;
       }
       evaluated += 1;
@@ -749,11 +769,11 @@ export const calculateRealGasMultiGasBlend = (
         outcome.alternatives.push(result.alternative);
         outcome.warnings.push(...result.warnings);
       } else if (result.rejected === "cap") {
-        outcome.capRejected += 1;
+        countCapRejection();
       } else if (result.rejected === "gerg") {
         // An uncapped probe's envelope failure says nothing about a fill its bank limits rule out.
         if (capMiss) {
-          outcome.capRejected += 1;
+          countCapRejection();
         } else {
           outcome.gergErrors.push(...result.errors);
         }
@@ -774,9 +794,11 @@ export const calculateRealGasMultiGasBlend = (
   };
 
   let capRejected = 0;
+  let exactCapRejected = 0;
   const gergErrors: string[] = [];
   const track = (outcome: RealizeOutcome): RealGasMultiGasAlternative[] => {
     capRejected += outcome.capRejected;
+    exactCapRejected += outcome.exactCapRejected;
     gergErrors.push(...outcome.gergErrors);
     return outcome.alternatives;
   };
@@ -1184,7 +1206,7 @@ export const calculateRealGasMultiGasBlend = (
       closestOptions
     );
   // Bank limits that rejected exact, bleed, or residual options are worth naming next to a closest blend.
-  const closestLimitWarnings = capRejected > 0 ? [BANK_LIMITS_BLOCK_EXACT_WARNING] : [];
+  const closestLimitWarnings = exactCapRejected > 0 ? [BANK_LIMITS_BLOCK_EXACT_WARNING] : [];
   const closestOutcome = closestFrom(fullStart);
   const closest = track(closestOutcome);
   if (closest.length > 0) {

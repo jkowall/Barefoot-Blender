@@ -1267,6 +1267,25 @@ describe("calculateRealGasMultiGasBlend ninth review cases", () => {
     expect(plan.settledPressurePsi).toBeCloseTo(3000, 1);
   });
 
+  test("does not blame bank limits when no source can make the exact mix", () => {
+    // EAN31.6 is capped, but neither it nor EAN31.9 makes EAN32 even without limits.
+    const result = calculateRealGasMultiGasBlend(
+      psi,
+      multiGasInput({
+        targetO2: 32,
+        targetHe: 0,
+        sources: [
+          { id: "ean316", name: "EAN31.6", o2: 31.6, he: 0, maxPressurePsi: 1 },
+          { id: "ean319", name: "EAN31.9", o2: 31.9, he: 0 }
+        ]
+      }),
+      prices
+    );
+    expect(result.match).toBe("closest");
+    expect(result.warnings).toContain(MULTI_GAS_SIMILAR_BLEND_WARNING);
+    expect(result.warnings).not.toContain(BANK_LIMITS_BLOCK_EXACT_WARNING);
+  });
+
   test("splits a bleed range where a tiny stage drops out and the next inherits another temperature", () => {
     // Near the top of the range Oxygen's amount is too small to meter, so Air inherits 70 F instead of
     // Oxygen's 0 F and rises about 846 psi; just below, the 0 F Oxygen stage keeps Air under 697.37.
