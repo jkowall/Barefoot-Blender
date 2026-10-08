@@ -24,6 +24,8 @@ Steps:
 5. If the solution requires negative additions or cannot satisfy the target composition, trigger **bleed-down** search:
    - Perform a binary search on a lower start pressure.
    - Re-run the solver until a feasible plan is found.
+   - Snap to the exact bleed pressure. Each addition is linear in the start pressure, so the highest workable start is where the first addition that shrinks as the start rises reaches zero. That addition then drops out of the plan instead of showing as a few millionths of a PSI.
+   - Omit additions of 0.01 PSI or less from the bleed plan. Targets that nearly put two limits on the same bleed pressure (for example a He% rounded to 4 decimals) leave thousandths of a PSI that no one can meter.
    - Output an explicit bleed instruction (`BLEED tank down to ...`).
 6. Emit warnings for hypoxic (<18% O₂) and high-oxygen (>40% O₂) mixes.
 

@@ -89,6 +89,12 @@ type BlendFractions = {
 
 const tolerance = 1e-6;
 
+// Smallest addition a bleed plan lists. The bleed puts the fill on a constraint boundary, so
+// at least one addition is zero in exact math; inputs that nearly put two constraints on the
+// same boundary (a target He% rounded to 4 decimals) leave thousandths of a PSI that would
+// render as "+0 PSI" steps.
+const MIN_BLEED_PLAN_ADDITION_PSI = 0.01;
+
 const isCloseToZero = (value: number, eps = tolerance): boolean => Math.abs(value) <= eps;
 
 const fraction = (percent: number): number => percent / 100;
@@ -267,6 +273,41 @@ const solveBlend = (inputs: BlendInputs): SolveOutcome => {
   });
 };
 
+// Highest start pressure, up to ceilingPsi, at which every amount solveBlendInternal checks
+// is still non-negative. Each amount is affine in the start pressure b (atZero + perPsi * b),
+// so this is the first root among the amounts that fall as b rises.
+const bleedBoundaryPsi = (targetPressure: number, fractions: BlendFractions, ceilingPsi: number): number => {
+  const {
+    startO2Fraction,
+    startHeFraction,
+    startN2Fraction,
+    targetO2Fraction,
+    targetHeFraction,
+    targetN2,
+    topO2Fraction,
+    topHeFraction,
+    topN2Fraction
+  } = fractions;
+
+  const dO2 = { atZero: targetPressure * targetO2Fraction, perPsi: -startO2Fraction };
+  const dHe = { atZero: targetPressure * targetHeFraction, perPsi: -startHeFraction };
+  const dN2 = { atZero: targetPressure * targetN2, perPsi: -startN2Fraction };
+  const amounts = [dO2, dHe, dN2];
+  if (topN2Fraction > tolerance) {
+    const topoff = { atZero: dN2.atZero / topN2Fraction, perPsi: dN2.perPsi / topN2Fraction };
+    amounts.push(
+      topoff,
+      { atZero: dHe.atZero - topHeFraction * topoff.atZero, perPsi: dHe.perPsi - topHeFraction * topoff.perPsi },
+      { atZero: dO2.atZero - topO2Fraction * topoff.atZero, perPsi: dO2.perPsi - topO2Fraction * topoff.perPsi }
+    );
+  }
+
+  return amounts.reduce(
+    (limit, { atZero, perPsi }) => (perPsi < -tolerance ? Math.min(limit, -atZero / perPsi) : limit),
+    ceilingPsi
+  );
+};
+
 const findBleedSolution = (inputs: BlendInputs): SolveOutcome & { bleedPressure?: number } => {
   const { startPressure, targetPressure, startO2, startHe, targetO2, targetHe, topGas } = inputs;
   let low = 0;
@@ -312,6 +353,18 @@ const findBleedSolution = (inputs: BlendInputs): SolveOutcome & { bleedPressure?
       low = mid;
     } else {
       high = mid;
+    }
+  }
+
+  // The bisection stops just below the boundary, where the addition that binds there is a
+  // few millionths of a PSI instead of zero. Move to the boundary itself when it checks out.
+  if (best.success && best.bleedPressure !== undefined) {
+    const boundaryPsi = bleedBoundaryPsi(targetPressure, fractions, high);
+    if (boundaryPsi > best.bleedPressure) {
+      const exact = solveBlendInternal(boundaryPsi, targetPressure, fractions);
+      if (exact.success) {
+        best = { ...exact, bleedPressure: boundaryPsi };
+      }
     }
   }
 
@@ -427,13 +480,13 @@ export const calculateStandardBlend = (
     }
   ];
 
-  if (bleed.helium && bleed.helium > tolerance) {
+  if (bleed.helium && bleed.helium > MIN_BLEED_PLAN_ADDITION_PSI) {
     steps.push({ kind: "helium", amount: bleed.helium, gasName: "Helium" });
   }
-  if (bleed.oxygen && bleed.oxygen > tolerance) {
+  if (bleed.oxygen && bleed.oxygen > MIN_BLEED_PLAN_ADDITION_PSI) {
     steps.push({ kind: "oxygen", amount: bleed.oxygen, gasName: "Oxygen" });
   }
-  if (bleed.topoff && bleed.topoff > tolerance) {
+  if (bleed.topoff && bleed.topoff > MIN_BLEED_PLAN_ADDITION_PSI) {
     steps.push({ kind: "topoff", amount: bleed.topoff, gasName: topGas.name });
   }
 
