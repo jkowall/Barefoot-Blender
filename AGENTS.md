@@ -73,7 +73,7 @@ npm run dev       # Start dev server (http://localhost:5173)
 npm run build     # Production build to dist/
 npm run preview   # Preview production build locally
 npm run lint      # Run ESLint checks
-npm run typecheck # Type-check src with tsc --noEmit (build and lint do not)
+npm run typecheck # Type-check src, Vite/Capacitor configs, and scripts with tsc --noEmit (build and lint do not)
 npm run test      # Run Vitest regression tests once
 npm run test:watch # Run Vitest in watch mode
 npm run verify:calc # Run calculation regression vectors

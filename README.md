@@ -42,7 +42,7 @@ npm run dev
 - `npm run build` – Produce a production bundle in `dist/` with pre-cached assets.
 - `npm run preview` – Preview the production build locally.
 - `npm run lint` – Run ESLint against the TypeScript source.
-- `npm run typecheck` – Type-check `src/` with `tsc --noEmit` (the Vite build and ESLint do not report type errors).
+- `npm run typecheck` – Type-check `src/` (`tsconfig.json`) and the Vite/Capacitor configs plus `scripts/*.mjs` (`tsconfig.node.json`) with `tsc --noEmit` (the Vite build and ESLint do not report type errors).
 - `npm run test` – Run the Vitest regression suite once.
 - `npm run test:watch` – Run Vitest in watch mode for local development.
 - `npm run verify:calc` – Run the calculation regression vectors only.

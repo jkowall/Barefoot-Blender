@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "verify:calc": "vitest run src/utils/calculations.test.ts src/utils/gerg2008.test.ts src/utils/realGasBlend.test.ts src/utils/realGasMultiGas.test.ts",
