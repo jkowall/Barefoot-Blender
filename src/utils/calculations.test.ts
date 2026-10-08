@@ -342,6 +342,25 @@ describe("calculateMultiGasBlend", () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe("Selected sources cannot meet the target helium percentage.");
   });
+
+  test("searches the fallback around the default 32% O2 when target O2 is omitted", () => {
+    const inputs: MultiGasInput = {
+      targetPressure: 3000,
+      targetHe: 3,
+      startPressure: 0,
+      startO2: 21,
+      startHe: 0,
+      selectedAlternativeIndex: 0
+    };
+
+    const result = calculateMultiGasBlend(settings, inputs, oxygen, air);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Selected sources cannot meet the target helium percentage.");
+    expect(result.fallback).toBeDefined();
+    expect(result.fallback?.finalO2).toBeCloseTo(32, 6);
+    expect(result).toEqual(calculateMultiGasBlend(settings, { ...inputs, targetO2: 32 }, oxygen, air));
+  });
 });
 
 describe("calculateGasCost", () => {
