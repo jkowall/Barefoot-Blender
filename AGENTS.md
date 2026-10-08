@@ -50,6 +50,7 @@ src/
 │   ├── realGasBlend.ts  # GERG-2008 Standard Blend and Top-Off
 │   ├── realGasMultiGas.ts # GERG-2008 Multi-Gas planner
 │   ├── multiGasPlan.ts  # Multi-Gas source resolution, reorder, and plan-model selection
+│   ├── standardBlendPlan.ts # Standard Blend plan stop pressures (ideal and GERG-2008)
 │   ├── temperature.ts   # Temperature conversions and defaults
 │   ├── format.ts        # Number formatting helpers
 │   └── units.ts         # Unit conversion utilities

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import {
-  blendPlanStopPressures,
   buildStandardBlendFillCostPlan,
   realGasResultToBlendResult,
   selectStandardBlendResult,
@@ -10,7 +9,6 @@ import {
   resolveInputStageTemperatures,
   resolveInputTankContext,
   resolveStageTemperatureDisplayF,
-  resolveBlendPlanStopPressures,
   resolveStandardBlendFields,
   stageTemperaturesForEdit,
   updateStageTemperatureState
@@ -18,6 +16,7 @@ import {
 import type { StandardBlendInput } from "../state/session";
 import { calculateFillCostEstimate, calculateStandardBlend, summarizeBlendVolumes } from "../utils/calculations";
 import { calculateRealGasStandardBlend, type RealGasBlendResult } from "../utils/realGasBlend";
+import { blendPlanStopPressures, resolveBlendPlanStopPressures } from "../utils/standardBlendPlan";
 import { fromDisplayPressure } from "../utils/units";
 
 describe("realGasResultToBlendResult", () => {

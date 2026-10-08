@@ -50,6 +50,7 @@ import {
 } from "../utils/temperature";
 import { useClearableNumber } from "./useClearableNumber";
 import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
+import { resolveBlendPlanStopPressures } from "../utils/standardBlendPlan";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
 import { SelectInput } from "./SelectInput";
@@ -387,35 +388,6 @@ export const resolveStandardBlendFields = (input: StandardBlendInput): ResolvedS
   startHe: input.startHe ?? 0,
   targetHe: input.targetHe ?? 0
 });
-
-// Tank pressure after each plan step: a bleed drains to the solved bleed pressure, gas steps add theirs.
-export const blendPlanStopPressures = (result: BlendResult, startPsi: number): number[] => {
-  let runningPsi = startPsi;
-  return result.steps.map((step) => {
-    runningPsi = step.kind === "bleed"
-      ? result.bleedPressure ?? clampPressure(runningPsi - step.amount)
-      : runningPsi + step.amount;
-    return runningPsi;
-  });
-};
-
-// Stop pressures for the displayed plan. idealStartPsi must be the start pressure the ideal result was
-// solved from, not the live field, so editing Start Pressure cannot pair old steps with a new start.
-// A GERG stage's pressure change is measured at that stage's temperature, so the changes do not sum
-// to the next stop when stage temperatures differ; use the solved stop pressures instead.
-export const resolveBlendPlanStopPressures = (
-  result: BlendResult,
-  resultSource: "ideal" | "realGas",
-  realGasResult: RealGasBlendResult | null,
-  idealStartPsi: number
-): number[] => {
-  if (resultSource === "realGas" && realGasResult) {
-    return realGasResult.steps.length === result.steps.length
-      ? realGasResult.steps.map((step) => step.stopPressurePsi)
-      : blendPlanStopPressures(result, realGasResult.startHotPressurePsi);
-  }
-  return blendPlanStopPressures(result, idealStartPsi);
-};
 
 const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
   const standardBlend = useSessionStore((state) => state.standardBlend);
