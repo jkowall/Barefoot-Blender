@@ -10,6 +10,7 @@ export default tseslint.config(
       "dist/",
       "node_modules/",
       "private/",
+      ".claude/",
       "eslint.config.js",
       "benchmark.js",
       "android/**/build/",
