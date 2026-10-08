@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { calculateFillCostEstimate, type GasSelection } from "../utils/calculations";
+import { calculateFillCostEstimate, solveTopOffBleedForTargetPercent, type GasSelection } from "../utils/calculations";
 import {
   buildTopOffFillCostPlan,
   calculateTopOffBleedPreview,
@@ -10,6 +10,7 @@ import {
   resolveTopOffResultTemperatureF,
   resolveTopOffSelectedGas,
   resolveTopOffStartMix,
+  resolveTopOffStartPressurePsi,
   resolveTopOffStartTemperatureF,
   syncTopOffInputSelectedGas,
   updateTopOffInputField,
@@ -17,6 +18,7 @@ import {
   updateTopOffResultTemperatureState
 } from "./TopOffTab";
 import type { TopOffInput } from "../state/session";
+import { toDisplayPressure } from "../utils/units";
 
 const topOffOptions = [
   { id: "air", name: "Air", o2: 21, he: 0 },
@@ -508,5 +510,123 @@ describe("buildTopOffFillCostPlan", () => {
     expect(plan.basis).toBe("ideal");
     expect(plan.additions[0].volumeCuFt).toBeUndefined();
     expect(estimate.lines[0].volumeCuFt).toBeCloseTo(66.667, 3);
+  });
+});
+
+describe("cleared Top-Off fields", () => {
+  const air = topOffOptions[0];
+  const idealSettings = (pressureUnit: "psi" | "bar") => ({
+    pressureUnit,
+    gasModel: "ideal" as const,
+    defaultTankSizeCuFt: 80,
+    tankRatedPressure: 3000
+  });
+
+  test("a cleared Start Pressure is an empty cylinder in either unit", () => {
+    expect(resolveTopOffStartPressurePsi(undefined, "psi")).toBe(0);
+    expect(resolveTopOffStartPressurePsi(undefined, "bar")).toBe(0);
+    expect(resolveTopOffStartPressurePsi(100, "bar")).toBeCloseTo(1450.37738, 4);
+  });
+
+  test.each([
+    { pressureUnit: "psi" as const, startPressure: 1500, finalPressure: 3000 },
+    { pressureUnit: "bar" as const, startPressure: 100, finalPressure: 200 }
+  ])("reverse-solves the bleed with the 32/0 default when Start O2/He are cleared ($pressureUnit)", ({ pressureUnit, startPressure, finalPressure }) => {
+    const input: TopOffInput = { topGasId: "air", startPressure, finalPressure };
+    const startMix = resolveTopOffStartMix(input);
+    const startPressurePsi = resolveTopOffStartPressurePsi(input.startPressure, pressureUnit);
+    const bleedPsi = solveTopOffBleedForTargetPercent({
+      targetPercent: 26,
+      startPercent: startMix.o2,
+      topPercent: air.o2,
+      finalPressure: input.finalPressure,
+      pressureUnit,
+      startPressurePsi
+    });
+
+    expect(startMix).toEqual({ o2: 32, he: 0 });
+    expect(bleedPsi).not.toBeNull();
+    expect(Number.isFinite(bleedPsi)).toBe(true);
+    const preview = calculateTopOffBleedPreview(idealSettings(pressureUnit), input, air, startPressurePsi - (bleedPsi ?? 0));
+    expect(preview.finalO2).toBeCloseTo(26, 6);
+  });
+
+  test("reverse-solves against the same 3000 Final Pressure fallback the bleed preview uses", () => {
+    const input: TopOffInput = { topGasId: "air", startPressure: 1500, startO2: 32, startHe: 0 };
+    const solve = (finalPressure: number | undefined) => solveTopOffBleedForTargetPercent({
+      targetPercent: 26,
+      startPercent: 32,
+      topPercent: air.o2,
+      finalPressure,
+      pressureUnit: "psi",
+      startPressurePsi: 1500
+    });
+    const bleedPsi = solve(input.finalPressure);
+
+    expect(bleedPsi).toBe(solve(3000));
+    const preview = calculateTopOffBleedPreview(idealSettings("psi"), input, air, 1500 - (bleedPsi ?? 0));
+    expect(preview.finalO2).toBeCloseTo(26, 6);
+  });
+
+  test.each([
+    { pressureUnit: "psi" as const, gasModel: "ideal" as const },
+    { pressureUnit: "bar" as const, gasModel: "ideal" as const },
+    { pressureUnit: "psi" as const, gasModel: "gerg2008" as const },
+    { pressureUnit: "bar" as const, gasModel: "gerg2008" as const }
+  ])("a cleared Final Pressure tops off to 3000 psi, not 3000 $pressureUnit ($gasModel)", ({ pressureUnit, gasModel }) => {
+    const settings = { ...idealSettings(pressureUnit), gasModel };
+    const input: TopOffInput = {
+      topGasId: "air",
+      startPressure: toDisplayPressure(1500, pressureUnit),
+      startO2: 32,
+      startHe: 0,
+      startTemperatureF: 70
+    };
+    const cleared = calculateTopOffForModel(settings, input, air);
+    const typed = calculateTopOffForModel(settings, { ...input, finalPressure: toDisplayPressure(3000, pressureUnit) }, air);
+
+    expect(cleared.success).toBe(true);
+    expect(cleared.goalPressurePsi).toBeCloseTo(3000, 6);
+    expect(cleared.finalO2).toBe(typed.finalO2);
+    expect(cleared.addedPressure).toBe(typed.addedPressure);
+  });
+
+  test("reverse-solves a cleared Final Pressure in bar against the preview's 3000 psi fallback", () => {
+    const input: TopOffInput = { topGasId: "air", startPressure: 100, startO2: 32, startHe: 0 };
+    const startPressurePsi = resolveTopOffStartPressurePsi(input.startPressure, "bar");
+    const solve = (finalPressure: number | undefined) => solveTopOffBleedForTargetPercent({
+      targetPercent: 26,
+      startPercent: 32,
+      topPercent: air.o2,
+      finalPressure,
+      pressureUnit: "bar",
+      startPressurePsi
+    });
+    const bleedPsi = solve(input.finalPressure);
+
+    expect(bleedPsi).toBe(solve(toDisplayPressure(3000, "bar")));
+    // 3000 bar would need a 19,777 psi start, so the old fallback clamped the bleed to 0.
+    expect(bleedPsi).toBeCloseTo(86.7, 1);
+    const preview = calculateTopOffBleedPreview(idealSettings("bar"), input, air, startPressurePsi - (bleedPsi ?? 0));
+    expect(preview.goalPressurePsi).toBeCloseTo(3000, 6);
+    expect(preview.finalO2).toBeCloseTo(26, 6);
+  });
+
+  test.each(["psi", "bar"] as const)("never produces a NaN bleed when every field is cleared (%s)", (pressureUnit) => {
+    const input: TopOffInput = { topGasId: "air" };
+    const startMix = resolveTopOffStartMix(input);
+    const startPressurePsi = resolveTopOffStartPressurePsi(input.startPressure, pressureUnit);
+    const solveFor = (gas: "o2" | "he") => solveTopOffBleedForTargetPercent({
+      targetPercent: 26,
+      startPercent: startMix[gas],
+      topPercent: air[gas],
+      finalPressure: input.finalPressure,
+      pressureUnit,
+      startPressurePsi
+    });
+
+    expect(solveFor("o2")).toBe(0);
+    // Start and top-off He are both 0%, so bleeding cannot change He and the handler leaves the bleed alone.
+    expect(solveFor("he")).toBeNull();
   });
 });

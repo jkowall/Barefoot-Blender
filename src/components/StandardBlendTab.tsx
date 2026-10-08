@@ -49,7 +49,8 @@ import {
   toDisplayTemperatureInput
 } from "../utils/temperature";
 import { useClearableNumber } from "./useClearableNumber";
-import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
+import { fromDisplayPressure, resolveFillPressureDisplay, toDisplayPressure } from "../utils/units";
+import { resolveBlendPlanStopPressures } from "../utils/standardBlendPlan";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
 import { SelectInput } from "./SelectInput";
@@ -377,6 +378,20 @@ export const resolveRealGasStopDisplay = (
   return { rows, footer: realGasResult.success ? "summary" : "stageTemperature" };
 };
 
+// Fills mix and pressure fields left empty mid-edit with the defaults the Standard Blend solvers use.
+export const resolveStandardBlendFields = (
+  input: StandardBlendInput,
+  pressureUnit: SettingsSnapshot["pressureUnit"]
+): ResolvedStandardBlendInput => ({
+  ...input,
+  startPressure: input.startPressure ?? 0,
+  targetPressure: resolveFillPressureDisplay(input.targetPressure, pressureUnit),
+  targetO2: input.targetO2 ?? 32,
+  startO2: input.startO2 ?? 21,
+  startHe: input.startHe ?? 0,
+  targetHe: input.targetHe ?? 0
+});
+
 const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
   const standardBlend = useSessionStore((state) => state.standardBlend);
   const standardBlendHistory = useSessionStore((state) => state.standardBlendHistory);
@@ -387,6 +402,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
   const [result, setResult] = useState<BlendResult | null>(null);
   const [realGasResult, setRealGasResult] = useState<RealGasBlendResult | null>(null);
   const [resultSource, setResultSource] = useState<"ideal" | "realGas">("ideal");
+  const [resultStartPressurePsi, setResultStartPressurePsi] = useState(0);
   const [sensitivityDeltaPsi, setSensitivityDeltaPsi] = useState(0);
   const [planOpen, setPlanOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
@@ -411,9 +427,14 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     }
   }, [selectedTopGas, standardBlend, setStandardBlend]);
 
+  const resolvedFields = useMemo(
+    () => resolveStandardBlendFields(standardBlend, settings.pressureUnit),
+    [standardBlend, settings.pressureUnit]
+  );
+
   const startPressurePsi = useMemo(
-    () => fromDisplayPressure(standardBlend.startPressure ?? 0, settings.pressureUnit),
-    [standardBlend.startPressure, settings.pressureUnit]
+    () => fromDisplayPressure(resolvedFields.startPressure, settings.pressureUnit),
+    [resolvedFields.startPressure, settings.pressureUnit]
   );
 
   const negativeSensitivityLimitPsi = useMemo(
@@ -479,17 +500,14 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       return null;
     }
 
-    let runningPsi = resultSource === "realGas" && realGasResult
-      ? realGasResult.startHotPressurePsi
-      : fromDisplayPressure(standardBlend.startPressure ?? 0, settings.pressureUnit);
+    const stopPressures = resolveBlendPlanStopPressures(result, resultSource, realGasResult, resultStartPressurePsi);
 
     return result.steps.map((step, index) => {
+      const runningPsi = stopPressures[index];
       if (step.kind === "bleed") {
-        const bleedTargetPsi = result.bleedPressure ?? clampPressure(runningPsi - step.amount);
-        runningPsi = bleedTargetPsi;
         return (
           <li key={step.kind}>
-            {index + 1}. BLEED tank down to {formatPressure(bleedTargetPsi, settings.pressureUnit)}
+            {index + 1}. BLEED tank down to {formatPressure(runningPsi, settings.pressureUnit)}
             <span className="result-step-total">{"->"} Tank @ {formatPressure(runningPsi, settings.pressureUnit)}</span>
           </li>
         );
@@ -497,7 +515,6 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
 
       const descriptor = step.kind === "topoff" ? "Top-off with" : "Add";
       const gasLabel = step.kind === "topoff" ? selectedTopGas?.name ?? step.gasName : step.gasName;
-      runningPsi += step.amount;
       return (
         <li key={`${step.kind}-${step.gasName}-${step.amount.toFixed(6)}-${runningPsi.toFixed(6)}`}>
           {index + 1}. {descriptor} {gasLabel}: {formatPressure(runningPsi, settings.pressureUnit)}
@@ -505,7 +522,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
         </li>
       );
     });
-  }, [realGasResult, result, resultSource, selectedTopGas?.name, settings.pressureUnit, standardBlend.startPressure]);
+  }, [realGasResult, result, resultSource, resultStartPressurePsi, selectedTopGas?.name, settings.pressureUnit]);
 
   const updateField = <K extends keyof StandardBlendInput>(key: K, value: StandardBlendInput[K]): void => {
     setStandardBlend({ ...standardBlend, [key]: value });
@@ -519,13 +536,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       settings.tankRatedPressure
     );
     return {
-      ...input,
-      startPressure: input.startPressure ?? 0,
-      targetPressure: input.targetPressure ?? 3000,
-      targetO2: input.targetO2 ?? 32,
-      startO2: input.startO2 ?? 21,
-      startHe: input.startHe ?? 0,
-      targetHe: input.targetHe ?? 0,
+      ...resolveStandardBlendFields(input, settings.pressureUnit),
       ...resolvedTankContext,
       startTemperatureF: resolvedStartTemperatureF,
       settledTemperatureF: input.settledTemperatureF ?? DEFAULT_SETTLED_TEMPERATURE_F,
@@ -673,6 +684,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     setResult(effectiveResult);
     setRealGasResult(correctedResult);
     setResultSource(selection.source);
+    setResultStartPressurePsi(fromDisplayPressure(resolvedInput.startPressure, settings.pressureUnit));
     setSensitivityDeltaPsi(0);
     setPlanOpen(true);
     setCostOpen(true);
@@ -714,13 +726,8 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
 
       const adjustedStartPsi = clampPressure(startPressurePsi + deltaPsi);
       const candidate: StandardBlendInput = {
-        ...standardBlend,
-        startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit),
-        targetPressure: standardBlend.targetPressure ?? 3000,
-        targetO2: standardBlend.targetO2 ?? 32,
-        startO2: standardBlend.startO2 ?? 21,
-        startHe: standardBlend.startHe ?? 0,
-        targetHe: standardBlend.targetHe ?? 0
+        ...resolvedFields,
+        startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit)
       };
       return calculateStandardBlend({ pressureUnit: settings.pressureUnit }, candidate, selectedTopGas);
     };
@@ -796,11 +803,11 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     baseVolumes,
     clampedSensitivityDeltaPsi,
     negativeSensitivityLimitPsi,
+    resolvedFields,
     result,
     resultSource,
     selectedTopGas,
     settings.pressureUnit,
-    standardBlend,
     startPressurePsi
   ]);
 
@@ -810,18 +817,10 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     }
     return solveRequiredStartPressure(
       { pressureUnit: settings.pressureUnit },
-      {
-        ...standardBlend,
-        startPressure: standardBlend.startPressure ?? 0,
-        targetPressure: standardBlend.targetPressure ?? 3000,
-        targetO2: standardBlend.targetO2 ?? 32,
-        startO2: standardBlend.startO2 ?? 21,
-        startHe: standardBlend.startHe ?? 0,
-        targetHe: standardBlend.targetHe ?? 0
-      },
+      resolvedFields,
       selectedTopGas
     );
-  }, [result, resultSource, selectedTopGas, settings.pressureUnit, standardBlend]);
+  }, [resolvedFields, result, resultSource, selectedTopGas, settings.pressureUnit]);
 
   const noHeliumTarget = useMemo(() => {
     if (!result || !result.success || resultSource !== "ideal" || !selectedTopGas) {
@@ -829,18 +828,10 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     }
     return solveMaxTargetWithoutHelium(
       { pressureUnit: settings.pressureUnit },
-      {
-        ...standardBlend,
-        startPressure: standardBlend.startPressure ?? 0,
-        targetPressure: standardBlend.targetPressure ?? 3000,
-        targetO2: standardBlend.targetO2 ?? 32,
-        startO2: standardBlend.startO2 ?? 21,
-        startHe: standardBlend.startHe ?? 0,
-        targetHe: standardBlend.targetHe ?? 0
-      },
+      resolvedFields,
       selectedTopGas
     );
-  }, [result, resultSource, selectedTopGas, settings.pressureUnit, standardBlend]);
+  }, [resolvedFields, result, resultSource, selectedTopGas, settings.pressureUnit]);
 
   const sliderMinDisplay = toDisplayPressure(-negativeSensitivityLimitPsi, settings.pressureUnit);
   const sliderMaxDisplay = toDisplayPressure(SENSITIVITY_RANGE_PSI, settings.pressureUnit);
@@ -862,7 +853,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     }
 
     const effectiveStartPressurePsi = result.bleedPressure ?? startPressurePsi;
-    const targetPressurePsi = fromDisplayPressure(standardBlend.targetPressure ?? 3000, settings.pressureUnit);
+    const targetPressurePsi = fromDisplayPressure(resolvedFields.targetPressure, settings.pressureUnit);
     const startO2Fraction = toFraction(standardBlend.startO2, 21);
     const startHeFraction = toFraction(standardBlend.startHe, 0);
     const startN2Fraction = Math.max(0, 1 - startO2Fraction - startHeFraction);
@@ -944,6 +935,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     };
   }, [
     baseVolumes,
+    resolvedFields.targetPressure,
     result,
     resultSource,
     selectedTopGas,
@@ -952,7 +944,6 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     standardBlend.startO2,
     standardBlend.targetHe,
     standardBlend.targetO2,
-    standardBlend.targetPressure,
     startPressurePsi,
     trainingModeEnabled
   ]);
@@ -1454,7 +1445,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
               {noHeliumTarget?.success ? (
                 <>
                   <div className="reverse-value">
-                    {formatPercentage(standardBlend.targetO2 ?? 0)} O2 / {formatPercentage(noHeliumTarget.targetHe)} He
+                    {formatPercentage(resolvedFields.targetO2)} O2 / {formatPercentage(noHeliumTarget.targetHe)} He
                   </div>
                   <div className="reverse-actions">
                     <button

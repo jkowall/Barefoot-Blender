@@ -9,6 +9,7 @@ import {
   type FillCostBasis,
   type GasSelection,
   type ResolvedTopOffInput,
+  solveTopOffBleedForTargetPercent,
   type TopOffResult,
   type TopOffProjectionRow,
   clampPercent,
@@ -29,7 +30,7 @@ import {
   temperatureUnitLabel,
   toDisplayTemperature
 } from "../utils/temperature";
-import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
+import { fromDisplayPressure, resolveFillPressureDisplay, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
 import TankContextFields from "./TankContextFields";
@@ -171,13 +172,13 @@ export const calculateTopOffForModel = (
   const baseInput: ResolvedTopOffInput = {
     ...input,
     startPressure: input.startPressure ?? 0,
-    finalPressure: input.finalPressure ?? 3000,
+    finalPressure: resolveFillPressureDisplay(input.finalPressure, settings.pressureUnit),
     startO2: startMix.o2,
     startHe: startMix.he
   };
   const resolvedStartTemperatureF = resolveTopOffStartTemperatureF(baseInput);
   const resolvedResultTemperatureF = resolveTopOffResultTemperatureF(baseInput, resolvedStartTemperatureF);
-  const goalPressurePsi = fromDisplayPressure(baseInput.finalPressure ?? 3000, settings.pressureUnit);
+  const goalPressurePsi = fromDisplayPressure(baseInput.finalPressure, settings.pressureUnit);
 
   if (settings.gasModel === "ideal") {
     return {
@@ -298,11 +299,15 @@ export const calculateTopOffBleedPreview = (
   settings,
   {
     ...input,
-    startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit),
-    finalPressure: input.finalPressure ?? 3000
+    startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit)
   },
   topGas
 );
+
+export const resolveTopOffStartPressurePsi = (
+  startPressure: number | undefined,
+  pressureUnit: SettingsSnapshot["pressureUnit"]
+): number => fromDisplayPressure(startPressure ?? 0, pressureUnit);
 
 export const copyTopOffResultToStartInput = (
   input: TopOffInput,
@@ -348,7 +353,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
   }, [topOff.topGasId, topOffOptions]);
 
   const startPressurePsi = useMemo(
-    () => fromDisplayPressure(topOff.startPressure ?? 0, settings.pressureUnit),
+    () => resolveTopOffStartPressurePsi(topOff.startPressure, settings.pressureUnit),
     [topOff.startPressure, settings.pressureUnit]
   );
 
@@ -373,7 +378,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
     const baseInput: ResolvedTopOffInput = {
       ...input,
       startPressure: input.startPressure ?? 0,
-      finalPressure: input.finalPressure ?? 3000,
+      finalPressure: resolveFillPressureDisplay(input.finalPressure, settings.pressureUnit),
       startO2: startMix.o2,
       startHe: startMix.he
     };
@@ -902,30 +907,16 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                         return;
                       }
 
-                      // Reverse solve: P_final_O2 = (P_start_adj * Start_O2 + P_added * Top_O2) / P_total
-                      // We know P_total (finalPressure), Top_O2, Start_O2.
-                      // Variable is bleed amount, which determines P_start_adj.
-                      // P_start_adj = P_start - bleed.
-                      // P_added = P_total - P_start_adj.
-
-                      const targetO2 = Number(e.target.value) / 100;
-                      const topO2 = selectedTopGas?.o2 ?? 0;
-                      const startO2 = startMix.o2 / 100;
-
-                      const pTotal = fromDisplayPressure(topOff.finalPressure ?? 3000, settings.pressureUnit);
-
-                      // P_total * Target_O2 = P_start_adj * Start_O2 + (P_total - P_start_adj) * Top_O2
-                      // P_total * Target_O2 = P_start_adj * Start_O2 + P_total * Top_O2 - P_start_adj * Top_O2
-                      // P_total * (Target_O2 - Top_O2) = P_start_adj * (Start_O2 - Top_O2)
-                      // P_start_adj = P_total * (Target_O2 - Top_O2) / (Start_O2 - Top_O2)
-
-                      const numerator = pTotal * (targetO2 - (topO2 / 100));
-                      const denominator = startO2 - (topO2 / 100);
-
-                      if (Math.abs(denominator) > 1e-6) {
-                        const neededStartPsi = numerator / denominator;
-                        const neededBleed = startPressurePsi - neededStartPsi;
-                        setBleedPsi(clampPressure(Math.min(neededBleed, startPressurePsi)));
+                      const nextBleedPsi = solveTopOffBleedForTargetPercent({
+                        targetPercent: Number(e.target.value),
+                        startPercent: startMix.o2,
+                        topPercent: selectedTopGas?.o2 ?? 0,
+                        finalPressure: topOff.finalPressure,
+                        pressureUnit: settings.pressureUnit,
+                        startPressurePsi
+                      });
+                      if (nextBleedPsi !== null) {
+                        setBleedPsi(nextBleedPsi);
                       }
                     }}
                   />
@@ -946,19 +937,16 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                         return;
                       }
 
-                      const targetHe = Number(e.target.value) / 100;
-                      const topHe = selectedTopGas?.he ?? 0;
-                      const startHe = startMix.he / 100;
-
-                      const pTotal = fromDisplayPressure(topOff.finalPressure ?? 3000, settings.pressureUnit);
-
-                      const numerator = pTotal * (targetHe - (topHe / 100));
-                      const denominator = startHe - (topHe / 100);
-
-                      if (Math.abs(denominator) > 1e-6) {
-                        const neededStartPsi = numerator / denominator;
-                        const neededBleed = startPressurePsi - neededStartPsi;
-                        setBleedPsi(clampPressure(Math.min(neededBleed, startPressurePsi)));
+                      const nextBleedPsi = solveTopOffBleedForTargetPercent({
+                        targetPercent: Number(e.target.value),
+                        startPercent: startMix.he,
+                        topPercent: selectedTopGas?.he ?? 0,
+                        finalPressure: topOff.finalPressure,
+                        pressureUnit: settings.pressureUnit,
+                        startPressurePsi
+                      });
+                      if (nextBleedPsi !== null) {
+                        setBleedPsi(nextBleedPsi);
                       }
                     }}
                   />

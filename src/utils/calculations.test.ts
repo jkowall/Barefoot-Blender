@@ -1,6 +1,7 @@
 import { expect, test, describe } from "vitest";
 import {
   calculateTopOffBlend,
+  solveTopOffBleedForTargetPercent,
   calculateBestMix,
   calculateMultiGasBlend,
   calculateStandardBlend,
@@ -691,6 +692,43 @@ describe("calculateMOD", () => {
     expect(result.contingency).toBe(0);
   });
 });
+describe("solveTopOffBleedForTargetPercent", () => {
+  const solve = (overrides: Partial<Parameters<typeof solveTopOffBleedForTargetPercent>[0]> = {}) =>
+    solveTopOffBleedForTargetPercent({
+      targetPercent: 26,
+      startPercent: 32,
+      topPercent: 21,
+      finalPressure: 3000,
+      pressureUnit: "psi",
+      startPressurePsi: 1500,
+      ...overrides
+    });
+
+  test("bleeds 32% at 1500 psi to 1363.6 psi so an Air top-off to 3000 psi lands on 26%", () => {
+    // P_start_adj = 3000 * (0.26 - 0.21) / (0.32 - 0.21)
+    expect(solve()).toBeCloseTo(1500 - (3000 * 0.05) / 0.11, 9);
+  });
+
+  test("converts a bar Final Pressure before solving", () => {
+    expect(solve({ finalPressure: 200, pressureUnit: "bar" })).toBeCloseTo(1500 - (200 * 14.5037738 * 0.05) / 0.11, 6);
+  });
+
+  test.each(["psi", "bar"] as const)("solves an empty Final Pressure against 3000 psi, not 3000 %s", (pressureUnit) => {
+    expect(solve({ finalPressure: undefined, pressureUnit })).toBeCloseTo(1500 - (3000 * 0.05) / 0.11, 6);
+  });
+
+  test("clamps the bleed between none and the whole start pressure", () => {
+    // 31% would need more 32% gas than the tank holds, so no bleed helps.
+    expect(solve({ targetPercent: 31 })).toBe(0);
+    // A target at or below the top-off O2 needs an empty tank, so bleed everything.
+    expect(solve({ targetPercent: 20, startPressurePsi: 100 })).toBe(100);
+  });
+
+  test("returns null when the start and top-off fractions match", () => {
+    expect(solve({ startPercent: 21 })).toBeNull();
+  });
+});
+
 describe("calculateTopOffBlend", () => {
   const settingsPsi = { pressureUnit: "psi" as const };
   const settingsBar = { pressureUnit: "bar" as const };

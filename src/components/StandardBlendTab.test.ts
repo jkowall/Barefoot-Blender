@@ -9,12 +9,15 @@ import {
   resolveInputStageTemperatures,
   resolveInputTankContext,
   resolveStageTemperatureDisplayF,
+  resolveStandardBlendFields,
   stageTemperaturesForEdit,
   updateStageTemperatureState
 } from "./StandardBlendTab";
 import type { StandardBlendInput } from "../state/session";
 import { calculateFillCostEstimate, calculateStandardBlend, summarizeBlendVolumes } from "../utils/calculations";
 import { calculateRealGasStandardBlend, type RealGasBlendResult } from "../utils/realGasBlend";
+import { blendPlanStopPressures, resolveBlendPlanStopPressures } from "../utils/standardBlendPlan";
+import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 
 describe("realGasResultToBlendResult", () => {
   test("replaces a failed GERG primary result with current errors and no stale steps", () => {
@@ -596,5 +599,130 @@ describe("buildStandardBlendFillCostPlan", () => {
     const larger = buildStandardBlendFillCostPlan(idealVolumes, realGasResult, "gerg2008", air, 120, 3000);
 
     expect(larger.additions[1].volumeCuFt).toBeCloseTo((base.additions[1].volumeCuFt ?? 0) * 1.5, 9);
+  });
+});
+
+describe("cleared Standard Blend fields", () => {
+  const airTopGas = { id: "air", name: "Air", o2: 21, he: 0 };
+
+  test("resolve to the solver defaults while a field is empty mid-edit, including 32% Target O2", () => {
+    expect(resolveStandardBlendFields({ topGasId: "air" }, "psi")).toEqual({
+      topGasId: "air",
+      startPressure: 0,
+      targetPressure: 3000,
+      targetO2: 32,
+      startO2: 21,
+      startHe: 0,
+      targetHe: 0
+    });
+    expect(resolveStandardBlendFields({ topGasId: "air", startPressure: 500, targetO2: 36 }, "psi")).toMatchObject({
+      startPressure: 500,
+      targetO2: 36
+    });
+  });
+
+  test.each([
+    { pressureUnit: "psi" as const, targetPressure: 3000 },
+    { pressureUnit: "bar" as const, targetPressure: 200 }
+  ])("plan stops start from an empty cylinder when Start Pressure is cleared ($pressureUnit)", ({ pressureUnit, targetPressure }) => {
+    const fields = resolveStandardBlendFields({ topGasId: "air", targetPressure, targetO2: 32 }, pressureUnit);
+    const result = calculateStandardBlend({ pressureUnit }, fields, airTopGas);
+    const stops = blendPlanStopPressures(result, fromDisplayPressure(fields.startPressure, pressureUnit));
+
+    expect(result.success).toBe(true);
+    expect(stops).toHaveLength(result.steps.length);
+    expect(stops.every(Number.isFinite)).toBe(true);
+    expect(stops[0]).toBeCloseTo(result.steps[0].amount, 9);
+    expect(stops[stops.length - 1]).toBeCloseTo(fromDisplayPressure(targetPressure, pressureUnit), 6);
+  });
+
+  test("plan stops drain to the solved bleed pressure before adding gas", () => {
+    const fields = resolveStandardBlendFields({
+      topGasId: "air",
+      startPressure: 1500,
+      startHe: 35,
+      targetHe: 10,
+      targetPressure: 3000
+    }, "psi");
+    const result = calculateStandardBlend({ pressureUnit: "psi" }, fields, airTopGas);
+    const stops = blendPlanStopPressures(result, 1500);
+
+    expect(result.steps[0].kind).toBe("bleed");
+    expect(stops[0]).toBe(result.bleedPressure);
+    for (let index = 1; index < stops.length; index += 1) {
+      expect(stops[index]).toBeCloseTo(stops[index - 1] + result.steps[index].amount, 9);
+    }
+    expect(stops[stops.length - 1]).toBeCloseTo(3000, 6);
+  });
+
+  test.each(["psi", "bar"] as const)("a cleared Target Pressure fills to 3000 psi, not 3000 %s", (pressureUnit) => {
+    const fields = resolveStandardBlendFields({ topGasId: "air", startPressure: 0, targetO2: 32 }, pressureUnit);
+    const typed = resolveStandardBlendFields({
+      topGasId: "air",
+      startPressure: 0,
+      targetO2: 32,
+      targetPressure: toDisplayPressure(3000, pressureUnit)
+    }, pressureUnit);
+    const result = calculateStandardBlend({ pressureUnit }, fields, airTopGas);
+    const stops = blendPlanStopPressures(result, 0);
+
+    expect(fromDisplayPressure(fields.targetPressure, pressureUnit)).toBeCloseTo(3000, 9);
+    expect(fields.targetPressure).toBe(typed.targetPressure);
+    expect(result.success).toBe(true);
+    expect(stops[stops.length - 1]).toBeCloseTo(3000, 6);
+    // Fresh EAN32 from empty with an Air top-off needs about 418 psi of O2 in either unit.
+    expect(result.steps.find((step) => step.kind === "oxygen")?.amount).toBeCloseTo(417.72, 2);
+  });
+
+  test("a typed Target Pressure in bar is used as entered", () => {
+    const fields = resolveStandardBlendFields({ topGasId: "air", targetPressure: 232 }, "bar");
+    const result = calculateStandardBlend({ pressureUnit: "bar" }, fields, airTopGas);
+
+    const stops = blendPlanStopPressures(result, 0);
+
+    expect(fields.targetPressure).toBe(232);
+    expect(stops[stops.length - 1]).toBeCloseTo(fromDisplayPressure(232, "bar"), 6);
+  });
+});
+
+describe("resolveBlendPlanStopPressures", () => {
+  const airTopGas = { id: "air", name: "Air", o2: 21, he: 0 };
+
+  test("keeps ideal stops on the start pressure the result was solved from", () => {
+    const fields = resolveStandardBlendFields({ topGasId: "air", startPressure: 500, startO2: 32, targetPressure: 3000 }, "psi");
+    const result = calculateStandardBlend({ pressureUnit: "psi" }, fields, airTopGas);
+    const stops = resolveBlendPlanStopPressures(result, "ideal", null, 500);
+
+    expect(result.success).toBe(true);
+    expect(stops[0]).toBeCloseTo(500 + result.steps[0].amount, 9);
+    expect(stops[stops.length - 1]).toBeCloseTo(3000, 6);
+  });
+
+  test("uses solved GERG stop pressures when stage temperatures differ", () => {
+    const inputs: StandardBlendInput = {
+      topGasId: "air",
+      startPressure: 0,
+      startO2: 21,
+      startHe: 0,
+      targetPressure: 3000,
+      targetO2: 21,
+      targetHe: 35,
+      tankSizeCuFt: 80,
+      tankRatedPressurePsi: 3000,
+      startTemperatureF: 70,
+      settledTemperatureF: 70,
+      stageTemperaturesF: { helium: 70, oxygen: 110, topoff: 130 },
+      stageTemperatureTouched: { helium: true, oxygen: true, topoff: true }
+    };
+    const realGasResult = calculateRealGasStandardBlend({ pressureUnit: "psi" }, inputs, airTopGas);
+    const realGasBlend = realGasResultToBlendResult(realGasResult);
+    const stops = resolveBlendPlanStopPressures(realGasBlend, "realGas", realGasResult, 0);
+    const summed = blendPlanStopPressures(realGasBlend, realGasResult.startHotPressurePsi);
+
+    expect(realGasResult.success).toBe(true);
+    expect(realGasResult.steps.length).toBeGreaterThan(1);
+    expect(stops).toEqual(realGasResult.steps.map((step) => step.stopPressurePsi));
+    // Summing per-stage pressure changes drifts once the stage temperature changes.
+    expect(Math.abs(summed[summed.length - 1] - stops[stops.length - 1])).toBeGreaterThan(1);
   });
 });

@@ -28,8 +28,8 @@ Use these instructions when reviewing pull requests in this repository. Focus on
 
 ## Tests And CI
 
-- UI, state, styling, or app wiring changes should preserve `npm run lint`, `npm run test`, and `npm run build`.
-- Calculation changes should preserve `npm run lint`, `npm run verify:calc`, and `npm run build`, with updated regression vectors when behavior changes.
+- UI, state, styling, or app wiring changes should preserve `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build`.
+- Calculation changes should preserve `npm run lint`, `npm run typecheck`, `npm run verify:calc`, and `npm run build`, with updated regression vectors when behavior changes.
 - Native wiring changes should consider `npm run build:mobile`, `npx cap doctor`, Android Gradle smoke checks, and iOS simulator builds without signing.
 - Do not suggest GitHub Actions as the source of truth for signed native release artifacts. Local signing material and store-console state are required.
 
