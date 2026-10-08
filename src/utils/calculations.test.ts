@@ -2042,6 +2042,21 @@ describe("Standard Blend reverse solvers", () => {
       expect(heliumAdded(result.blend)).toBeLessThan(0.01);
     });
 
+    test("plans the bleed when the top gas is richer in oxygen than the target", () => {
+      // 25% from 3500 psi of Air with a 32% bank works only from 1909.1 to 2848.1 psi kept. The
+      // least bleed keeps 2250 / 0.79 = 2848.1 psi, whose nitrogen is all the target needs.
+      const bank32: GasSelection = { id: "bank-32", name: "Bank 32", o2: 32, he: 0 };
+      const result = solveMaxTargetWithoutHelium(
+        settingsPsi,
+        blendInputs({ startPressure: 3500, targetO2: 25 }),
+        bank32
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.targetHe).toBe(0);
+      expect(result.blend?.bleedPressure).toBeCloseTo(2250 / 0.79, 6);
+      expect(result.blend?.steps.map((step) => step.kind)).toEqual(["bleed", "oxygen"]);
+    });
 
     test("counts helium carried by a trimix top gas", () => {
       // 1000 psi Air + O2 + TMX 18/45: top-off = (3000 * 0.68 - 1000 * 0.79) / 0.82 = 1524.39 psi.

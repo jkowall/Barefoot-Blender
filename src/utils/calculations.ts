@@ -581,7 +581,8 @@ export const projectTopOffChart = (
   });
 };
 
-// Helium a reverse-solver plan may still show after calculateStandardBlend's bleed bisection.
+// Helium a reverse-solver plan may show from rounding and still count as helium-free. It matches
+// MIN_BLEED_PLAN_ADDITION_PSI, the smallest addition a bleed plan lists.
 const HELIUM_FREE_TOLERANCE_PSI = 0.01;
 
 // Fills that add only oxygen and top gas to a start mix at pressure b (PSI) form a
