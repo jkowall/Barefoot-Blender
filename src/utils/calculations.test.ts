@@ -1904,8 +1904,8 @@ describe("Standard Blend reverse solvers", () => {
 
       expect(result.success).toBe(true);
       expect(result.targetHe).toBeCloseTo(30.1266, 3);
-      expect(result.blend?.bleedPressure).toBeCloseTo(2582.28, 1);
-      expect(heliumAdded(result.blend)).toBeLessThan(0.01);
+      expect(result.blend?.bleedPressure).toBeCloseTo((3000 * 0.68) / 0.79, 6);
+      expect(heliumAdded(result.blend)).toBe(0);
     });
 
     test("bleeds a start mix too rich in oxygen before keeping its helium", () => {
@@ -1918,8 +1918,8 @@ describe("Standard Blend reverse solvers", () => {
 
       expect(result.success).toBe(true);
       expect(result.targetHe).toBeCloseTo(7.5862, 3);
-      expect(result.blend?.bleedPressure).toBeCloseTo(1137.93, 1);
-      expect(heliumAdded(result.blend)).toBeLessThan(0.01);
+      expect(result.blend?.bleedPressure).toBeCloseTo((3000 * (0.32 - 0.21)) / (0.5 - 0.21), 6);
+      expect(heliumAdded(result.blend)).toBe(0);
     });
 
     test("keeps a full tank that is already the target mix", () => {
@@ -1959,7 +1959,7 @@ describe("Standard Blend reverse solvers", () => {
       expect(result.success).toBe(true);
       expect(result.targetHe).toBeCloseTo(10, 6);
       expect(result.blend?.bleedPressure).toBeCloseTo(3000, 1);
-      expect(heliumAdded(result.blend)).toBeLessThan(0.01);
+      expect(heliumAdded(result.blend)).toBe(0);
     });
 
     test("counts helium carried by a trimix top gas", () => {
