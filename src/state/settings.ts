@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create, type StoreApi } from "zustand";
 import { persist } from "zustand/middleware";
 import { sanitizeGasName } from "../utils/gasNames";
 
@@ -51,13 +51,7 @@ export type PersistedSettingsState = Partial<SettingsState> & {
   pricePerCuFtAir?: number;
 };
 
-type SettingsSetter = (
-  partial:
-    | SettingsState
-    | Partial<SettingsState>
-    | ((state: SettingsState) => SettingsState | Partial<SettingsState>),
-  replace?: boolean
-) => void;
+type SettingsSetter = StoreApi<SettingsState>["setState"];
 
 const defaultGas: GasDefinition = {
   id: "bank-36",

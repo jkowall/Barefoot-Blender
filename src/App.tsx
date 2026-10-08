@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type JSX } from "react";
 import { useSettingsStore } from "./state/settings";
 import { listTopOffOptions } from "./utils/calculations";
 import { isNativeApp } from "./utils/platform";

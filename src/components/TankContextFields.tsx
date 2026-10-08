@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { NumberInput } from "./NumberInput";
 
 type TankContextFieldsProps = {

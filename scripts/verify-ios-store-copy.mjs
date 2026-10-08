@@ -7,11 +7,16 @@ const forbiddenTerms = ["Android", "Google", "Google Play", "Play Store"];
 const textExtensions = new Set([".css", ".html", ".js", ".json", ".map", ".svg", ".txt", ".webmanifest", ".xml"]);
 const binaryExtensions = new Set([".gif", ".ico", ".jpeg", ".jpg", ".png", ".webp", ".woff", ".woff2"]);
 
+/** @param {string} filePath */
 const extensionOf = (filePath) => {
   const index = filePath.lastIndexOf(".");
   return index === -1 ? "" : filePath.slice(index).toLowerCase();
 };
 
+/**
+ * @param {string} dir
+ * @returns {Promise<string[]>}
+ */
 const walk = async (dir) => {
   const entries = await readdir(dir, { withFileTypes: true });
   const files = [];

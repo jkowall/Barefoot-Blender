@@ -42,10 +42,11 @@ npm run dev
 - `npm run build` – Produce a production bundle in `dist/` with pre-cached assets.
 - `npm run preview` – Preview the production build locally.
 - `npm run lint` – Run ESLint against the TypeScript source.
+- `npm run typecheck` – Type-check `src/` (`tsconfig.json`) and the Vite/Capacitor configs plus `scripts/*.mjs` (`tsconfig.node.json`) with `tsc --noEmit` (the Vite build and ESLint do not report type errors).
 - `npm run test` – Run the Vitest regression suite once.
 - `npm run test:watch` – Run Vitest in watch mode for local development.
 - `npm run verify:calc` – Run the calculation regression vectors only.
-- `npm run check` – Run lint, tests, and production build in sequence.
+- `npm run check` – Run lint, typecheck, tests, and production build in sequence.
 - `npm run build:mobile` – Build the web app and sync Capacitor iOS/Android projects.
 - `npm run build:mobile:debug` – Build a simulator/device debug bundle that bypasses native subscription gating.
 - `npm run debug:ios` – Build the debug mobile bundle and open the iOS project in Xcode.
