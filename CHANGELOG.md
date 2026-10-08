@@ -8,6 +8,8 @@
 
 ### Fixed
 
+- **END With Oxygen Narcotic**: With "Oxygen is narcotic?" set to Yes, END now compares against air's full narcotic fraction (1.0) instead of its nitrogen fraction (0.79). Air and nitrox now show an END equal to the depth, and trimix follows (D + 33)(1 - He) - 33. END values drop for this setting: air at 30 m reads 30 m instead of 40.6 m, and 21/35 at 100 ft reads 53.5 ft instead of 76.4 ft. The default N2-only END is unchanged.
+- **Best Mix With Oxygen Narcotic**: Best Mix now follows the "Oxygen is narcotic?" setting. It previously always planned helium for an N2-only END, which left too little helium when oxygen counts as narcotic (60 m, PPO2 1.4, Max END 30 m: 20/42.9 instead of 20/34.9, whose END is 35.6 m with oxygen narcotic). The result shows which setting it used, warns when oxygen alone is over the Max END limit, and the default N2-only result is unchanged.
 - **Clearable Temperature Fields**: Start Temp (Initial Temp in Standard Blend) and Settled Temp in Standard Blend and Multi-Gas no longer refill with their default while being cleared, so negative temperatures such as -5 C can be typed. A cleared field keeps its saved temperature until it is left empty, which restores the default. Celsius temperature inputs now round to 0.01 degrees instead of showing conversion noise such as 12.000000000000002.
 
 ## [1.2.0] - 2026-10-06
