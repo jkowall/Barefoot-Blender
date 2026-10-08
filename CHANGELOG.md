@@ -1,10 +1,13 @@
 # Changelog
 
-## [Unreleased]
+## [1.2.1] - 2026-10-08
+
+Released to the web only; the native apps stay on 1.2.0 until the next native release.
 
 ### Changed
 
 - **Gas Picker Fractions**: The Multi-Gas source picker now shows each gas's O2 and He fractions, as Top-Off and Standard Blend do ("Air (21% O2 / 0% He)"). All three pickers show two decimals where needed, so an analyzed 20.95% O2 bank no longer reads as 21%. The Multi-Gas picker keeps room for the fractions on phones: full width on narrow screens, with Enabled beside it once the row is wide enough.
+- **Dependencies**: `@capacitor/cli`'s `xcode` dependency now resolves `uuid` 11.1.1 through an npm override, clearing GHSA-w5hq-g745-h8pq. This is a build-time tool; no app code changes.
 
 ### Fixed
 

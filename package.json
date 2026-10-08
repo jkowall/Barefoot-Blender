@@ -1,6 +1,6 @@
 {
   "name": "barefoot-blender",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "packageManager": "npm@11.12.1",
   "type": "module",
