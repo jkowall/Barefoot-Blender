@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent, type JSX } from "react";
 import type { GasModel, SettingsSnapshot } from "../state/settings";
 import {
   useSessionStore,
@@ -17,6 +17,7 @@ import {
   type FillCostAddition,
   type FillCostBasis,
   type GasSelection,
+  type ResolvedStandardBlendInput,
   summarizeBlendVolumes,
   solveRequiredStartPressure,
   solveMaxTargetWithoutHelium,
@@ -410,7 +411,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
   }, [selectedTopGas, standardBlend, setStandardBlend]);
 
   const startPressurePsi = useMemo(
-    () => fromDisplayPressure(standardBlend.startPressure, settings.pressureUnit),
+    () => fromDisplayPressure(standardBlend.startPressure ?? 0, settings.pressureUnit),
     [standardBlend.startPressure, settings.pressureUnit]
   );
 
@@ -479,7 +480,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
 
     let runningPsi = resultSource === "realGas" && realGasResult
       ? realGasResult.startHotPressurePsi
-      : fromDisplayPressure(standardBlend.startPressure, settings.pressureUnit);
+      : fromDisplayPressure(standardBlend.startPressure ?? 0, settings.pressureUnit);
 
     return result.steps.map((step, index) => {
       if (step.kind === "bleed") {
@@ -509,7 +510,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     setStandardBlend({ ...standardBlend, [key]: value });
   };
 
-  const buildResolvedInput = (input: StandardBlendInput): StandardBlendInput => {
+  const buildResolvedInput = (input: StandardBlendInput): ResolvedStandardBlendInput => {
     const resolvedStartTemperatureF = input.startTemperatureF ?? DEFAULT_START_TEMPERATURE_F;
     const resolvedTankContext = resolveInputTankContext(
       input,
@@ -1053,7 +1054,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
               {warning}
             </div>
           ))}
-          {trainingMath && (
+          {trainingMath && baseVolumes && (
             <TrainingMathPanel
               title="Standard Blend Hand Math"
               note="This mirrors the worksheet method taught for partial-pressure fills. Always analyze the finished gas with calibrated oxygen and helium analyzers."
@@ -1452,7 +1453,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
               {noHeliumTarget?.success ? (
                 <>
                   <div className="reverse-value">
-                    {formatPercentage(standardBlend.targetO2)} O2 / {formatPercentage(noHeliumTarget.targetHe)} He
+                    {formatPercentage(standardBlend.targetO2 ?? 32)} O2 / {formatPercentage(noHeliumTarget.targetHe)} He
                   </div>
                   <div className="reverse-actions">
                     <button

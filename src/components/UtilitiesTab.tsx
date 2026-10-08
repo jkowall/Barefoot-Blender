@@ -1,4 +1,4 @@
-import { useMemo, useState, useId, type FocusEvent } from "react";
+import { useMemo, useState, useId, type FocusEvent, type JSX } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore } from "../state/session";
 import {

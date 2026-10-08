@@ -5,6 +5,7 @@
 ### Fixed
 
 - **Clearable Temperature Fields**: Start Temp (Initial Temp in Standard Blend) and Settled Temp in Standard Blend and Multi-Gas no longer refill with their default while being cleared, so negative temperatures such as -5 C can be typed. A cleared field keeps its saved temperature until it is left empty, which restores the default. Celsius temperature inputs now round to 0.01 degrees instead of showing conversion noise such as 12.000000000000002.
+- **Empty Fields While Editing**: While a pressure or mix field is empty mid-edit, Standard Blend and Top-Off now use the same defaults their calculations already apply instead of passing the empty value into display math as NaN. Standard Blend fill stops and hand-math values no longer collapse to 0 while Start Pressure is empty, Max Target Without Helium no longer shows 0% O2 while Target O2 is empty, and Top-Off's Final O2/He reverse-solve no longer sets the bleed to NaN while Start O2, Start He, or Final Pressure is empty. Completed inputs are unaffected.
 
 ## [1.2.0] - 2026-10-06
 

@@ -73,10 +73,11 @@ npm run dev       # Start dev server (http://localhost:5173)
 npm run build     # Production build to dist/
 npm run preview   # Preview production build locally
 npm run lint      # Run ESLint checks
+npm run typecheck # Type-check src/ with tsc --noEmit (vite build does not type-check)
 npm run test      # Run Vitest regression tests once
 npm run test:watch # Run Vitest in watch mode
 npm run verify:calc # Run calculation regression vectors
-npm run check     # Run lint, tests, and build
+npm run check     # Run lint, typecheck, tests, and build
 npm run build:mobile # Build web assets and sync Capacitor iOS/Android
 npm run build:mobile:debug # Build native debug bundle with subscription bypass
 npm run debug:ios # Build native debug bundle and open Xcode project
@@ -177,11 +178,13 @@ Run these commands based on the type of change:
 
 1. **UI, state, styling, or app wiring changes**:
    - `npm run lint`
+   - `npm run typecheck`
    - `npm run test`
    - `npm run build`
    - For native app wiring, also run `npm run build:mobile`
 2. **Calculation logic changes** (`src/utils/calculations.ts` and related math):
    - `npm run lint`
+   - `npm run typecheck`
    - `npm run verify:calc`
    - Run the known-value calculation vectors listed below
    - Add/update lightweight regression coverage as described in "Calculation Regression Harness"
@@ -201,7 +204,7 @@ Before submitting changes, verify:
 
 1. **Build succeeds**: `npm run build` completes without errors
 2. **Lint passes**: `npm run lint` shows no violations
-3. **TypeScript compiles**: No type errors in IDE or build output
+3. **TypeScript compiles**: `npm run typecheck` reports no errors (`vite build` does not type-check)
 4. **PWA works offline**: After first load, app functions without network
 5. **Settings persist**: Reload preserves user preferences
 6. **Units work**: Toggle PSI/bar and ft/m; calculations update correctly

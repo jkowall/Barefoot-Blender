@@ -198,6 +198,7 @@ Pull requests and pushes to `main` run the automated quality gates in GitHub Act
 - Web and shared app checks:
   - `npm ci`
   - `npm run lint`
+  - `npm run typecheck`
   - `npm run test`
   - `npm run build`
 - Android native smoke:

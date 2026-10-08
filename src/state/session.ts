@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create, type StateCreator } from "zustand";
 import { persist } from "zustand/middleware";
 import type { FillCostBasis, MultiGasFillOrderMode } from "../utils/calculations";
 
@@ -127,14 +127,6 @@ export type SessionState = {
   setTopOff: (value: TopOffInput) => void;
 };
 
-type SessionSetter = (
-  partial:
-    | SessionState
-    | Partial<SessionState>
-    | ((state: SessionState) => SessionState | Partial<SessionState>),
-  replace?: boolean
-) => void;
-
 const defaultValues = {
   standardBlend: {
     startO2: 21,
@@ -191,7 +183,7 @@ const defaultValues = {
   }
 };
 
-const sessionCreator = (set: SessionSetter): SessionState => ({
+const sessionCreator: StateCreator<SessionState, [["zustand/persist", unknown]]> = (set) => ({
   standardBlend: { ...defaultValues.standardBlend },
   standardBlendHistory: [],
   multiGas: { ...defaultValues.multiGas },

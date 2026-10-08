@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create, type StateCreator } from "zustand";
 import { persist } from "zustand/middleware";
 import { sanitizeGasName } from "../utils/gasNames";
 
@@ -51,14 +51,6 @@ export type PersistedSettingsState = Partial<SettingsState> & {
   pricePerCuFtAir?: number;
 };
 
-type SettingsSetter = (
-  partial:
-    | SettingsState
-    | Partial<SettingsState>
-    | ((state: SettingsState) => SettingsState | Partial<SettingsState>),
-  replace?: boolean
-) => void;
-
 const defaultGas: GasDefinition = {
   id: "bank-36",
   name: "Bank 36",
@@ -97,7 +89,7 @@ export const migrateSettingsState = (persisted: PersistedSettingsState): Persist
   return withTrainingModeDefault;
 };
 
-const settingsCreator = (set: SettingsSetter, get: () => SettingsState): SettingsState => ({
+const settingsCreator: StateCreator<SettingsState, [["zustand/persist", unknown]]> = (set, get) => ({
   pressureUnit: "psi",
   depthUnit: "ft",
   temperatureUnit: "f",

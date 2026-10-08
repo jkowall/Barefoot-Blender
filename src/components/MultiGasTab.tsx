@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useMemo, useState, type KeyboardEvent, type JSX } from "react";
 import type { GasModel, SettingsSnapshot, TemperatureUnit } from "../state/settings";
 import { useSessionStore, type MultiGasInput, type GasSourceInput } from "../state/session";
 import {
