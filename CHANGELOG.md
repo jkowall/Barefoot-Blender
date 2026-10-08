@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Gas Picker Fractions**: The Multi-Gas source picker now shows each gas's O2 and He fractions, as Top-Off and Standard Blend do ("Air (21% O2 / 0% He)"). All three pickers show two decimals where needed, so an analyzed 20.95% O2 bank no longer reads as 21%. The Multi-Gas picker keeps room for the fractions on phones: full width on narrow screens, with Enabled beside it once the row is wide enough.
+
 ### Fixed
 
 - **Clearable Temperature Fields**: Start Temp (Initial Temp in Standard Blend) and Settled Temp in Standard Blend and Multi-Gas no longer refill with their default while being cleared, so negative temperatures such as -5 C can be typed. A cleared field keeps its saved temperature until it is left empty, which restores the default. Celsius temperature inputs now round to 0.01 degrees instead of showing conversion noise such as 12.000000000000002.

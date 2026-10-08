@@ -212,7 +212,7 @@ Before submitting changes, verify:
 
 Test blending scenarios against known values:
 
-- **Fresh Nitrox**: Empty → 32% at 3000 PSI with Air top should require ~460 PSI O2
+- **Fresh Nitrox**: Empty → 32% at 3000 PSI with Air top should require ~418 PSI O2 (ideal 417.7; about 403 with GERG-2008 at 70 F)
 - **MOD for 32% at PPO2 1.4**: Should equal ~111 ft (33.8 m)
 - **EAD for 32% at 100 ft**: Should equal ~82 ft
 - **Bleed-down**: Start He% > target He% should trigger drain instruction

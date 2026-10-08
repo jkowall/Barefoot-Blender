@@ -136,6 +136,22 @@ Reference implementation:
 - Regression tests compare the TypeScript O2/N2/He implementation against NIST C++ reference values for air, trimix, and heliox states.
 - This source relationship does not mean NIST certifies Barefoot Blender or its use for scuba blending. Corrected stops remain estimates, and the finished mix must be analyzed before use.
 
+### Source Gas Composition
+
+- The built-in Air source is 21.00% O2, 0% He, and 79.00% N2, treated as dry. The argon in real air (about 0.93%) is counted as nitrogen, because the GERG-2008 implementation carries only O2, N2, and He.
+- Dry air is about 20.946% O2 ([NASA Earth Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html)). Using 21.00 overstates the predicted O2 by the Air share of the final gas times 0.054 points:
+
+  | Fill | Air share of final gas | O2 overstatement |
+  | --- | --- | --- |
+  | Straight air fill | 100% | 0.054 points |
+  | EAN32 from Oxygen, then Air | 86% | 0.047 points |
+  | 15.7/55 to 15/55 top-up (section 3) | 5% | 0.003 points |
+
+- Modeling argon separately would change Z by about -0.1% on a 3000 PSI air fill and the mix by under 0.001 points.
+- All of these are below a 0.1-resolution analyzer and below calibration effects. Calibrating to 20.9 on room air at 25 C and 50% relative humidity makes a dry 15.0% mix read about 15.2.
+- For analyzed air, add it as a custom bank gas (for example 20.9/0) and select it instead of Air. Gas pickers show fractions to two decimals, so the bank reads as analyzed.
+- The 0.79 in EAD, END, and the Best Mix helium limit (section 4) is air's N2 fraction used as the narcosis reference, not the source-gas composition.
+
 ## 3. Multi-Gas Blend Optimizer
 
 Modules:
@@ -201,6 +217,13 @@ When no exact plan exists:
 If GERG-2008 cannot evaluate the inputs (failure `gerg`: Start or Settled Temp below 250 K, no tank volume, pressure above 400 bar absolute at the target, or a stage temperature or hot stage that every option needs and GERG-2008 cannot evaluate), the tab shows the ideal plan labeled as a fallback. A stage temperature only matters to options that use that stage, so an out-of-range value on a source no plan needs does not block the corrected plan. This includes a fill where some options break a bank limit and every other option breaks the envelope. An option that fails the envelope still counts as a bank-limit miss when a stage it completed went over its limit, or when its planned amount is clearly over a limit. That includes the bleed search's probes that ignore limits, so a fill that only bank limits rule out stays "no valid blend". A GERG-2008 "no valid blend" result, where bank limits rule out every option, is shown as is, so a bank limit is never hidden behind an ideal plan.
 
 For a fill from 0 PSI with Helium, Oxygen, and Air, GERG-2008 Multi-Gas reproduces Standard Blend's corrected stops and moles (21/35 to 3000 PSI in an 80 cu ft tank at 70 F: 987.0, 1267.9, and 3000 PSI).
+
+A logged top-up is pinned as a field example. Start: 2577 PSI of 15.7/55 at 73.5 F. My order adds Air, a 15.2/56 bank, and Helium, to 3300 PSI of 15/55.
+- Corrected stops at 73.5 F: 2752.5, 3074.5, and 3300.0 PSI.
+- With stage temps of 76.5, 84.5, and 60 F: 2769.3, 3143.3, and 3209.9 PSI. The gas added is the same, and the stops do not depend on tank size.
+- Chaining GERG-2008 Top-Off at the 73.5 F stops returns 15.00/55.00. Re-entering each intermediate mix at two decimals drifts to 15.01/55.01.
+- The ideal optimizer plans 2739.3 and 3109.9 PSI for the same order.
+- The fill analyzed 14.9/54.8 on a 0.1-resolution analyzer.
 
 ## 4. Utility Calculators
 
