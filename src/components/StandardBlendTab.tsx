@@ -49,7 +49,7 @@ import {
   toDisplayTemperatureInput
 } from "../utils/temperature";
 import { useClearableNumber } from "./useClearableNumber";
-import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
+import { fromDisplayPressure, resolveFillPressureDisplay, toDisplayPressure } from "../utils/units";
 import { resolveBlendPlanStopPressures } from "../utils/standardBlendPlan";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
@@ -379,10 +379,13 @@ export const resolveRealGasStopDisplay = (
 };
 
 // Fills mix and pressure fields left empty mid-edit with the defaults the Standard Blend solvers use.
-export const resolveStandardBlendFields = (input: StandardBlendInput): ResolvedStandardBlendInput => ({
+export const resolveStandardBlendFields = (
+  input: StandardBlendInput,
+  pressureUnit: SettingsSnapshot["pressureUnit"]
+): ResolvedStandardBlendInput => ({
   ...input,
   startPressure: input.startPressure ?? 0,
-  targetPressure: input.targetPressure ?? 3000,
+  targetPressure: resolveFillPressureDisplay(input.targetPressure, pressureUnit),
   targetO2: input.targetO2 ?? 32,
   startO2: input.startO2 ?? 21,
   startHe: input.startHe ?? 0,
@@ -424,7 +427,10 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     }
   }, [selectedTopGas, standardBlend, setStandardBlend]);
 
-  const resolvedFields = useMemo(() => resolveStandardBlendFields(standardBlend), [standardBlend]);
+  const resolvedFields = useMemo(
+    () => resolveStandardBlendFields(standardBlend, settings.pressureUnit),
+    [standardBlend, settings.pressureUnit]
+  );
 
   const startPressurePsi = useMemo(
     () => fromDisplayPressure(resolvedFields.startPressure, settings.pressureUnit),
@@ -530,7 +536,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       settings.tankRatedPressure
     );
     return {
-      ...resolveStandardBlendFields(input),
+      ...resolveStandardBlendFields(input, settings.pressureUnit),
       ...resolvedTankContext,
       startTemperatureF: resolvedStartTemperatureF,
       settledTemperatureF: input.settledTemperatureF ?? DEFAULT_SETTLED_TEMPERATURE_F,
@@ -720,13 +726,8 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
 
       const adjustedStartPsi = clampPressure(startPressurePsi + deltaPsi);
       const candidate: StandardBlendInput = {
-        ...standardBlend,
-        startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit),
-        targetPressure: standardBlend.targetPressure ?? 3000,
-        targetO2: standardBlend.targetO2 ?? 32,
-        startO2: standardBlend.startO2 ?? 21,
-        startHe: standardBlend.startHe ?? 0,
-        targetHe: standardBlend.targetHe ?? 0
+        ...resolvedFields,
+        startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit)
       };
       return calculateStandardBlend({ pressureUnit: settings.pressureUnit }, candidate, selectedTopGas);
     };
@@ -802,11 +803,11 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     baseVolumes,
     clampedSensitivityDeltaPsi,
     negativeSensitivityLimitPsi,
+    resolvedFields,
     result,
     resultSource,
     selectedTopGas,
     settings.pressureUnit,
-    standardBlend,
     startPressurePsi
   ]);
 
@@ -852,7 +853,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     }
 
     const effectiveStartPressurePsi = result.bleedPressure ?? startPressurePsi;
-    const targetPressurePsi = fromDisplayPressure(standardBlend.targetPressure ?? 3000, settings.pressureUnit);
+    const targetPressurePsi = fromDisplayPressure(resolvedFields.targetPressure, settings.pressureUnit);
     const startO2Fraction = toFraction(standardBlend.startO2, 21);
     const startHeFraction = toFraction(standardBlend.startHe, 0);
     const startN2Fraction = Math.max(0, 1 - startO2Fraction - startHeFraction);
@@ -934,6 +935,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     };
   }, [
     baseVolumes,
+    resolvedFields.targetPressure,
     result,
     resultSource,
     selectedTopGas,
@@ -942,7 +944,6 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     standardBlend.startO2,
     standardBlend.targetHe,
     standardBlend.targetO2,
-    standardBlend.targetPressure,
     startPressurePsi,
     trainingModeEnabled
   ]);

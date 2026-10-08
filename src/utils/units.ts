@@ -19,6 +19,13 @@ export const fromDisplayPressure = (value: number, unit: PressureUnit): number =
   return value * PSI_PER_BAR;
 };
 
+// Fill pressure assumed while a Final or Target Pressure field is empty mid-edit. It is defined in PSI so
+// bar mode falls back to the same fill (about 206.8 bar) instead of reading 3000 as a bar value.
+export const DEFAULT_FILL_PRESSURE_PSI = 3000;
+
+export const resolveFillPressureDisplay = (value: number | undefined, unit: PressureUnit): number =>
+  value ?? toDisplayPressure(DEFAULT_FILL_PRESSURE_PSI, unit);
+
 export const toDisplayDepth = (valueFeet: number, unit: DepthUnit): number => {
   if (unit === "ft") {
     return valueFeet;

@@ -30,7 +30,7 @@ import {
   temperatureUnitLabel,
   toDisplayTemperature
 } from "../utils/temperature";
-import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
+import { fromDisplayPressure, resolveFillPressureDisplay, toDisplayPressure } from "../utils/units";
 import { AccordionItem } from "./Accordion";
 import { NumberInput } from "./NumberInput";
 import TankContextFields from "./TankContextFields";
@@ -172,13 +172,13 @@ export const calculateTopOffForModel = (
   const baseInput: ResolvedTopOffInput = {
     ...input,
     startPressure: input.startPressure ?? 0,
-    finalPressure: input.finalPressure ?? 3000,
+    finalPressure: resolveFillPressureDisplay(input.finalPressure, settings.pressureUnit),
     startO2: startMix.o2,
     startHe: startMix.he
   };
   const resolvedStartTemperatureF = resolveTopOffStartTemperatureF(baseInput);
   const resolvedResultTemperatureF = resolveTopOffResultTemperatureF(baseInput, resolvedStartTemperatureF);
-  const goalPressurePsi = fromDisplayPressure(baseInput.finalPressure ?? 3000, settings.pressureUnit);
+  const goalPressurePsi = fromDisplayPressure(baseInput.finalPressure, settings.pressureUnit);
 
   if (settings.gasModel === "ideal") {
     return {
@@ -299,8 +299,7 @@ export const calculateTopOffBleedPreview = (
   settings,
   {
     ...input,
-    startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit),
-    finalPressure: input.finalPressure ?? 3000
+    startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit)
   },
   topGas
 );
@@ -379,7 +378,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
     const baseInput: ResolvedTopOffInput = {
       ...input,
       startPressure: input.startPressure ?? 0,
-      finalPressure: input.finalPressure ?? 3000,
+      finalPressure: resolveFillPressureDisplay(input.finalPressure, settings.pressureUnit),
       startO2: startMix.o2,
       startHe: startMix.he
     };

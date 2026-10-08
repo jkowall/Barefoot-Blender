@@ -18,6 +18,7 @@ import {
   updateTopOffResultTemperatureState
 } from "./TopOffTab";
 import type { TopOffInput } from "../state/session";
+import { toDisplayPressure } from "../utils/units";
 
 const topOffOptions = [
   { id: "air", name: "Air", o2: 21, he: 0 },
@@ -564,6 +565,50 @@ describe("cleared Top-Off fields", () => {
 
     expect(bleedPsi).toBe(solve(3000));
     const preview = calculateTopOffBleedPreview(idealSettings("psi"), input, air, 1500 - (bleedPsi ?? 0));
+    expect(preview.finalO2).toBeCloseTo(26, 6);
+  });
+
+  test.each([
+    { pressureUnit: "psi" as const, gasModel: "ideal" as const },
+    { pressureUnit: "bar" as const, gasModel: "ideal" as const },
+    { pressureUnit: "psi" as const, gasModel: "gerg2008" as const },
+    { pressureUnit: "bar" as const, gasModel: "gerg2008" as const }
+  ])("a cleared Final Pressure tops off to 3000 psi, not 3000 $pressureUnit ($gasModel)", ({ pressureUnit, gasModel }) => {
+    const settings = { ...idealSettings(pressureUnit), gasModel };
+    const input: TopOffInput = {
+      topGasId: "air",
+      startPressure: toDisplayPressure(1500, pressureUnit),
+      startO2: 32,
+      startHe: 0,
+      startTemperatureF: 70
+    };
+    const cleared = calculateTopOffForModel(settings, input, air);
+    const typed = calculateTopOffForModel(settings, { ...input, finalPressure: toDisplayPressure(3000, pressureUnit) }, air);
+
+    expect(cleared.success).toBe(true);
+    expect(cleared.goalPressurePsi).toBeCloseTo(3000, 6);
+    expect(cleared.finalO2).toBe(typed.finalO2);
+    expect(cleared.addedPressure).toBe(typed.addedPressure);
+  });
+
+  test("reverse-solves a cleared Final Pressure in bar against the preview's 3000 psi fallback", () => {
+    const input: TopOffInput = { topGasId: "air", startPressure: 100, startO2: 32, startHe: 0 };
+    const startPressurePsi = resolveTopOffStartPressurePsi(input.startPressure, "bar");
+    const solve = (finalPressure: number | undefined) => solveTopOffBleedForTargetPercent({
+      targetPercent: 26,
+      startPercent: 32,
+      topPercent: air.o2,
+      finalPressure,
+      pressureUnit: "bar",
+      startPressurePsi
+    });
+    const bleedPsi = solve(input.finalPressure);
+
+    expect(bleedPsi).toBe(solve(toDisplayPressure(3000, "bar")));
+    // 3000 bar would need a 19,777 psi start, so the old fallback clamped the bleed to 0.
+    expect(bleedPsi).toBeCloseTo(86.7, 1);
+    const preview = calculateTopOffBleedPreview(idealSettings("bar"), input, air, startPressurePsi - (bleedPsi ?? 0));
+    expect(preview.goalPressurePsi).toBeCloseTo(3000, 6);
     expect(preview.finalO2).toBeCloseTo(26, 6);
   });
 

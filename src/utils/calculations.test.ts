@@ -713,6 +713,10 @@ describe("solveTopOffBleedForTargetPercent", () => {
     expect(solve({ finalPressure: 200, pressureUnit: "bar" })).toBeCloseTo(1500 - (200 * 14.5037738 * 0.05) / 0.11, 6);
   });
 
+  test.each(["psi", "bar"] as const)("solves an empty Final Pressure against 3000 psi, not 3000 %s", (pressureUnit) => {
+    expect(solve({ finalPressure: undefined, pressureUnit })).toBeCloseTo(1500 - (3000 * 0.05) / 0.11, 6);
+  });
+
   test("clamps the bleed between none and the whole start pressure", () => {
     // 31% would need more 32% gas than the tank holds, so no bleed helps.
     expect(solve({ targetPercent: 31 })).toBe(0);

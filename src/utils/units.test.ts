@@ -5,6 +5,8 @@ import {
   toDisplayDepth,
   fromDisplayDepth,
   depthPerAtm,
+  resolveFillPressureDisplay,
+  DEFAULT_FILL_PRESSURE_PSI,
   PSI_PER_BAR,
   FEET_PER_METER,
   FEET_PER_ATM,
@@ -32,6 +34,19 @@ describe("Unit Conversions", () => {
       const inputBar = 10;
       const expectedPsi = inputBar * PSI_PER_BAR;
       expect(fromDisplayPressure(inputBar, "bar")).toBeCloseTo(expectedPsi, 5);
+    });
+
+    test("resolveFillPressureDisplay: an empty field falls back to 3000 psi in the display unit", () => {
+      expect(DEFAULT_FILL_PRESSURE_PSI).toBe(3000);
+      expect(resolveFillPressureDisplay(undefined, "psi")).toBe(3000);
+      expect(resolveFillPressureDisplay(undefined, "bar")).toBeCloseTo(206.84, 2);
+      expect(fromDisplayPressure(resolveFillPressureDisplay(undefined, "bar"), "bar")).toBeCloseTo(3000, 9);
+    });
+
+    test("resolveFillPressureDisplay: typed values, including 0, are kept as entered", () => {
+      expect(resolveFillPressureDisplay(232, "bar")).toBe(232);
+      expect(resolveFillPressureDisplay(3442, "psi")).toBe(3442);
+      expect(resolveFillPressureDisplay(0, "bar")).toBe(0);
     });
   });
 

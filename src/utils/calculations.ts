@@ -1,6 +1,6 @@
 import type { DepthUnit, GasDefinition, PressureUnit } from "../state/settings";
 import type { StandardBlendInput, MultiGasInput, TopOffInput } from "../state/session";
-import { depthPerAtm, fromDisplayPressure, toDisplayPressure } from "./units";
+import { depthPerAtm, fromDisplayPressure, resolveFillPressureDisplay, toDisplayPressure } from "./units";
 
 /** Standard Blend input after the caller has defaulted every pressure and mix field. */
 export type ResolvedStandardBlendInput = StandardBlendInput &
@@ -834,7 +834,7 @@ export type TopOffBleedSolveInput = {
  * final pressure and P_start_adj the pressure left after bleeding:
  * P_total * Target = P_start_adj * Start + (P_total - P_start_adj) * Top, so
  * P_start_adj = P_total * (Target - Top) / (Start - Top).
- * An empty Final Pressure uses the same 3000 fallback as the Top-Off bleed preview. Returns null
+ * An empty Final Pressure uses the same unit-aware fallback as the Top-Off bleed preview. Returns null
  * when the start and top-off fractions match, because bleeding cannot change the mix.
  */
 export const solveTopOffBleedForTargetPercent = ({
@@ -847,7 +847,7 @@ export const solveTopOffBleedForTargetPercent = ({
 }: TopOffBleedSolveInput): number | null => {
   const target = targetPercent / 100;
   const start = startPercent / 100;
-  const pTotal = fromDisplayPressure(finalPressure ?? 3000, pressureUnit);
+  const pTotal = fromDisplayPressure(resolveFillPressureDisplay(finalPressure, pressureUnit), pressureUnit);
   const numerator = pTotal * (target - (topPercent / 100));
   const denominator = start - (topPercent / 100);
 

@@ -17,7 +17,7 @@ import type { StandardBlendInput } from "../state/session";
 import { calculateFillCostEstimate, calculateStandardBlend, summarizeBlendVolumes } from "../utils/calculations";
 import { calculateRealGasStandardBlend, type RealGasBlendResult } from "../utils/realGasBlend";
 import { blendPlanStopPressures, resolveBlendPlanStopPressures } from "../utils/standardBlendPlan";
-import { fromDisplayPressure } from "../utils/units";
+import { fromDisplayPressure, toDisplayPressure } from "../utils/units";
 
 describe("realGasResultToBlendResult", () => {
   test("replaces a failed GERG primary result with current errors and no stale steps", () => {
@@ -606,7 +606,7 @@ describe("cleared Standard Blend fields", () => {
   const airTopGas = { id: "air", name: "Air", o2: 21, he: 0 };
 
   test("resolve to the solver defaults while a field is empty mid-edit, including 32% Target O2", () => {
-    expect(resolveStandardBlendFields({ topGasId: "air" })).toEqual({
+    expect(resolveStandardBlendFields({ topGasId: "air" }, "psi")).toEqual({
       topGasId: "air",
       startPressure: 0,
       targetPressure: 3000,
@@ -615,7 +615,7 @@ describe("cleared Standard Blend fields", () => {
       startHe: 0,
       targetHe: 0
     });
-    expect(resolveStandardBlendFields({ topGasId: "air", startPressure: 500, targetO2: 36 })).toMatchObject({
+    expect(resolveStandardBlendFields({ topGasId: "air", startPressure: 500, targetO2: 36 }, "psi")).toMatchObject({
       startPressure: 500,
       targetO2: 36
     });
@@ -625,7 +625,7 @@ describe("cleared Standard Blend fields", () => {
     { pressureUnit: "psi" as const, targetPressure: 3000 },
     { pressureUnit: "bar" as const, targetPressure: 200 }
   ])("plan stops start from an empty cylinder when Start Pressure is cleared ($pressureUnit)", ({ pressureUnit, targetPressure }) => {
-    const fields = resolveStandardBlendFields({ topGasId: "air", targetPressure, targetO2: 32 });
+    const fields = resolveStandardBlendFields({ topGasId: "air", targetPressure, targetO2: 32 }, pressureUnit);
     const result = calculateStandardBlend({ pressureUnit }, fields, airTopGas);
     const stops = blendPlanStopPressures(result, fromDisplayPressure(fields.startPressure, pressureUnit));
 
@@ -643,7 +643,7 @@ describe("cleared Standard Blend fields", () => {
       startHe: 35,
       targetHe: 10,
       targetPressure: 3000
-    });
+    }, "psi");
     const result = calculateStandardBlend({ pressureUnit: "psi" }, fields, airTopGas);
     const stops = blendPlanStopPressures(result, 1500);
 
@@ -654,13 +654,42 @@ describe("cleared Standard Blend fields", () => {
     }
     expect(stops[stops.length - 1]).toBeCloseTo(3000, 6);
   });
+
+  test.each(["psi", "bar"] as const)("a cleared Target Pressure fills to 3000 psi, not 3000 %s", (pressureUnit) => {
+    const fields = resolveStandardBlendFields({ topGasId: "air", startPressure: 0, targetO2: 32 }, pressureUnit);
+    const typed = resolveStandardBlendFields({
+      topGasId: "air",
+      startPressure: 0,
+      targetO2: 32,
+      targetPressure: toDisplayPressure(3000, pressureUnit)
+    }, pressureUnit);
+    const result = calculateStandardBlend({ pressureUnit }, fields, airTopGas);
+    const stops = blendPlanStopPressures(result, 0);
+
+    expect(fromDisplayPressure(fields.targetPressure, pressureUnit)).toBeCloseTo(3000, 9);
+    expect(fields.targetPressure).toBe(typed.targetPressure);
+    expect(result.success).toBe(true);
+    expect(stops[stops.length - 1]).toBeCloseTo(3000, 6);
+    // Fresh EAN32 from empty with an Air top-off needs about 418 psi of O2 in either unit.
+    expect(result.steps.find((step) => step.kind === "oxygen")?.amount).toBeCloseTo(417.72, 2);
+  });
+
+  test("a typed Target Pressure in bar is used as entered", () => {
+    const fields = resolveStandardBlendFields({ topGasId: "air", targetPressure: 232 }, "bar");
+    const result = calculateStandardBlend({ pressureUnit: "bar" }, fields, airTopGas);
+
+    const stops = blendPlanStopPressures(result, 0);
+
+    expect(fields.targetPressure).toBe(232);
+    expect(stops[stops.length - 1]).toBeCloseTo(fromDisplayPressure(232, "bar"), 6);
+  });
 });
 
 describe("resolveBlendPlanStopPressures", () => {
   const airTopGas = { id: "air", name: "Air", o2: 21, he: 0 };
 
   test("keeps ideal stops on the start pressure the result was solved from", () => {
-    const fields = resolveStandardBlendFields({ topGasId: "air", startPressure: 500, startO2: 32, targetPressure: 3000 });
+    const fields = resolveStandardBlendFields({ topGasId: "air", startPressure: 500, startO2: 32, targetPressure: 3000 }, "psi");
     const result = calculateStandardBlend({ pressureUnit: "psi" }, fields, airTopGas);
     const stops = resolveBlendPlanStopPressures(result, "ideal", null, 500);
 
