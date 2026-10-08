@@ -2,6 +2,14 @@ import type { DepthUnit, GasDefinition, PressureUnit } from "../state/settings";
 import type { StandardBlendInput, MultiGasInput, TopOffInput } from "../state/session";
 import { depthPerAtm, fromDisplayPressure, toDisplayPressure } from "./units";
 
+/** Standard Blend input after the caller has defaulted every pressure and mix field. */
+export type ResolvedStandardBlendInput = StandardBlendInput &
+  Required<Pick<StandardBlendInput, "startPressure" | "targetPressure" | "startO2" | "startHe" | "targetO2" | "targetHe">>;
+
+/** Top-Off input after the caller has defaulted every pressure and mix field. */
+export type ResolvedTopOffInput = TopOffInput &
+  Required<Pick<TopOffInput, "startPressure" | "finalPressure" | "startO2" | "startHe">>;
+
 export type GasSelection = {
   id: string;
   name: string;
@@ -355,10 +363,10 @@ export const calculateStandardBlend = (
   const primary = solveBlend(blendInputs);
 
   const warnings: string[] = [];
-  if (inputs.targetO2 < 18) {
+  if (blendInputs.targetO2 < 18) {
     warnings.push("Hypoxic mix (<18% O2).");
   }
-  if (inputs.targetO2 > 40) {
+  if (blendInputs.targetO2 > 40) {
     warnings.push("High O2 - fire risk (>40% O2).");
   }
 
@@ -440,7 +448,7 @@ export const calculateStandardBlend = (
 
 export const projectTopOffChart = (
   settings: { pressureUnit: PressureUnit },
-  baseInputs: StandardBlendInput,
+  baseInputs: ResolvedStandardBlendInput,
   topGas: GasSelection
 ): TopOffProjectionRow[] => {
   const basePressurePsi = fromDisplayPressure(baseInputs.startPressure, settings.pressureUnit);
@@ -524,7 +532,7 @@ export type StartPressureSolveResult = {
 
 export const solveRequiredStartPressure = (
   settings: { pressureUnit: PressureUnit },
-  inputs: StandardBlendInput,
+  inputs: ResolvedStandardBlendInput,
   topGas: GasSelection
 ): StartPressureSolveResult => {
   const targetPressurePsi = fromDisplayPressure(inputs.targetPressure, settings.pressureUnit);
@@ -620,7 +628,7 @@ export type NoHeliumTargetResult = {
 
 export const solveMaxTargetWithoutHelium = (
   settings: { pressureUnit: PressureUnit },
-  inputs: StandardBlendInput,
+  inputs: ResolvedStandardBlendInput,
   topGas: GasSelection
 ): NoHeliumTargetResult => {
   const maxHe = Math.max(0, Math.min(100 - inputs.targetO2, 100));
@@ -682,7 +690,7 @@ export const solveMaxTargetWithoutHelium = (
 
 export const calculateTopOffBlend = (
   settings: { pressureUnit: PressureUnit },
-  inputs: TopOffInput,
+  inputs: ResolvedTopOffInput,
   topGas: GasSelection
 ): TopOffResult => {
   const startPressurePsi = fromDisplayPressure(inputs.startPressure, settings.pressureUnit);
@@ -1086,7 +1094,8 @@ export const calculateMultiGasBlend = (
     };
   }
 
-  const targetO2Fraction = fraction(inputs.targetO2 ?? 32);
+  const targetO2 = inputs.targetO2 ?? 32;
+  const targetO2Fraction = fraction(targetO2);
   const targetHe = inputs.targetHe ?? 0;
   const targetHeFraction = fraction(targetHe);
 
@@ -1137,7 +1146,7 @@ export const calculateMultiGasBlend = (
       // We should confirm if the caller expects the final total mix or the added mix.
       // Looking at usage: likely expects the resulting mix in the tank.
       // Since we hit the target exactly (primary.success), we return the requested target.
-      finalO2: inputs.targetO2,
+      finalO2: targetO2,
       finalHe: targetHe,
       warning: primary.warning
     };
@@ -1145,7 +1154,7 @@ export const calculateMultiGasBlend = (
 
   const fallback = findSimilarMultiGasBlend(
     targetPressurePsi,
-    inputs.targetO2,
+    targetO2,
     targetHe,
     gas1,
     gas2,

@@ -20,7 +20,6 @@ ReactDOM.createRoot(root).render(
 if ("serviceWorker" in navigator && !Capacitor.isNativePlatform()) {
   void import("virtual:pwa-register")
     .then(({ registerSW }) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       registerSW({ immediate: true });
     })
     .catch((error) => {

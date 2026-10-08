@@ -1,4 +1,4 @@
-import { useId, type ComponentProps, type ReactNode } from "react";
+import { useId, type ComponentProps, type JSX, type ReactNode } from "react";
 
 type Props = ComponentProps<"select"> & {
   label: string;
