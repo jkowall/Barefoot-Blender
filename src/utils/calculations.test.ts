@@ -28,7 +28,7 @@ import {
   solveMaxTargetWithoutHelium,
   solveRequiredStartPressure
 } from "./calculations";
-import type { GasSelection, BlendResult, BlendAlternative } from "./calculations";
+import type { GasSelection, BlendResult, BlendAlternative, ResolvedStandardBlendInput } from "./calculations";
 import type { MultiGasInput, StandardBlendInput } from "../state/session";
 import type { GasDefinition } from "../state/settings";
 import { useSessionStore } from "../state/session";
@@ -1728,7 +1728,7 @@ describe("Standard Blend reverse solvers", () => {
   const trimixBank: GasSelection = { id: "tmx-18-45", name: "TMX 18/45", o2: 18, he: 45 };
   const bank36: GasSelection = { id: "bank-36", name: "Bank 36", o2: 36, he: 0 };
 
-  const blendInputs = (overrides: Partial<StandardBlendInput>): StandardBlendInput => ({
+  const blendInputs = (overrides: Partial<StandardBlendInput>): ResolvedStandardBlendInput => ({
     startPressure: 0,
     startO2: 21,
     startHe: 0,
@@ -1739,6 +1739,20 @@ describe("Standard Blend reverse solvers", () => {
     ...overrides
   });
 
+  // Fresh-install session defaults, resolved with the same fallbacks the Standard Blend tab applies.
+  const sessionDefaults = (): ResolvedStandardBlendInput => {
+    const standardBlend = useSessionStore.getState().standardBlend;
+    return {
+      ...standardBlend,
+      startPressure: standardBlend.startPressure ?? 0,
+      targetPressure: standardBlend.targetPressure ?? 3000,
+      targetO2: standardBlend.targetO2 ?? 32,
+      startO2: standardBlend.startO2 ?? 21,
+      startHe: standardBlend.startHe ?? 0,
+      targetHe: standardBlend.targetHe ?? 0
+    };
+  };
+
   const hasBleed = (blend: BlendResult | null): boolean =>
     blend?.steps.some((step) => step.kind === "bleed") ?? false;
 
@@ -1747,9 +1761,7 @@ describe("Standard Blend reverse solvers", () => {
 
   describe("solveMaxTargetWithoutHelium", () => {
     test("fresh-install session defaults reach 32/0 without helium", () => {
-      // The Standard Blend tab passes these defaults through unchanged.
-      const defaults = useSessionStore.getState().standardBlend;
-      const result = solveMaxTargetWithoutHelium(settingsPsi, defaults, air);
+      const result = solveMaxTargetWithoutHelium(settingsPsi, sessionDefaults(), air);
 
       expect(result.success).toBe(true);
       expect(result.targetHe).toBe(0);
@@ -1871,8 +1883,7 @@ describe("Standard Blend reverse solvers", () => {
 
   describe("solveRequiredStartPressure", () => {
     test("fresh-install session defaults already work from the current start", () => {
-      const defaults = useSessionStore.getState().standardBlend;
-      const result = solveRequiredStartPressure(settingsPsi, defaults, air);
+      const result = solveRequiredStartPressure(settingsPsi, sessionDefaults(), air);
 
       expect(result.success).toBe(true);
       expect(result.startPressurePsi).toBe(0);

@@ -620,7 +620,7 @@ export const solveRequiredStartPressure = (
     errors: [message]
   });
 
-  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure ?? 0, settings.pressureUnit);
+  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure, settings.pressureUnit);
   if (targetPressurePsi <= tolerance) {
     return failure("Target pressure must be greater than zero.");
   }
@@ -630,9 +630,9 @@ export const solveRequiredStartPressure = (
 
   const family = solveHeliumFreeFamily(
     targetPressurePsi,
-    fraction(inputs.startO2 ?? 21),
-    fraction(inputs.startHe ?? 0),
-    fraction(inputs.targetO2 ?? 32),
+    fraction(inputs.startO2),
+    fraction(inputs.startHe),
+    fraction(inputs.targetO2),
     topGas
   );
   if (!family) {
@@ -640,7 +640,7 @@ export const solveRequiredStartPressure = (
   }
 
   const { minStartPsi, maxStartPsi, heFractionAtZero, heFractionPerPsi } = family;
-  const targetHeFraction = fraction(inputs.targetHe ?? 0);
+  const targetHeFraction = fraction(inputs.targetHe);
   const heAt = (startPsi: number): number => heFractionAtZero + heFractionPerPsi * startPsi;
   const reachableHeMax = Math.max(heAt(minStartPsi), heAt(maxStartPsi));
   const reachableHeMin = Math.min(heAt(minStartPsi), heAt(maxStartPsi));
@@ -652,7 +652,7 @@ export const solveRequiredStartPressure = (
     return failure(unsolvable);
   }
 
-  const currentStartPsi = fromDisplayPressure(inputs.startPressure ?? 0, settings.pressureUnit);
+  const currentStartPsi = fromDisplayPressure(inputs.startPressure, settings.pressureUnit);
   const startPsi =
     Math.abs(heFractionPerPsi * targetPressurePsi) <= tolerance
       ? Math.min(maxStartPsi, Math.max(minStartPsi, currentStartPsi))
@@ -697,8 +697,7 @@ export const solveMaxTargetWithoutHelium = (
   inputs: ResolvedStandardBlendInput,
   topGas: GasSelection
 ): NoHeliumTargetResult => {
-  const targetO2 = inputs.targetO2 ?? 32;
-  const maxHe = Math.max(0, Math.min(100 - targetO2, 100));
+  const maxHe = Math.max(0, Math.min(100 - inputs.targetO2, 100));
   if (maxHe <= tolerance) {
     return {
       success: true,
@@ -717,7 +716,7 @@ export const solveMaxTargetWithoutHelium = (
     errors: [message]
   });
 
-  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure ?? 0, settings.pressureUnit);
+  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure, settings.pressureUnit);
   if (targetPressurePsi <= tolerance) {
     return failure("Target pressure must be greater than zero.");
   }
@@ -725,12 +724,12 @@ export const solveMaxTargetWithoutHelium = (
   const unreachable = "Unable to achieve a target mix without helium addition.";
   const family = solveHeliumFreeFamily(
     targetPressurePsi,
-    fraction(inputs.startO2 ?? 21),
-    fraction(inputs.startHe ?? 0),
-    fraction(targetO2),
+    fraction(inputs.startO2),
+    fraction(inputs.startHe),
+    fraction(inputs.targetO2),
     topGas
   );
-  const startPressurePsi = fromDisplayPressure(inputs.startPressure ?? 0, settings.pressureUnit);
+  const startPressurePsi = fromDisplayPressure(inputs.startPressure, settings.pressureUnit);
   if (!family || family.minStartPsi > startPressurePsi + tolerance) {
     return failure(unreachable);
   }
