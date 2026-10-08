@@ -304,6 +304,50 @@ export const calculateTopOffBleedPreview = (
   topGas
 );
 
+export const resolveTopOffStartPressurePsi = (
+  startPressure: number | undefined,
+  pressureUnit: SettingsSnapshot["pressureUnit"]
+): number => fromDisplayPressure(startPressure ?? 0, pressureUnit);
+
+export type TopOffBleedSolveInput = {
+  targetPercent: number;
+  startPercent: number;
+  topPercent: number;
+  finalPressure: number | undefined;
+  pressureUnit: SettingsSnapshot["pressureUnit"];
+  startPressurePsi: number;
+};
+
+/**
+ * Reverse-solves the ideal bleed preview for a typed final O2 or He percentage. With P_total the
+ * final pressure and P_start_adj the pressure left after bleeding:
+ * P_total * Target = P_start_adj * Start + (P_total - P_start_adj) * Top, so
+ * P_start_adj = P_total * (Target - Top) / (Start - Top).
+ * An empty Final Pressure uses the same 3000 fallback as calculateTopOffBleedPreview. Returns null
+ * when the start and top-off fractions match, because bleeding cannot change the mix.
+ */
+export const solveTopOffBleedForTargetPercent = ({
+  targetPercent,
+  startPercent,
+  topPercent,
+  finalPressure,
+  pressureUnit,
+  startPressurePsi
+}: TopOffBleedSolveInput): number | null => {
+  const target = targetPercent / 100;
+  const start = startPercent / 100;
+  const pTotal = fromDisplayPressure(finalPressure ?? 3000, pressureUnit);
+  const numerator = pTotal * (target - (topPercent / 100));
+  const denominator = start - (topPercent / 100);
+
+  if (Math.abs(denominator) > 1e-6) {
+    const neededStartPsi = numerator / denominator;
+    const neededBleed = startPressurePsi - neededStartPsi;
+    return clampPressure(Math.min(neededBleed, startPressurePsi));
+  }
+  return null;
+};
+
 export const copyTopOffResultToStartInput = (
   input: TopOffInput,
   result: TopOffDisplayResult,
@@ -348,7 +392,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
   }, [topOff.topGasId, topOffOptions]);
 
   const startPressurePsi = useMemo(
-    () => fromDisplayPressure(topOff.startPressure ?? 0, settings.pressureUnit),
+    () => resolveTopOffStartPressurePsi(topOff.startPressure, settings.pressureUnit),
     [topOff.startPressure, settings.pressureUnit]
   );
 
@@ -902,30 +946,16 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                         return;
                       }
 
-                      // Reverse solve: P_final_O2 = (P_start_adj * Start_O2 + P_added * Top_O2) / P_total
-                      // We know P_total (finalPressure), Top_O2, Start_O2.
-                      // Variable is bleed amount, which determines P_start_adj.
-                      // P_start_adj = P_start - bleed.
-                      // P_added = P_total - P_start_adj.
-
-                      const targetO2 = Number(e.target.value) / 100;
-                      const topO2 = selectedTopGas?.o2 ?? 0;
-                      const startO2 = startMix.o2 / 100;
-
-                      const pTotal = fromDisplayPressure(topOff.finalPressure ?? 3000, settings.pressureUnit);
-
-                      // P_total * Target_O2 = P_start_adj * Start_O2 + (P_total - P_start_adj) * Top_O2
-                      // P_total * Target_O2 = P_start_adj * Start_O2 + P_total * Top_O2 - P_start_adj * Top_O2
-                      // P_total * (Target_O2 - Top_O2) = P_start_adj * (Start_O2 - Top_O2)
-                      // P_start_adj = P_total * (Target_O2 - Top_O2) / (Start_O2 - Top_O2)
-
-                      const numerator = pTotal * (targetO2 - (topO2 / 100));
-                      const denominator = startO2 - (topO2 / 100);
-
-                      if (Math.abs(denominator) > 1e-6) {
-                        const neededStartPsi = numerator / denominator;
-                        const neededBleed = startPressurePsi - neededStartPsi;
-                        setBleedPsi(clampPressure(Math.min(neededBleed, startPressurePsi)));
+                      const nextBleedPsi = solveTopOffBleedForTargetPercent({
+                        targetPercent: Number(e.target.value),
+                        startPercent: startMix.o2,
+                        topPercent: selectedTopGas?.o2 ?? 0,
+                        finalPressure: topOff.finalPressure,
+                        pressureUnit: settings.pressureUnit,
+                        startPressurePsi
+                      });
+                      if (nextBleedPsi !== null) {
+                        setBleedPsi(nextBleedPsi);
                       }
                     }}
                   />
@@ -946,19 +976,16 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                         return;
                       }
 
-                      const targetHe = Number(e.target.value) / 100;
-                      const topHe = selectedTopGas?.he ?? 0;
-                      const startHe = startMix.he / 100;
-
-                      const pTotal = fromDisplayPressure(topOff.finalPressure ?? 3000, settings.pressureUnit);
-
-                      const numerator = pTotal * (targetHe - (topHe / 100));
-                      const denominator = startHe - (topHe / 100);
-
-                      if (Math.abs(denominator) > 1e-6) {
-                        const neededStartPsi = numerator / denominator;
-                        const neededBleed = startPressurePsi - neededStartPsi;
-                        setBleedPsi(clampPressure(Math.min(neededBleed, startPressurePsi)));
+                      const nextBleedPsi = solveTopOffBleedForTargetPercent({
+                        targetPercent: Number(e.target.value),
+                        startPercent: startMix.he,
+                        topPercent: selectedTopGas?.he ?? 0,
+                        finalPressure: topOff.finalPressure,
+                        pressureUnit: settings.pressureUnit,
+                        startPressurePsi
+                      });
+                      if (nextBleedPsi !== null) {
+                        setBleedPsi(nextBleedPsi);
                       }
                     }}
                   />
