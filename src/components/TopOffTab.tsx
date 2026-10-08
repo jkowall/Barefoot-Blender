@@ -16,8 +16,8 @@ import {
 import {
   formatFillCostBasis,
   formatGasCostDetail,
+  formatGasOptionLabel,
   formatNumber,
-  formatPercentage,
   formatPressure,
   formatSignedPressure
 } from "../utils/format";
@@ -624,7 +624,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
           >
             {topOffOptions.map((option) => (
               <option key={option.id} value={option.id}>
-                {option.name} ({formatPercentage(option.o2)} O2 / {formatPercentage(option.he)} He)
+                {formatGasOptionLabel(option)}
               </option>
             ))}
           </select>

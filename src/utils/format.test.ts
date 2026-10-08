@@ -3,6 +3,7 @@ import {
   formatDepth,
   formatFillCostBasis,
   formatGasCostDetail,
+  formatGasOptionLabel,
   formatGasVolume,
   formatNumber,
   formatPercentage,
@@ -63,6 +64,28 @@ describe("formatPercentage", () => {
   test("respects decimals", () => {
     expect(formatPercentage(32.123, 2)).toBe("32.12%");
     expect(formatPercentage(32, 0)).toBe("32%");
+  });
+});
+
+describe("formatGasOptionLabel", () => {
+  test("shows the name with O2 and He fractions", () => {
+    expect(formatGasOptionLabel({ name: "Air", o2: 21, he: 0 })).toBe("Air (21% O2 / 0% He)");
+    expect(formatGasOptionLabel({ name: "Oxygen", o2: 100, he: 0 })).toBe("Oxygen (100% O2 / 0% He)");
+    expect(formatGasOptionLabel({ name: "Helium", o2: 0, he: 100 })).toBe("Helium (0% O2 / 100% He)");
+  });
+
+  test("keeps tenths unchanged and shows analyzed hundredths", () => {
+    expect(formatGasOptionLabel({ name: "Bank", o2: 15.2, he: 56 })).toBe("Bank (15.2% O2 / 56% He)");
+    expect(formatGasOptionLabel({ name: "Bank", o2: 32.5, he: 12.5 })).toBe("Bank (32.5% O2 / 12.5% He)");
+    // One decimal would show this analyzed air as 21%.
+    expect(formatGasOptionLabel({ name: "Air 20.95", o2: 20.95, he: 0 })).toBe("Air 20.95 (20.95% O2 / 0% He)");
+  });
+
+  test("always adds fractions, including names that already contain the mix", () => {
+    expect(formatGasOptionLabel({ name: "Trimix 15/55", o2: 15, he: 55 })).toBe("Trimix 15/55 (15% O2 / 55% He)");
+    expect(formatGasOptionLabel({ name: "Bank (main)", o2: 36, he: 0 })).toBe("Bank (main) (36% O2 / 0% He)");
+    const longName = "A".repeat(32);
+    expect(formatGasOptionLabel({ name: longName, o2: 32.5, he: 12.5 })).toBe(`${longName} (32.5% O2 / 12.5% He)`);
   });
 });
 

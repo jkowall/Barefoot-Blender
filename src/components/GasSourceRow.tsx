@@ -2,6 +2,7 @@ import { memo, useMemo } from "react";
 import type { GasSourceInput } from "../state/session";
 import type { PressureUnit } from "../state/settings";
 import { type GasSelection, clampPercent } from "../utils/calculations";
+import { formatGasOptionLabel } from "../utils/format";
 import { NumberInput } from "./NumberInput";
 import { SelectInput } from "./SelectInput";
 
@@ -49,7 +50,7 @@ export const GasSourceRow = memo(({
   const options = useMemo(() => {
     const custom: GasSelection = {
       id: "custom",
-      name: `Custom (${(source.customO2 ?? 32).toFixed(1)} O2 / ${(source.customHe ?? 0).toFixed(1)} He)`,
+      name: "Custom",
       o2: source.customO2 ?? 32,
       he: source.customHe ?? 0
     };
@@ -109,7 +110,7 @@ export const GasSourceRow = memo(({
         >
           {options.map((option: GasSelection) => (
             <option key={option.id} value={option.id}>
-              {option.name}
+              {formatGasOptionLabel(option)}
             </option>
           ))}
         </SelectInput>

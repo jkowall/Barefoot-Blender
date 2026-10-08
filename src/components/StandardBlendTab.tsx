@@ -27,6 +27,7 @@ import {
 import {
   formatFillCostBasis,
   formatGasCostDetail,
+  formatGasOptionLabel,
   formatNumber,
   formatPercentage,
   formatPressure,
@@ -1029,7 +1030,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
         >
           {topOffOptions.map((option) => (
             <option key={option.id} value={option.id}>
-              {option.name} ({formatPercentage(option.o2)} O2 / {formatPercentage(option.he)} He)
+              {formatGasOptionLabel(option)}
             </option>
           ))}
         </SelectInput>

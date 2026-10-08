@@ -1350,6 +1350,83 @@ describe("calculateRealGasMultiGasBlend ninth review cases", () => {
   });
 });
 
+// A logged top-up from a 15.7/55 residual: Air, then a 15.2/56 bank, then Helium to 3300 psi of 15/55 at
+// 73.5 F. The fill was planned and analyzed (14.9/54.8) against 21.00% O2 Air, so Air stays local here.
+describe("calculateRealGasMultiGasBlend logged three-source top-up", () => {
+  const loggedAir: RealGasMultiGasSource = { id: "air-0", name: "Air", o2: 21, he: 0 };
+  const loggedBank: RealGasMultiGasSource = { id: "custom-1", name: "Custom (15.2 O2 / 56.0 He)", o2: 15.2, he: 56 };
+  const loggedHelium: RealGasMultiGasSource = { id: "helium-2", name: "Helium", o2: 0, he: 100 };
+  const loggedInput = (overrides: Partial<RealGasMultiGasInput> = {}): RealGasMultiGasInput => multiGasInput({
+    startPressure: 2577,
+    startO2: 15.7,
+    startHe: 55,
+    targetPressure: 3300,
+    targetO2: 15,
+    targetHe: 55,
+    startTemperatureF: 73.5,
+    settledTemperatureF: 73.5,
+    fillOrderMode: "manual",
+    sources: [loggedAir, loggedBank, loggedHelium],
+    ...overrides
+  });
+
+  test("pins the logged stops in the user's order", () => {
+    const input = loggedInput();
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.success).toBe(true);
+    expect(result.match).toBe("exact");
+    expect(result.warnings).toContain("Hypoxic mix (<18% O2).");
+    const plan = result.alternatives[0];
+    expect(addSteps(plan).map((step) => step.gasName)).toEqual(["Air", "Custom (15.2 O2 / 56.0 He)", "Helium"]);
+    expect(addSteps(plan).map((step) => step.stopPressurePsi)).toEqual([
+      expect.closeTo(2752.54, 1),
+      expect.closeTo(3074.51, 1),
+      expect.closeTo(3300, 3)
+    ]);
+    expect(plan.finalO2).toBeCloseTo(15, 6);
+    expect(plan.finalHe).toBeCloseTo(55, 6);
+    expectExactReplay(input, plan);
+  });
+
+  test("moves the logged stops with stage temperatures but not the gas added", () => {
+    const nominal = calculateRealGasMultiGasBlend(psi, loggedInput(), prices).alternatives[0];
+    const input = loggedInput({
+      sources: [
+        { ...loggedAir, stageTemperatureF: 76.5 },
+        { ...loggedBank, stageTemperatureF: 84.5 },
+        { ...loggedHelium, stageTemperatureF: 60 }
+      ]
+    });
+    const result = calculateRealGasMultiGasBlend(psi, input, prices);
+
+    expect(result.match).toBe("exact");
+    const plan = result.alternatives[0];
+    expect(addSteps(plan).map((step) => step.temperatureF)).toEqual([76.5, 84.5, 60]);
+    expect(addSteps(plan).map((step) => step.stopPressurePsi)).toEqual([
+      expect.closeTo(2769.28, 1),
+      expect.closeTo(3143.26, 1),
+      expect.closeTo(3209.89, 1)
+    ]);
+    expect(plan.settledPressurePsi).toBeCloseTo(3300, 2);
+    const nominalMoles = molesBySource(nominal);
+    for (const [id, moles] of Object.entries(molesBySource(plan))) {
+      expect(moles / nominalMoles[id]).toBeCloseTo(1, 9);
+    }
+    expectExactReplay(input, plan);
+  });
+
+  test("keeps the logged stops for any tank size", () => {
+    const reference = addSteps(calculateRealGasMultiGasBlend(psi, loggedInput(), prices).alternatives[0]);
+    for (const [tankSizeCuFt, tankRatedPressurePsi] of [[40, 3000], [100, 3442]]) {
+      const steps = addSteps(
+        calculateRealGasMultiGasBlend(psi, loggedInput({ tankSizeCuFt, tankRatedPressurePsi }), prices).alternatives[0]
+      );
+      steps.forEach((step, index) => expect(step.stopPressurePsi).toBeCloseTo(reference[index].stopPressurePsi, 6));
+    }
+  });
+});
+
 describe("resolveMultiGasStageTemperaturesF", () => {
   test("inherits the previous stage, then Start Temp", () => {
     expect(

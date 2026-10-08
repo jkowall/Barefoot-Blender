@@ -41,7 +41,7 @@ Order of content:
 
 1. **Start Tank** card – Starting mix and pressure for partial fills. When `GERG-2008` is selected it also has Start Temp.
 2. **Tank Context** card – Per-fill tank volume and rated pressure.
-3. **Source Gases** card – A Fill Order selector, then 1 to 6 source rows with optional custom mixes and bank pressure limits. `Auto (recommended)` fills helium, then oxygen, then richer mixes, with Air last. `My order (top to bottom)` adds up/down buttons to each row and fills in list order; amounts stay the same in any order and only the stop pressures change. In `GERG-2008` mode a bank limit caps the source's real-gas pressure rise at its stage temperature and fill position.
+3. **Source Gases** card – A Fill Order selector, then 1 to 6 source rows with optional custom mixes and bank pressure limits. Each gas option shows its O2/He fractions, as in the Top-Off and Standard Blend pickers, to two decimals where needed. `Auto (recommended)` fills helium, then oxygen, then richer mixes, with Air last. `My order (top to bottom)` adds up/down buttons to each row and fills in list order; amounts stay the same in any order and only the stop pressures change. In `GERG-2008` mode a bank limit caps the source's real-gas pressure rise at its stage temperature and fill position.
 4. **Target Blend** card – Oxygen, helium, and final pressure fields. When `GERG-2008` is selected it also has Settled Temp, and the target pressure is the settled pressure at that temperature.
 5. **Blend Options** card – Ranked alternatives with estimated cost, then the selected fill plan.
    - Ideal mode: fill order with running stop pressures, added PSI, cu ft, free gas liters, and cost.
