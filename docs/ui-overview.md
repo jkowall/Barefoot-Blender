@@ -33,7 +33,7 @@ Order of content:
 
 1. **Start Tank** card – Current mix and pressure.
 2. **Top-Off** card – Selected top-off source, goal pressure, and `Calculate` button.
-3. **Result** card – Final O2 and He. When `GERG-2008` is selected, Start Temp appears in the Start card and Result Temp appears here. Changing Result Temp updates the displayed pressure target only; the mix and fill cost stay fixed. The stop line shows Z, and a note shows the start Z (plus the goal Z when Result Temp differs from Start Temp).
+3. **Result** card – Final O2 and He. When `GERG-2008` is selected, Start Temp appears in the Start card and Result Temp appears here. Changing Result Temp updates the displayed pressure target only; the mix and fill cost stay fixed. The stop line shows Z, and a note shows the start Z (plus the goal Z when Result Temp differs from Start Temp). `Copy Result to Start Tank` moves the result mix, goal pressure, and (in `GERG-2008` mode) Start Temp into the Start Tank card for the next stage of a multi-stage fill. The O2 and He fields show the copied mix at 2 decimals, but calculations keep using the unrounded mix until either field is edited, so chained top-offs do not accumulate rounding.
 4. **Fill Cost** card – Per-fill tank volume, rated pressure, gas volume, and estimated cost. In `GERG-2008` mode the volume comes from solved real-gas moles and a note states the basis.
 5. **Bleed-Down What-If** and **Top-Off Sensitivity** cards – The bleed slider follows the selected gas model; GERG-2008 previews use the same temperature-aware top-off solver as the main result. The alternate-start sensitivity table remains an explicitly labeled ideal pressure-point projection.
 
