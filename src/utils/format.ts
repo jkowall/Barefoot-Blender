@@ -1,5 +1,5 @@
 import type { DepthUnit, PressureUnit, TemperatureUnit } from "../state/settings";
-import type { FillCostBasis } from "./calculations";
+import type { FillCostBasis, GasSelection } from "./calculations";
 import { FREE_GAS_REFERENCE_TEMPERATURE_F, temperatureUnitLabel, toDisplayTemperature } from "./temperature";
 import { toDisplayDepth, toDisplayPressure } from "./units";
 export { GAS_NAME_MAX_LENGTH, sanitizeGasName } from "./gasNames";
@@ -9,6 +9,10 @@ const clampPrecision = (value: number, decimals = 1): number => {
 };
 
 export const formatPercentage = (value: number, decimals = 1): string => `${clampPrecision(value, decimals)}%`;
+
+// Gas picker label. Two decimals so an analyzed bank such as 20.95% O2 does not read as 21%.
+export const formatGasOptionLabel = (option: Pick<GasSelection, "name" | "o2" | "he">): string =>
+  `${option.name} (${formatPercentage(option.o2, 2)} O2 / ${formatPercentage(option.he, 2)} He)`;
 
 export const formatPressure = (valuePsi: number, unit: PressureUnit, decimals = 0): string =>
   `${clampPrecision(toDisplayPressure(valuePsi, unit), decimals)} ${unit.toUpperCase()}`;

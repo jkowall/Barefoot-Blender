@@ -1204,21 +1204,36 @@ export const calculateEAD = (o2Percent: number, depth: number, unit: DepthUnit):
   return Math.max(0, ead);
 };
 
+// Narcotic fraction of the air reference in END and Best Mix: N2 only (0.79), or O2 + N2 (1.0)
+// when oxygen counts as narcotic, so air at any depth has an END equal to that depth.
+export const airNarcoticFraction = (oxygenIsNarcotic: boolean): number => (oxygenIsNarcotic ? 1 : 0.79);
+
+export type BestMixResult = {
+  o2: number;
+  he: number;
+  // False when oxygen counts as narcotic and the O2 alone is over the Max END limit.
+  maxEndMet: boolean;
+};
+
 export const calculateBestMix = (
   depth: number,
   targetPPO2: number,
   maxEND: number,
-  unit: DepthUnit
-): { o2: number; he: number } => {
+  unit: DepthUnit,
+  oxygenIsNarcotic: boolean
+): BestMixResult => {
   const perAtm = depthPerAtm(unit);
   const ambient = depth / perAtm + 1;
   const o2 = Math.min(100, Math.max(0, (targetPPO2 / ambient) * 100));
 
-  const safeN2Pressure = (maxEND / perAtm + 1) * 0.79;
-  const maxN2Fraction = safeN2Pressure / ambient;
-  const he = Math.max(0, 100 - o2 - maxN2Fraction * 100);
+  const safeNarcoticPressure = (maxEND / perAtm + 1) * airNarcoticFraction(oxygenIsNarcotic);
+  const maxNarcoticPercent = (safeNarcoticPressure / ambient) * 100;
+  const maxN2Percent = oxygenIsNarcotic ? maxNarcoticPercent - o2 : maxNarcoticPercent;
+  const maxEndMet = maxN2Percent >= -1e-6;
+  // When O2 alone exceeds the narcotic limit, the rest is helium and Max END cannot be met.
+  const he = Math.min(100 - o2, Math.max(0, 100 - o2 - maxN2Percent));
 
-  return { o2, he };
+  return { o2, he, maxEndMet };
 };
 
 export const calculateEND = (
@@ -1234,7 +1249,7 @@ export const calculateEND = (
   const narcoticFraction = oxygenIsNarcotic ? fractionO2 + fractionN2 : fractionN2;
   const perAtm = depthPerAtm(unit);
   const ambient = depth / perAtm + 1;
-  const end = (ambient * narcoticFraction / 0.79 - 1) * perAtm;
+  const end = (ambient * narcoticFraction / airNarcoticFraction(oxygenIsNarcotic) - 1) * perAtm;
   return Math.max(0, end);
 };
 

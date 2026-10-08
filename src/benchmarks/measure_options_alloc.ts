@@ -32,7 +32,7 @@ const source: GasSourceInput = {
 const getOptionsBaseline = (source: GasSourceInput): GasSelection[] => {
   const custom: GasSelection = {
     id: "custom",
-    name: `Custom (${(source.customO2 ?? 32).toFixed(1)} O2 / ${(source.customHe ?? 0).toFixed(1)} He)`,
+    name: "Custom",
     o2: source.customO2 ?? 32,
     he: source.customHe ?? 0
   };
@@ -44,7 +44,7 @@ const getOptionsBaseline = (source: GasSourceInput): GasSelection[] => {
 const getOptionsOptimized = (source: GasSourceInput): GasSelection[] => {
   const custom: GasSelection = {
     id: "custom",
-    name: `Custom (${(source.customO2 ?? 32).toFixed(1)} O2 / ${(source.customHe ?? 0).toFixed(1)} He)`,
+    name: "Custom",
     o2: source.customO2 ?? 32,
     he: source.customHe ?? 0
   };

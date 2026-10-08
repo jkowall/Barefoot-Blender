@@ -74,6 +74,8 @@ export type UtilityInputs = {
 export type TopOffInput = {
   startO2?: number;
   startHe?: number;
+  // Unrounded mix from Copy Result to Start Tank; startO2/startHe hold its 2-decimal display copy.
+  startMixExact?: { o2: number; he: number };
   startPressure?: number;
   finalPressure?: number;
   tankSizeCuFt?: number;
