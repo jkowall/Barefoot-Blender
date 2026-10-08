@@ -1146,7 +1146,7 @@ export const calculateMultiGasBlend = (
       // We should confirm if the caller expects the final total mix or the added mix.
       // Looking at usage: likely expects the resulting mix in the tank.
       // Since we hit the target exactly (primary.success), we return the requested target.
-      finalO2: inputs.targetO2,
+      finalO2: targetO2,
       finalHe: targetHe,
       warning: primary.warning
     };

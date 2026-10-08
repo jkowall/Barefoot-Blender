@@ -361,6 +361,24 @@ describe("calculateMultiGasBlend", () => {
     expect(result.fallback?.finalO2).toBeCloseTo(32, 6);
     expect(result).toEqual(calculateMultiGasBlend(settings, { ...inputs, targetO2: 32 }, oxygen, air));
   });
+
+  test("reports the default 32% O2 as the final mix when target O2 is omitted and the blend succeeds", () => {
+    const inputs: MultiGasInput = {
+      targetPressure: 3000,
+      targetHe: 0,
+      startPressure: 0,
+      startO2: 21,
+      startHe: 0,
+      selectedAlternativeIndex: 0
+    };
+
+    const result = calculateMultiGasBlend(settings, inputs, oxygen, air);
+
+    expect(result.success).toBe(true);
+    expect(result.finalO2).toBe(32);
+    expect(result.finalHe).toBe(0);
+    expect(result).toEqual(calculateMultiGasBlend(settings, { ...inputs, targetO2: 32 }, oxygen, air));
+  });
 });
 
 describe("calculateGasCost", () => {
