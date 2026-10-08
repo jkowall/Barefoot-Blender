@@ -219,14 +219,6 @@ const solveBlend = (inputs: BlendInputs): SolveOutcome => {
     return { success: false, requiresBleed: false, message: "Target pressure must be greater than zero." };
   }
 
-  if (startPressure > targetPressure + tolerance) {
-    return {
-      success: false,
-      requiresBleed: true,
-      message: "Target pressure is below current pressure. Bleed-down required."
-    };
-  }
-
   const startCheck = sanitizeMix(startO2, startHe);
   if (!startCheck.valid) {
     return { success: false, requiresBleed: false, message: startCheck.message };
@@ -246,6 +238,15 @@ const solveBlend = (inputs: BlendInputs): SolveOutcome => {
       success: false,
       requiresBleed: false,
       message: "Target mix is not physically possible."
+    };
+  }
+
+  // Checked after the mixes so the bleed-down search never plans from an invalid mix.
+  if (startPressure > targetPressure + tolerance) {
+    return {
+      success: false,
+      requiresBleed: true,
+      message: "Target pressure is below current pressure. Bleed-down required."
     };
   }
 
@@ -273,10 +274,21 @@ const solveBlend = (inputs: BlendInputs): SolveOutcome => {
   });
 };
 
-// Highest start pressure, up to ceilingPsi, at which every amount solveBlendInternal checks
-// is still non-negative. Each amount is affine in the start pressure b (atZero + perPsi * b),
-// so this is the first root among the amounts that fall as b rises.
-const bleedBoundaryPsi = (targetPressure: number, fractions: BlendFractions, ceilingPsi: number): number => {
+// An amount solveBlendInternal checks, as a function of the start pressure b: atZero + perPsi * b.
+type AffineInStartPsi = { atZero: number; perPsi: number };
+
+// Highest start pressure in [0, ceilingPsi] at which every amount solveBlendInternal checks is
+// non-negative, or null when no start pressure in that range works. Each amount is affine in the
+// start pressure b, so the workable pressures form one range: an amount that falls as b rises caps
+// it, and one that rises with b (oxygen when the top gas is richer in O2 than the target) floors
+// it. A nitrogen-free top gas cannot add the nitrogen the target needs, so the start must hold
+// exactly that much, which pins b to a single pressure. Amounts that barely move with b set no
+// limit here; solveBlendInternal still checks them.
+const leastBleedPressurePsi = (
+  targetPressure: number,
+  fractions: BlendFractions,
+  ceilingPsi: number
+): number | null => {
   const {
     startO2Fraction,
     startHeFraction,
@@ -289,47 +301,44 @@ const bleedBoundaryPsi = (targetPressure: number, fractions: BlendFractions, cei
     topN2Fraction
   } = fractions;
 
-  const dO2 = { atZero: targetPressure * targetO2Fraction, perPsi: -startO2Fraction };
-  const dHe = { atZero: targetPressure * targetHeFraction, perPsi: -startHeFraction };
-  const dN2 = { atZero: targetPressure * targetN2, perPsi: -startN2Fraction };
+  const dO2: AffineInStartPsi = { atZero: targetPressure * targetO2Fraction, perPsi: -startO2Fraction };
+  const dHe: AffineInStartPsi = { atZero: targetPressure * targetHeFraction, perPsi: -startHeFraction };
+  const dN2: AffineInStartPsi = { atZero: targetPressure * targetN2, perPsi: -startN2Fraction };
+  // dTotal - dHe - dO2: the nitrogen solveBlendInternal asks the top gas to supply.
+  const topN2Needed: AffineInStartPsi = {
+    atZero: targetPressure - dHe.atZero - dO2.atZero,
+    perPsi: -1 - dHe.perPsi - dO2.perPsi
+  };
+
+  let minPsi = 0;
+  let maxPsi = ceilingPsi;
   const amounts = [dO2, dHe, dN2];
   if (topN2Fraction > tolerance) {
-    const topoff = { atZero: dN2.atZero / topN2Fraction, perPsi: dN2.perPsi / topN2Fraction };
+    const topoff = { atZero: topN2Needed.atZero / topN2Fraction, perPsi: topN2Needed.perPsi / topN2Fraction };
     amounts.push(
       topoff,
       { atZero: dHe.atZero - topHeFraction * topoff.atZero, perPsi: dHe.perPsi - topHeFraction * topoff.perPsi },
       { atZero: dO2.atZero - topO2Fraction * topoff.atZero, perPsi: dO2.perPsi - topO2Fraction * topoff.perPsi }
     );
+  } else if (Math.abs(topN2Needed.perPsi) > tolerance) {
+    const exactPsi = -topN2Needed.atZero / topN2Needed.perPsi;
+    minPsi = Math.max(minPsi, exactPsi);
+    maxPsi = Math.min(maxPsi, exactPsi);
   }
 
-  return amounts.reduce(
-    (limit, { atZero, perPsi }) => (perPsi < -tolerance ? Math.min(limit, -atZero / perPsi) : limit),
-    ceilingPsi
-  );
+  for (const { atZero, perPsi } of amounts) {
+    if (perPsi < -tolerance) {
+      maxPsi = Math.min(maxPsi, -atZero / perPsi);
+    } else if (perPsi > tolerance) {
+      minPsi = Math.max(minPsi, -atZero / perPsi);
+    }
+  }
+
+  return minPsi <= maxPsi + tolerance ? Math.max(0, maxPsi) : null;
 };
 
 const findBleedSolution = (inputs: BlendInputs): SolveOutcome & { bleedPressure?: number } => {
   const { startPressure, targetPressure, startO2, startHe, targetO2, targetHe, topGas } = inputs;
-  let low = 0;
-  let high = startPressure;
-  let best: SolveOutcome & { bleedPressure?: number } = {
-    success: false,
-    requiresBleed: true
-  };
-
-  // Check if draining the tank completely is a valid solution
-  const emptyInputs: BlendInputs = {
-    ...inputs,
-    startPressure: 0
-  };
-  // Maintain fractions (though irrelevant at 0 pressure, keeps type/logic consistent)
-  emptyInputs.startO2 = inputs.startO2;
-  emptyInputs.startHe = inputs.startHe;
-
-  const emptyAttempt = solveBlend(emptyInputs);
-  if (emptyAttempt.success) {
-    best = { ...emptyAttempt, bleedPressure: 0 };
-  }
 
   const fractions: BlendFractions = {
     startO2Fraction: fraction(startO2),
@@ -343,32 +352,24 @@ const findBleedSolution = (inputs: BlendInputs): SolveOutcome & { bleedPressure?
     topN2Fraction: Math.max(0, 1 - fraction(topGas.o2) - fraction(topGas.he))
   };
 
-  for (let i = 0; i < 25; i += 1) {
-    if (high - low < tolerance) break;
-    const mid = (low + high) / 2;
-
-    const attempt = solveBlendInternal(mid, targetPressure, fractions);
+  // Keep as much of the start gas as possible. The kept gas can never exceed the target pressure.
+  const bleedPressure = leastBleedPressurePsi(targetPressure, fractions, Math.min(startPressure, targetPressure));
+  if (bleedPressure !== null) {
+    const attempt = solveBlendInternal(bleedPressure, targetPressure, fractions);
     if (attempt.success) {
-      best = { ...attempt, bleedPressure: mid };
-      low = mid;
-    } else {
-      high = mid;
+      return { ...attempt, bleedPressure };
+    }
+    // The range reaches the target pressure only when the start already holds the target mix, so
+    // every addition there is zero. solveBlendInternal rejects a fill that adds nothing after its
+    // composition checks pass (requiresBleed false); bleeding to the target pressure is the plan.
+    if (isCloseToZero(targetPressure - bleedPressure) && !attempt.requiresBleed) {
+      return { success: true, requiresBleed: false, helium: 0, oxygen: 0, topoff: 0, bleedPressure: targetPressure };
     }
   }
 
-  // The bisection stops just below the boundary, where the addition that binds there is a
-  // few millionths of a PSI instead of zero. Move to the boundary itself when it checks out.
-  if (best.success && best.bleedPressure !== undefined) {
-    const boundaryPsi = bleedBoundaryPsi(targetPressure, fractions, high);
-    if (boundaryPsi > best.bleedPressure) {
-      const exact = solveBlendInternal(boundaryPsi, targetPressure, fractions);
-      if (exact.success) {
-        best = { ...exact, bleedPressure: boundaryPsi };
-      }
-    }
-  }
-
-  return best;
+  // Fall back to draining the tank completely.
+  const emptyAttempt = solveBlend({ ...inputs, startPressure: 0 });
+  return emptyAttempt.success ? { ...emptyAttempt, bleedPressure: 0 } : { success: false, requiresBleed: true };
 };
 
 export const summarizeBlendVolumes = (result: BlendResult): BlendVolumes => {
