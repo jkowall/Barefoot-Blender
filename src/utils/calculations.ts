@@ -342,6 +342,17 @@ export const summarizeBlendVolumes = (result: BlendResult): BlendVolumes => {
   return summary;
 };
 
+const targetMixWarnings = (targetO2: number): string[] => {
+  const warnings: string[] = [];
+  if (targetO2 < 18) {
+    warnings.push("Hypoxic mix (<18% O2).");
+  }
+  if (targetO2 > 40) {
+    warnings.push("High O2 - fire risk (>40% O2).");
+  }
+  return warnings;
+};
+
 export const calculateStandardBlend = (
   settings: { pressureUnit: PressureUnit },
   inputs: StandardBlendInput,
@@ -362,13 +373,7 @@ export const calculateStandardBlend = (
 
   const primary = solveBlend(blendInputs);
 
-  const warnings: string[] = [];
-  if (blendInputs.targetO2 < 18) {
-    warnings.push("Hypoxic mix (<18% O2).");
-  }
-  if (blendInputs.targetO2 > 40) {
-    warnings.push("High O2 - fire risk (>40% O2).");
-  }
+  const warnings = targetMixWarnings(blendInputs.targetO2);
 
   if (primary.success) {
     const steps: BlendStep[] = [];
@@ -595,6 +600,26 @@ const solveHeliumFreeFamily = (
 const addsHelium = (blend: BlendResult): boolean =>
   summarizeBlendVolumes(blend).helium > HELIUM_FREE_TOLERANCE_PSI;
 
+// Plans a helium-free fill from fillFromPsi. calculateStandardBlend rejects a start that
+// already sits at the target pressure; a helium-free fill only ends there when the start
+// mix is the target mix, so that plan adds nothing.
+const planHeliumFreeFill = (
+  settings: { pressureUnit: PressureUnit },
+  inputs: ResolvedStandardBlendInput,
+  topGas: GasSelection,
+  fillFromPsi: number
+): BlendResult => {
+  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure, settings.pressureUnit);
+  const startPressurePsi = fromDisplayPressure(inputs.startPressure, settings.pressureUnit);
+  if (
+    isCloseToZero(targetPressurePsi - fillFromPsi) &&
+    isCloseToZero(targetPressurePsi - startPressurePsi)
+  ) {
+    return { success: true, steps: [], warnings: targetMixWarnings(inputs.targetO2), errors: [] };
+  }
+  return calculateStandardBlend(settings, inputs, topGas);
+};
+
 export type StartPressureSolveResult = {
   success: boolean;
   startPressurePsi: number;
@@ -661,10 +686,11 @@ export const solveRequiredStartPressure = (
           Math.max(minStartPsi, (targetHeFraction - heFractionAtZero) / heFractionPerPsi)
         );
 
-  const blend = calculateStandardBlend(
+  const blend = planHeliumFreeFill(
     settings,
     { ...inputs, startPressure: toDisplayPressure(startPsi, settings.pressureUnit) },
-    topGas
+    topGas,
+    startPsi
   );
   if (!blend.success || addsHelium(blend)) {
     return failure(unsolvable);
@@ -738,7 +764,7 @@ export const solveMaxTargetWithoutHelium = (
   const heFraction = family.heFractionAtZero + family.heFractionPerPsi * fillFromPsi;
   const targetHe = Math.min(maxHe, Math.max(0, heFraction * 100));
 
-  const blend = calculateStandardBlend(settings, { ...inputs, targetHe }, topGas);
+  const blend = planHeliumFreeFill(settings, { ...inputs, targetHe }, topGas, fillFromPsi);
   if (!blend.success || addsHelium(blend)) {
     return failure(unreachable);
   }

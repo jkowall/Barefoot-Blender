@@ -1839,6 +1839,46 @@ describe("Standard Blend reverse solvers", () => {
       expect(heliumAdded(result.blend)).toBeLessThan(0.01);
     });
 
+    test("keeps a full tank that is already the target mix", () => {
+      // calculateStandardBlend rejects equal start and target pressure; this fill adds nothing.
+      const result = solveMaxTargetWithoutHelium(
+        settingsPsi,
+        blendInputs({ startPressure: 3000, startO2: 32, startHe: 10 }),
+        air
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.targetHe).toBeCloseTo(10, 6);
+      expect(result.blend?.steps).toEqual([]);
+      expect(result.warnings).toEqual([]);
+    });
+
+    test("keeps target-mix warnings on a plan that adds nothing", () => {
+      const result = solveMaxTargetWithoutHelium(
+        settingsPsi,
+        blendInputs({ startPressure: 3000, startO2: 10, startHe: 70, targetO2: 10 }),
+        air
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.targetHe).toBeCloseTo(70, 6);
+      expect(result.blend?.steps).toEqual([]);
+      expect(result.warnings).toEqual(["Hypoxic mix (<18% O2)."]);
+    });
+
+    test("bleeds an overfilled tank of the target mix to the target pressure", () => {
+      const result = solveMaxTargetWithoutHelium(
+        settingsPsi,
+        blendInputs({ startPressure: 3200, startO2: 32, startHe: 10 }),
+        air
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.targetHe).toBeCloseTo(10, 6);
+      expect(result.blend?.bleedPressure).toBeCloseTo(3000, 1);
+      expect(heliumAdded(result.blend)).toBeLessThan(0.01);
+    });
+
     test("counts helium carried by a trimix top gas", () => {
       // 1000 psi Air + O2 + TMX 18/45: top-off = (3000 * 0.68 - 1000 * 0.79) / 0.82 = 1524.39 psi.
       const result = solveMaxTargetWithoutHelium(settingsPsi, blendInputs({ startPressure: 1000 }), trimixBank);
@@ -1913,6 +1953,19 @@ describe("Standard Blend reverse solvers", () => {
 
       expect(result.success).toBe(true);
       expect(result.startPressurePsi).toBeCloseTo(1500, 6);
+    });
+
+    test("returns a full cylinder when the start mix is the target mix", () => {
+      // Only 3000 psi of 32/10 holds the 300 psi He of 32/10 at 3000 psi, and that fill adds nothing.
+      const result = solveRequiredStartPressure(
+        settingsPsi,
+        blendInputs({ startPressure: 1000, startO2: 32, startHe: 10, targetHe: 10 }),
+        air
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.startPressurePsi).toBeCloseTo(3000, 6);
+      expect(result.blend?.steps).toEqual([]);
     });
 
     test("solves in bar", () => {

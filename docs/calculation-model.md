@@ -51,6 +51,7 @@ Requiring `T(b) >= 0`, `O2(b) >= 0`, and `0 <= b <= P_target` gives an interval 
 
 - **Required Start Pressure (no helium)** solves `He(b) = He_target` for `b`. When the target's helium does not depend on `b` (for example nitrox from Air), it returns the usable start pressure nearest the current one.
 - **Max Target Without Helium** evaluates `He(b)` at the current start pressure, or at the highest usable pressure when the start must be bled anyway (more inert gas or O₂ than the target allows). With a helium-free top gas this is the helium already in the tank diluted to the target pressure; lower He% targets need a bleed first. The panel shows the bleed pressure when one is required.
+- An answer at the target pressure means the start mix already is the target mix, so the plan adds nothing. The solvers report that empty plan directly, because `calculateStandardBlend` rejects a start at the target pressure.
 - Each answer is re-run through `calculateStandardBlend` and rejected if that plan still adds helium. This covers the one case where a helium-free fill exists only after extra bleeding (a top gas whose inert gas is richer in helium than the start's, plus a start too rich in O₂); the planner adds helium there instead of bleeding.
 
 ### Top-Off What-If
