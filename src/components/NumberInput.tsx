@@ -1,4 +1,4 @@
-import { useId, useRef, type KeyboardEventHandler, type JSX } from "react";
+import { useId, useRef, type JSX, type KeyboardEventHandler } from "react";
 
 type Props = {
   label: string;

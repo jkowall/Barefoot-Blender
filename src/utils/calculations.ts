@@ -2,6 +2,14 @@ import type { DepthUnit, GasDefinition, PressureUnit } from "../state/settings";
 import type { StandardBlendInput, MultiGasInput, TopOffInput } from "../state/session";
 import { depthPerAtm, fromDisplayPressure, toDisplayPressure } from "./units";
 
+/** Standard Blend input after the caller has defaulted every pressure and mix field. */
+export type ResolvedStandardBlendInput = StandardBlendInput &
+  Required<Pick<StandardBlendInput, "startPressure" | "targetPressure" | "startO2" | "startHe" | "targetO2" | "targetHe">>;
+
+/** Top-Off input after the caller has defaulted every pressure and mix field. */
+export type ResolvedTopOffInput = TopOffInput &
+  Required<Pick<TopOffInput, "startPressure" | "finalPressure" | "startO2" | "startHe">>;
+
 export type GasSelection = {
   id: string;
   name: string;
@@ -47,14 +55,6 @@ export type TopOffResult = {
   warnings: string[];
   errors: string[];
 };
-
-// Session inputs after the UI has filled empty fields with its defaults. Solvers that take these
-// read the mix and pressure fields directly, so callers resolve undefined fields first.
-export type ResolvedStandardBlendInput = StandardBlendInput &
-  Required<Pick<StandardBlendInput, "startO2" | "startHe" | "startPressure" | "targetO2" | "targetHe" | "targetPressure">>;
-
-export type ResolvedTopOffInput = TopOffInput &
-  Required<Pick<TopOffInput, "startO2" | "startHe" | "startPressure" | "finalPressure">>;
 
 type BlendInputs = {
   startPressure: number;
@@ -1094,7 +1094,8 @@ export const calculateMultiGasBlend = (
     };
   }
 
-  const targetO2Fraction = fraction(inputs.targetO2 ?? 32);
+  const targetO2 = inputs.targetO2 ?? 32;
+  const targetO2Fraction = fraction(targetO2);
   const targetHe = inputs.targetHe ?? 0;
   const targetHeFraction = fraction(targetHe);
 
@@ -1145,7 +1146,7 @@ export const calculateMultiGasBlend = (
       // We should confirm if the caller expects the final total mix or the added mix.
       // Looking at usage: likely expects the resulting mix in the tank.
       // Since we hit the target exactly (primary.success), we return the requested target.
-      finalO2: inputs.targetO2,
+      finalO2: targetO2,
       finalHe: targetHe,
       warning: primary.warning
     };
@@ -1153,7 +1154,7 @@ export const calculateMultiGasBlend = (
 
   const fallback = findSimilarMultiGasBlend(
     targetPressurePsi,
-    inputs.targetO2 ?? 32,
+    targetO2,
     targetHe,
     gas1,
     gas2,

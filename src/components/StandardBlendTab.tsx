@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent, type JSX } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type JSX, type KeyboardEvent } from "react";
 import type { GasModel, SettingsSnapshot } from "../state/settings";
 import {
   useSessionStore,

@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useId, type JSX } from "react";
+import { type JSX, type ReactNode, useState, useId } from "react";
 
 type AccordionItemProps = {
     title: string;

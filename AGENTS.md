@@ -73,7 +73,7 @@ npm run dev       # Start dev server (http://localhost:5173)
 npm run build     # Production build to dist/
 npm run preview   # Preview production build locally
 npm run lint      # Run ESLint checks
-npm run typecheck # Type-check src/ with tsc --noEmit (vite build does not type-check)
+npm run typecheck # Type-check src, Vite/Capacitor configs, and scripts with tsc --noEmit (build and lint do not)
 npm run test      # Run Vitest regression tests once
 npm run test:watch # Run Vitest in watch mode
 npm run verify:calc # Run calculation regression vectors
@@ -204,7 +204,7 @@ Before submitting changes, verify:
 
 1. **Build succeeds**: `npm run build` completes without errors
 2. **Lint passes**: `npm run lint` shows no violations
-3. **TypeScript compiles**: `npm run typecheck` reports no errors (`vite build` does not type-check)
+3. **TypeScript compiles**: `npm run typecheck` reports no errors (`npm run build` does not type-check)
 4. **PWA works offline**: After first load, app functions without network
 5. **Settings persist**: Reload preserves user preferences
 6. **Units work**: Toggle PSI/bar and ft/m; calculations update correctly
