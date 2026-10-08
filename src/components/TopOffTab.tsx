@@ -9,6 +9,7 @@ import {
   type FillCostBasis,
   type GasSelection,
   type ResolvedTopOffInput,
+  solveTopOffBleedForTargetPercent,
   type TopOffResult,
   type TopOffProjectionRow,
   clampPercent,
@@ -308,45 +309,6 @@ export const resolveTopOffStartPressurePsi = (
   startPressure: number | undefined,
   pressureUnit: SettingsSnapshot["pressureUnit"]
 ): number => fromDisplayPressure(startPressure ?? 0, pressureUnit);
-
-export type TopOffBleedSolveInput = {
-  targetPercent: number;
-  startPercent: number;
-  topPercent: number;
-  finalPressure: number | undefined;
-  pressureUnit: SettingsSnapshot["pressureUnit"];
-  startPressurePsi: number;
-};
-
-/**
- * Reverse-solves the ideal bleed preview for a typed final O2 or He percentage. With P_total the
- * final pressure and P_start_adj the pressure left after bleeding:
- * P_total * Target = P_start_adj * Start + (P_total - P_start_adj) * Top, so
- * P_start_adj = P_total * (Target - Top) / (Start - Top).
- * An empty Final Pressure uses the same 3000 fallback as calculateTopOffBleedPreview. Returns null
- * when the start and top-off fractions match, because bleeding cannot change the mix.
- */
-export const solveTopOffBleedForTargetPercent = ({
-  targetPercent,
-  startPercent,
-  topPercent,
-  finalPressure,
-  pressureUnit,
-  startPressurePsi
-}: TopOffBleedSolveInput): number | null => {
-  const target = targetPercent / 100;
-  const start = startPercent / 100;
-  const pTotal = fromDisplayPressure(finalPressure ?? 3000, pressureUnit);
-  const numerator = pTotal * (target - (topPercent / 100));
-  const denominator = start - (topPercent / 100);
-
-  if (Math.abs(denominator) > 1e-6) {
-    const neededStartPsi = numerator / denominator;
-    const neededBleed = startPressurePsi - neededStartPsi;
-    return clampPressure(Math.min(neededBleed, startPressurePsi));
-  }
-  return null;
-};
 
 export const copyTopOffResultToStartInput = (
   input: TopOffInput,

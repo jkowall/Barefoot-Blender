@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { calculateFillCostEstimate, type GasSelection } from "../utils/calculations";
+import { calculateFillCostEstimate, solveTopOffBleedForTargetPercent, type GasSelection } from "../utils/calculations";
 import {
   buildTopOffFillCostPlan,
   calculateTopOffBleedPreview,
@@ -12,7 +12,6 @@ import {
   resolveTopOffStartMix,
   resolveTopOffStartPressurePsi,
   resolveTopOffStartTemperatureF,
-  solveTopOffBleedForTargetPercent,
   syncTopOffInputSelectedGas,
   updateTopOffInputField,
   updateTopOffStartTemperatureState,
