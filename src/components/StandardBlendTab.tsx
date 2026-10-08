@@ -1457,6 +1457,11 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
                     </button>
                   </div>
                   <div className="table-note">O2 held at current target; remaining volume is N2.</div>
+                  {noHeliumTarget.blend?.bleedPressure !== undefined && (
+                    <div className="table-note">
+                      Bleed to {formatPressure(noHeliumTarget.blend.bleedPressure, settings.pressureUnit)} first.
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="warning">
