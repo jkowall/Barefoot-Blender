@@ -222,15 +222,23 @@ EAD = (Ambient · F_N₂ / 0.79 - 1) · depth_per_atm
 ```
 Ambient = Depth / depth_per_atm + 1
 Best Mix O₂% = PPO₂_target / Ambient · 100
+F_air = 0.79 (N₂ only), or 1.0 when "Oxygen is narcotic" is enabled
+F_narcotic,max = (Max END / depth_per_atm + 1) · F_air / Ambient
+He% = 100 - O₂% - F_narcotic,max · 100   (N₂ only)
+He% = 100 - F_narcotic,max · 100          (oxygen narcotic)
 ```
+- He% is clamped to 0 through 100 - O₂%. With oxygen narcotic, O₂ alone can exceed the narcotic limit (PPO₂ above Max END / depth_per_atm + 1). The rest is then helium, `maxEndMet` is false, and Utilities warns with the END the mix actually reaches.
+- When helium is needed and Max END can be met, `calculateEND` of the result equals Max END in either mode (60 m, PPO₂ 1.4, Max END 30 m: 20/34.9 N₂ only, 20/42.9 with oxygen narcotic).
 
 ### Equivalent Narcotic Depth (END)
 ```
 F_N₂ = max(0, 1 - F_O₂ - F_He)
 F_narcotic = F_N₂ (+ F_O₂ when "Oxygen is narcotic" is enabled)
+F_air = 0.79 (N₂ only), or 1.0 when "Oxygen is narcotic" is enabled
 Ambient = Depth / depth_per_atm + 1
-END = (Ambient · F_narcotic / 0.79 - 1) · depth_per_atm
+END = (Ambient · F_narcotic / F_air - 1) · depth_per_atm
 ```
+- With oxygen narcotic this is `(Depth + depth_per_atm) · (1 - F_He) - depth_per_atm`, so air and any nitrox have an END equal to the depth (21/35 at 100 ft: 53.5 ft).
 
 ### Gas Density
 ```

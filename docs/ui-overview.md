@@ -53,7 +53,7 @@ Order of content:
 Cards pair input controls with calculated output:
 - Maximum Operating Depth (shows working & contingency values).
 - Equivalent Air Depth.
-- Best Mix.
+- Best Mix (follows and notes the narcotic oxygen policy, and warns when Max END cannot be met).
 - Equivalent Narcotic Depth (notes narcotic oxygen policy).
 - Gas Density.
 - Tank Conversion for PSI, cu ft, and free gas liters based on tank volume and rated pressure.
@@ -67,7 +67,7 @@ Sections:
 1. **Units** – Pressure (PSI/bar), depth (ft/m), and temperature (F/C).
 2. **Calculation Model** – Defaults new installs to GERG-2008 real-gas corrections for Standard Blend, Top-Off, and Multi-Gas. Ideal partial-pressure math remains selectable for training and comparison, and saved user choices are preserved.
 3. **Defaults** – Max and contingency PPO₂.
-4. **Equivalent Narcotic Gas** – Toggle for oxygen narcotic behavior.
+4. **Equivalent Narcotic Gas** – Toggle for oxygen narcotic behavior in END and Best Mix.
 5. **Custom Banked Gases** – Editable list with name, O₂ %, He %, and delete/add controls.
 6. **Pricing** – Gas prices and tank defaults used to initialize per-fill tank context.
 7. **About** – Safety warning and native subscription summary.
