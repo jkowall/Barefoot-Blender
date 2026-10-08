@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FocusEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FocusEvent, type JSX } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore, type TopOffInput } from "../state/session";
 import {
@@ -8,6 +8,7 @@ import {
   type FillCostAddition,
   type FillCostBasis,
   type GasSelection,
+  type ResolvedTopOffInput,
   type TopOffResult,
   type TopOffProjectionRow,
   clampPercent,
@@ -135,7 +136,7 @@ export const calculateTopOffForModel = (
   input: TopOffInput,
   topGas: GasSelection
 ): TopOffDisplayResult => {
-  const baseInput: TopOffInput = {
+  const baseInput: ResolvedTopOffInput = {
     ...input,
     startPressure: input.startPressure ?? 0,
     finalPressure: input.finalPressure ?? 3000,
@@ -316,7 +317,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
   }, [topOff.topGasId, topOffOptions]);
 
   const startPressurePsi = useMemo(
-    () => fromDisplayPressure(topOff.startPressure, settings.pressureUnit),
+    () => fromDisplayPressure(topOff.startPressure ?? 0, settings.pressureUnit),
     [topOff.startPressure, settings.pressureUnit]
   );
 
@@ -335,7 +336,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       return;
     }
 
-    const baseInput: TopOffInput = {
+    const baseInput: ResolvedTopOffInput = {
       ...input,
       startPressure: input.startPressure ?? 0,
       finalPressure: input.finalPressure ?? 3000,
@@ -720,7 +721,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
           {result.model === "gerg2008" && trainingModeEnabled && (
             <div className="table-note">GERG-2008 Topoff solves gas moles at Start Temp. Result Temp changes the displayed stop pressure, not the calculated mix or fill-cost volume.</div>
           )}
-          {trainingMath && (
+          {trainingMath && selectedTopGas && (
             <TrainingMathPanel
               title="Top-Off Hand Math"
               note="This uses pressure-percent points, the common hand check for topping a cylinder. Analyze the actual cylinder after the fill."
@@ -875,9 +876,9 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
 
                       const targetO2 = Number(e.target.value) / 100;
                       const topO2 = selectedTopGas?.o2 ?? 0;
-                      const startO2 = topOff.startO2 / 100;
+                      const startO2 = (topOff.startO2 ?? 32) / 100;
 
-                      const pTotal = fromDisplayPressure(topOff.finalPressure, settings.pressureUnit);
+                      const pTotal = fromDisplayPressure(topOff.finalPressure ?? 3000, settings.pressureUnit);
 
                       // P_total * Target_O2 = P_start_adj * Start_O2 + (P_total - P_start_adj) * Top_O2
                       // P_total * Target_O2 = P_start_adj * Start_O2 + P_total * Top_O2 - P_start_adj * Top_O2
@@ -913,9 +914,9 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
 
                       const targetHe = Number(e.target.value) / 100;
                       const topHe = selectedTopGas?.he ?? 0;
-                      const startHe = topOff.startHe / 100;
+                      const startHe = (topOff.startHe ?? 0) / 100;
 
-                      const pTotal = fromDisplayPressure(topOff.finalPressure, settings.pressureUnit);
+                      const pTotal = fromDisplayPressure(topOff.finalPressure ?? 3000, settings.pressureUnit);
 
                       const numerator = pTotal * (targetHe - (topHe / 100));
                       const denominator = startHe - (topHe / 100);

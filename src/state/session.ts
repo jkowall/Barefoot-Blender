@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create, type StoreApi } from "zustand";
 import { persist } from "zustand/middleware";
 import type { FillCostBasis, MultiGasFillOrderMode } from "../utils/calculations";
 
@@ -127,13 +127,7 @@ export type SessionState = {
   setTopOff: (value: TopOffInput) => void;
 };
 
-type SessionSetter = (
-  partial:
-    | SessionState
-    | Partial<SessionState>
-    | ((state: SessionState) => SessionState | Partial<SessionState>),
-  replace?: boolean
-) => void;
+type SessionSetter = StoreApi<SessionState>["setState"];
 
 const defaultValues = {
   standardBlend: {

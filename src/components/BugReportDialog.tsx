@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type JSX } from "react";
 import { useSessionStore, type SessionState } from "../state/session";
 import { useSettingsStore, type SettingsSnapshot } from "../state/settings";
 import {

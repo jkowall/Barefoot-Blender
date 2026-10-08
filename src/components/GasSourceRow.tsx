@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, type JSX } from "react";
 import type { GasSourceInput } from "../state/session";
 import type { PressureUnit } from "../state/settings";
 import { type GasSelection, clampPercent } from "../utils/calculations";

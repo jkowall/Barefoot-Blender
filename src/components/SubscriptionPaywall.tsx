@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import type { SubscriptionStatus } from "../services/subscription";
 
 const PRIVACY_URL = "https://trimix-blender.com/privacy/";
