@@ -25,6 +25,7 @@ import {
   cuFtToPressure,
   litersToCuFt,
   pressureToCuFt,
+  projectTopOffChart,
   summarizeBlendVolumes,
   solveMaxTargetWithoutHelium,
   solveRequiredStartPressure
@@ -204,8 +205,9 @@ describe("calculateStandardBlend", () => {
     const bleedStep = result.steps.find(s => s.kind === "bleed");
     expect(bleedStep).toBeDefined();
     expect(bleedStep?.amount).toBeCloseTo(1000, 1); // Bleed 2000 -> 1000
-    // The start is already the target mix, so the plan is the bleed alone.
+    // The start is already the target mix, so the plan is the bleed alone, to exactly the target.
     expect(result.steps.map(s => s.kind)).toEqual(["bleed"]);
+    expect(result.bleedPressure).toBe(1000);
   });
 
   test("Bleed Required: Composition requires drain", () => {
@@ -298,6 +300,63 @@ describe("calculateStandardBlend", () => {
     expect(result.steps[1].amount).toBeCloseTo(417.72, 2);
   });
 
+  describe("bleed-down with a top gas richer in O2 than the target", () => {
+    const ean32: GasSelection = { id: "ean32", name: "EAN32", o2: 32, he: 0 };
+    const bleedFromAir = (targetO2: number): BlendResult =>
+      calculateStandardBlend(
+        settingsPsi,
+        { startPressure: 3500, targetPressure: 3000, startO2: 21, startHe: 0, targetO2, targetHe: 0, topGasId: "ean32" },
+        ean32
+      );
+
+    test("plans the least bleed when keeping too little start gas also fails", () => {
+      // Oxygen rises with the kept pressure here, so bleeding below 1909.1 psi fails as well as
+      // keeping more than 2848.1 psi. Keep 2250 / 0.79 psi of Air: its N2 is all the target needs,
+      // so no EAN32 goes in, and 151.9 psi of O2 makes 0.21 * 2848.1 + 151.9 = 750 = 25% of 3000.
+      const result = bleedFromAir(25);
+
+      expect(result.success).toBe(true);
+      expect(result.bleedPressure).toBeCloseTo(2250 / 0.79, 6);
+      expect(result.steps.map(s => s.kind)).toEqual(["bleed", "oxygen"]);
+      expect(result.steps[0].amount).toBeCloseTo(651.9, 1);
+      expect(result.steps[1].amount).toBeCloseTo(151.9, 1);
+    });
+
+    test("keeps the 28/0 plan that already worked", () => {
+      const result = bleedFromAir(28);
+
+      expect(result.success).toBe(true);
+      expect(result.bleedPressure).toBeCloseTo(2734.18, 2);
+      expect(result.steps.map(s => s.kind)).toEqual(["bleed", "oxygen"]);
+      expect(result.steps[1].amount).toBeCloseTo(265.82, 2);
+    });
+  });
+
+  test("Bleed plan with a nitrogen-free top gas keeps exactly the nitrogen the target needs", () => {
+    // Oxygen cannot add nitrogen, so the kept Air must hold 0.68 * 3000 psi of it: 2040 / 0.79.
+    const result = calculateStandardBlend(
+      settingsPsi,
+      { startPressure: 3000, targetPressure: 3000, startO2: 21, startHe: 0, targetO2: 32, targetHe: 0, topGasId: "oxygen" },
+      oxygen
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.bleedPressure).toBeCloseTo(2040 / 0.79, 6);
+    expect(result.steps.map(s => s.kind)).toEqual(["bleed", "oxygen"]);
+    expect(result.steps[1].amount).toBeCloseTo(417.72, 2);
+  });
+
+  test("rejects an invalid mix before planning a bleed-down", () => {
+    const result = calculateStandardBlend(
+      settingsPsi,
+      { startPressure: 3500, targetPressure: 3000, startO2: 60, startHe: 50, targetO2: 32, targetHe: 0, topGasId: "air" },
+      air
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual(["O2% + He% must be 100% or less."]);
+  });
+
   test("Impossible Target: O2 + He > 100%", () => {
     const inputs: StandardBlendInput = {
       startPressure: 0,
@@ -370,6 +429,27 @@ describe("calculateStandardBlend", () => {
 
     // Allow small rounding differences (within 1 PSI) due to unit conversions
     expect(o2Step?.amount).toBeCloseTo(expectedPsi, 0);
+  });
+});
+
+describe("projectTopOffChart", () => {
+  test("marks start pressures that need a bleed-down infeasible", () => {
+    // From 3000 or 2900 psi of Air, 25/0 with EAN32 needs a bleed to 2848.1 psi first.
+    const ean32: GasSelection = { id: "ean32", name: "EAN32", o2: 32, he: 0 };
+    const rows = projectTopOffChart(
+      { pressureUnit: "psi" },
+      { startPressure: 3000, targetPressure: 3000, startO2: 21, startHe: 0, targetO2: 25, targetHe: 0, topGasId: "ean32" },
+      ean32
+    );
+
+    expect(rows.map(row => [row.startPressure, row.feasible])).toEqual([
+      [3000, false],
+      [2900, false],
+      [2800, true],
+      [2700, true]
+    ]);
+    expect(rows[2].oxygen).toBeCloseTo(144.12, 2);
+    expect(rows[2].topGas).toBeCloseTo(55.88, 2);
   });
 });
 
@@ -1960,6 +2040,22 @@ describe("Standard Blend reverse solvers", () => {
       expect(result.targetHe).toBeCloseTo(10, 6);
       expect(result.blend?.bleedPressure).toBeCloseTo(3000, 1);
       expect(heliumAdded(result.blend)).toBeLessThan(0.01);
+    });
+
+    test("plans the bleed when the top gas is richer in oxygen than the target", () => {
+      // 25% from 3500 psi of Air with a 32% bank works only from 1909.1 to 2848.1 psi kept. The
+      // least bleed keeps 2250 / 0.79 = 2848.1 psi, whose nitrogen is all the target needs.
+      const bank32: GasSelection = { id: "bank-32", name: "Bank 32", o2: 32, he: 0 };
+      const result = solveMaxTargetWithoutHelium(
+        settingsPsi,
+        blendInputs({ startPressure: 3500, targetO2: 25 }),
+        bank32
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.targetHe).toBe(0);
+      expect(result.blend?.bleedPressure).toBeCloseTo(2250 / 0.79, 6);
+      expect(result.blend?.steps.map((step) => step.kind)).toEqual(["bleed", "oxygen"]);
     });
 
     test("counts helium carried by a trimix top gas", () => {
