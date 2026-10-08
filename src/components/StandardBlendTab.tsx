@@ -399,6 +399,24 @@ export const blendPlanStopPressures = (result: BlendResult, startPsi: number): n
   });
 };
 
+// Stop pressures for the displayed plan. idealStartPsi must be the start pressure the ideal result was
+// solved from, not the live field, so editing Start Pressure cannot pair old steps with a new start.
+// A GERG stage's pressure change is measured at that stage's temperature, so the changes do not sum
+// to the next stop when stage temperatures differ; use the solved stop pressures instead.
+export const resolveBlendPlanStopPressures = (
+  result: BlendResult,
+  resultSource: "ideal" | "realGas",
+  realGasResult: RealGasBlendResult | null,
+  idealStartPsi: number
+): number[] => {
+  if (resultSource === "realGas" && realGasResult) {
+    return realGasResult.steps.length === result.steps.length
+      ? realGasResult.steps.map((step) => step.stopPressurePsi)
+      : blendPlanStopPressures(result, realGasResult.startHotPressurePsi);
+  }
+  return blendPlanStopPressures(result, idealStartPsi);
+};
+
 const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX.Element => {
   const standardBlend = useSessionStore((state) => state.standardBlend);
   const standardBlendHistory = useSessionStore((state) => state.standardBlendHistory);
@@ -409,6 +427,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
   const [result, setResult] = useState<BlendResult | null>(null);
   const [realGasResult, setRealGasResult] = useState<RealGasBlendResult | null>(null);
   const [resultSource, setResultSource] = useState<"ideal" | "realGas">("ideal");
+  const [resultStartPressurePsi, setResultStartPressurePsi] = useState(0);
   const [sensitivityDeltaPsi, setSensitivityDeltaPsi] = useState(0);
   const [planOpen, setPlanOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
@@ -503,10 +522,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
       return null;
     }
 
-    const stopPressures = blendPlanStopPressures(
-      result,
-      resultSource === "realGas" && realGasResult ? realGasResult.startHotPressurePsi : startPressurePsi
-    );
+    const stopPressures = resolveBlendPlanStopPressures(result, resultSource, realGasResult, resultStartPressurePsi);
 
     return result.steps.map((step, index) => {
       const runningPsi = stopPressures[index];
@@ -528,7 +544,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
         </li>
       );
     });
-  }, [realGasResult, result, resultSource, selectedTopGas?.name, settings.pressureUnit, startPressurePsi]);
+  }, [realGasResult, result, resultSource, resultStartPressurePsi, selectedTopGas?.name, settings.pressureUnit]);
 
   const updateField = <K extends keyof StandardBlendInput>(key: K, value: StandardBlendInput[K]): void => {
     setStandardBlend({ ...standardBlend, [key]: value });
@@ -690,6 +706,7 @@ const StandardBlendTab = ({ settings, topOffOptions, trainingModeEnabled }: Prop
     setResult(effectiveResult);
     setRealGasResult(correctedResult);
     setResultSource(selection.source);
+    setResultStartPressurePsi(fromDisplayPressure(resolvedInput.startPressure, settings.pressureUnit));
     setSensitivityDeltaPsi(0);
     setPlanOpen(true);
     setCostOpen(true);
