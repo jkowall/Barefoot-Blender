@@ -580,9 +580,6 @@ export const projectTopOffChart = (
   });
 };
 
-// Helium a reverse-solver plan may still show after calculateStandardBlend's bleed bisection.
-const HELIUM_FREE_TOLERANCE_PSI = 0.01;
-
 // Fills that add only oxygen and top gas to a start mix at pressure b (PSI) form a
 // one-parameter family. The added amounts and the resulting target He fraction are
 // affine in b, so the start pressures that work form an interval and are solved exactly.
@@ -650,8 +647,7 @@ const solveHeliumFreeFamily = (
   };
 };
 
-const addsHelium = (blend: BlendResult): boolean =>
-  summarizeBlendVolumes(blend).helium > HELIUM_FREE_TOLERANCE_PSI;
+const addsHelium = (blend: BlendResult): boolean => summarizeBlendVolumes(blend).helium > tolerance;
 
 // Plans a helium-free fill from fillFromPsi. calculateStandardBlend rejects a start that
 // already sits at the target pressure; a helium-free fill only ends there when the start
