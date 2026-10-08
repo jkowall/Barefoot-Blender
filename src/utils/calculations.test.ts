@@ -204,8 +204,8 @@ describe("calculateStandardBlend", () => {
     const bleedStep = result.steps.find(s => s.kind === "bleed");
     expect(bleedStep).toBeDefined();
     expect(bleedStep?.amount).toBeCloseTo(1000, 1); // Bleed 2000 -> 1000
-    // It might have tiny add steps due to binary search precision, which is acceptable.
-    // Just verify the bleed step accounts for most of the pressure drop.
+    // The start is already the target mix, so the plan is the bleed alone.
+    expect(result.steps.map(s => s.kind)).toEqual(["bleed"]);
   });
 
   test("Bleed Required: Composition requires drain", () => {
@@ -251,6 +251,51 @@ describe("calculateStandardBlend", () => {
     expect(bleedStep).toBeDefined();
     expect(result.bleedPressure).toBeCloseTo(1090.9, 1);
     expect(bleedStep?.amount).toBeCloseTo(1909.1, 1);
+    // Bleeding to the point where Air alone dilutes 32% to 25% leaves no oxygen to add.
+    expect(result.steps.map(s => s.kind)).toEqual(["bleed", "topoff"]);
+  });
+
+  test("Bleed plan lands on the helium boundary without a near-zero helium step", () => {
+    // 1000 psi of 21/35 holds 350 psi of He; 32/10 at 3000 psi allows 300, so bleed to 300 / 0.35.
+    const inputs: StandardBlendInput = {
+      startPressure: 1000,
+      targetPressure: 3000,
+      startO2: 21,
+      startHe: 35,
+      targetO2: 32,
+      targetHe: 10,
+      topGasId: "air"
+    };
+
+    const result = calculateStandardBlend(settingsPsi, inputs, air);
+
+    expect(result.success).toBe(true);
+    expect(result.bleedPressure).toBeCloseTo(300 / 0.35, 6);
+    expect(result.steps.map(s => s.kind)).toEqual(["bleed", "oxygen", "topoff"]);
+    expect(result.steps[0].amount).toBeCloseTo(142.86, 2);
+    expect(result.steps[1].amount).toBeCloseTo(417.72, 2);
+    expect(result.steps[2].amount).toBeCloseTo(1725.14, 2);
+  });
+
+  test("Bleed plan drops sub-0.01 psi residue when two constraints nearly coincide", () => {
+    // 32/30.1266 is 32/30.12658 rounded, so nitrogen binds at 2582.2773 psi with 0.00096 psi
+    // of helium left to add: real in exact math, but not gas anyone can meter.
+    const inputs: StandardBlendInput = {
+      startPressure: 2900,
+      targetPressure: 3000,
+      startO2: 21,
+      startHe: 35,
+      targetO2: 32,
+      targetHe: 30.1266,
+      topGasId: "air"
+    };
+
+    const result = calculateStandardBlend(settingsPsi, inputs, air);
+
+    expect(result.success).toBe(true);
+    expect(result.bleedPressure).toBeCloseTo((3000 * (1 - 0.32 - 0.301266)) / 0.44, 6);
+    expect(result.steps.map(s => s.kind)).toEqual(["bleed", "oxygen"]);
+    expect(result.steps[1].amount).toBeCloseTo(417.72, 2);
   });
 
   test("Impossible Target: O2 + He > 100%", () => {
