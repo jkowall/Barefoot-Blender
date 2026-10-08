@@ -10,7 +10,7 @@ Use these instructions when reviewing pull requests in this repository. Focus on
 - Internal pressure math must use PSI. Convert display pressure only at UI and utility boundaries.
 - Internal gas fractions must use `0-1` values. UI input and output may use percentages.
 - Calculation changes should keep pure logic in `src/utils/calculations.ts`, with structured `success`, `warnings`, and `errors` outputs where applicable.
-- Check known vectors when calculation logic changes: fresh 32% Nitrox at 3000 PSI needs about 460 PSI O2, 32% MOD at PPO2 1.4 is about 111 ft, 32% EAD at 100 ft is about 82 ft, and start He above target He needs bleed-down handling.
+- Check known vectors when calculation logic changes: fresh 32% Nitrox at 3000 PSI needs about 418 PSI O2 (ideal; about 403 PSI with GERG-2008 at 70 F), 32% MOD at PPO2 1.4 is about 111 ft, 32% EAD at 100 ft is about 82 ft, and start He above target He needs bleed-down handling.
 
 ## React And State
 

@@ -17,8 +17,8 @@ import {
 import {
   formatFillCostBasis,
   formatGasCostDetail,
+  formatGasOptionLabel,
   formatNumber,
-  formatPercentage,
   formatPressure,
   formatSignedPressure
 } from "../utils/format";
@@ -61,10 +61,41 @@ const RESULT_MIX_DECIMALS = 2;
 const roundResultMixPercent = (value: number): number =>
   Number.isFinite(value) ? clampPercent(Number(value.toFixed(RESULT_MIX_DECIMALS))) : 0;
 
-const copiedResultMix = (finalO2: number, finalHe: number): { o2: number; he: number } => {
+export type TopOffStartMix = { o2: number; he: number };
+
+const copiedResultMix = (finalO2: number, finalHe: number): TopOffStartMix => {
   const o2 = roundResultMixPercent(finalO2);
   const he = Math.min(roundResultMixPercent(finalHe), roundResultMixPercent(100 - o2));
   return { o2, he };
+};
+
+/**
+ * Copy Result to Start Tank shows the mix at 2 decimals but keeps the unrounded mix so chained
+ * top-offs do not compound the rounding. The exact mix applies only while the Start O2/He fields
+ * still show its rounded copy; otherwise the typed values are used.
+ */
+export const resolveTopOffStartMix = (
+  input: Pick<TopOffInput, "startO2" | "startHe" | "startMixExact">
+): TopOffStartMix => {
+  const typed = { o2: input.startO2 ?? 32, he: input.startHe ?? 0 };
+  const exact = input.startMixExact;
+  if (!exact || !Number.isFinite(exact.o2) || !Number.isFinite(exact.he)) {
+    return typed;
+  }
+  const shown = copiedResultMix(exact.o2, exact.he);
+  return shown.o2 === input.startO2 && shown.he === input.startHe ? { o2: exact.o2, he: exact.he } : typed;
+};
+
+export const updateTopOffInputField = <K extends keyof TopOffInput>(
+  input: TopOffInput,
+  key: K,
+  value: TopOffInput[K]
+): TopOffInput => {
+  const next: TopOffInput = { ...input, [key]: value };
+  if ((key === "startO2" || key === "startHe") && value !== input[key]) {
+    next.startMixExact = undefined;
+  }
+  return next;
 };
 
 const formatResultMixValue = (value: number): string =>
@@ -136,12 +167,13 @@ export const calculateTopOffForModel = (
   input: TopOffInput,
   topGas: GasSelection
 ): TopOffDisplayResult => {
+  const startMix = resolveTopOffStartMix(input);
   const baseInput: ResolvedTopOffInput = {
     ...input,
     startPressure: input.startPressure ?? 0,
     finalPressure: input.finalPressure ?? 3000,
-    startO2: input.startO2 ?? 32,
-    startHe: input.startHe ?? 0
+    startO2: startMix.o2,
+    startHe: startMix.he
   };
   const resolvedStartTemperatureF = resolveTopOffStartTemperatureF(baseInput);
   const resolvedResultTemperatureF = resolveTopOffResultTemperatureF(baseInput, resolvedStartTemperatureF);
@@ -267,9 +299,7 @@ export const calculateTopOffBleedPreview = (
   {
     ...input,
     startPressure: toDisplayPressure(adjustedStartPsi, settings.pressureUnit),
-    finalPressure: input.finalPressure ?? 3000,
-    startO2: input.startO2 ?? 32,
-    startHe: input.startHe ?? 0
+    finalPressure: input.finalPressure ?? 3000
   },
   topGas
 );
@@ -288,6 +318,7 @@ export const copyTopOffResultToStartInput = (
     ...input,
     startO2: mix.o2,
     startHe: mix.he,
+    startMixExact: { o2: result.finalO2, he: result.finalHe },
     startPressure: toDisplayPressure(result.goalPressurePsi, pressureUnit)
   };
 
@@ -321,6 +352,8 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
     [topOff.startPressure, settings.pressureUnit]
   );
 
+  const startMix = resolveTopOffStartMix(topOff);
+
   const selectOnFocus = (event: FocusEvent<HTMLInputElement>): void => {
     const target = event.target;
     requestAnimationFrame(() => {
@@ -336,12 +369,13 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       return;
     }
 
+    const startMix = resolveTopOffStartMix(input);
     const baseInput: ResolvedTopOffInput = {
       ...input,
       startPressure: input.startPressure ?? 0,
       finalPressure: input.finalPressure ?? 3000,
-      startO2: input.startO2 ?? 32,
-      startHe: input.startHe ?? 0
+      startO2: startMix.o2,
+      startHe: startMix.he
     };
     const outcome = calculateTopOffForModel(settings, baseInput, topGas);
     setResult(outcome);
@@ -389,7 +423,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
 
   function updateField<K extends keyof TopOffInput>(key: K, value: TopOffInput[K]): void {
     setCopyConfirmation(null);
-    setTopOffInput({ ...topOff, [key]: value });
+    setTopOffInput(updateTopOffInputField(topOff, key, value));
   }
 
   const updateTemperatureField = (value: number | undefined): void => {
@@ -515,8 +549,8 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       return null;
     }
 
-    const startO2Fraction = (topOff.startO2 ?? 32) / 100;
-    const startHeFraction = (topOff.startHe ?? 0) / 100;
+    const startO2Fraction = startMix.o2 / 100;
+    const startHeFraction = startMix.he / 100;
     const startN2Fraction = Math.max(0, 1 - startO2Fraction - startHeFraction);
     const topO2Fraction = selectedTopGas.o2 / 100;
     const topHeFraction = selectedTopGas.he / 100;
@@ -542,19 +576,19 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       totalO2Psi: startPressurePsi * startO2Fraction + result.addedPressure * topO2Fraction,
       totalHePsi: startPressurePsi * startHeFraction + result.addedPressure * topHeFraction,
       totalN2Psi: startPressurePsi * startN2Fraction + result.addedPressure * topN2Fraction,
-      totalO2PointsDisplay: startPressureDisplay * (topOff.startO2 ?? 32) + addedPressureDisplay * selectedTopGas.o2,
-      totalHePointsDisplay: startPressureDisplay * (topOff.startHe ?? 0) + addedPressureDisplay * selectedTopGas.he,
+      totalO2PointsDisplay: startPressureDisplay * startMix.o2 + addedPressureDisplay * selectedTopGas.o2,
+      totalHePointsDisplay: startPressureDisplay * startMix.he + addedPressureDisplay * selectedTopGas.he,
       totalN2PointsDisplay: startPressureDisplay * startN2Fraction * 100 + addedPressureDisplay * topN2Fraction * 100,
       finalPressureDisplay
     };
-  }, [result, selectedTopGas, settings.pressureUnit, startPressurePsi, topOff.startHe, topOff.startO2, trainingModeEnabled]);
+  }, [result, selectedTopGas, settings.pressureUnit, startPressurePsi, startMix.he, startMix.o2, trainingModeEnabled]);
 
   const bleedFormulaMath = useMemo(() => {
     if (!trainingModeEnabled || !bleedPreview?.success || bleedPreview.model !== "ideal" || !selectedTopGas) {
       return null;
     }
 
-    const startO2Percent = topOff.startO2 ?? 32;
+    const startO2Percent = startMix.o2;
     const targetO2Percent = bleedPreview.finalO2;
     const topO2Percent = selectedTopGas.o2;
     const denominator = startO2Percent - topO2Percent;
@@ -569,7 +603,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
       topO2Percent,
       solvedStartPsi
     };
-  }, [bleedPreview, selectedTopGas, topOff.startO2, trainingModeEnabled]);
+  }, [bleedPreview, selectedTopGas, startMix.o2, trainingModeEnabled]);
 
   return (
     <>
@@ -625,7 +659,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
           >
             {topOffOptions.map((option) => (
               <option key={option.id} value={option.id}>
-                {option.name} ({formatPercentage(option.o2)} O2 / {formatPercentage(option.he)} He)
+                {formatGasOptionLabel(option)}
               </option>
             ))}
           </select>
@@ -785,9 +819,9 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
                 <li>PPH = current pressure x current O2 fraction = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startO2Fraction, 3)} = {formatPressure(trainingMath.startO2PartialPressurePsi, settings.pressureUnit, 1)}</li>
                 <li>PPTMx = added pressure x top-off O2 fraction = {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.topO2Fraction, 3)} = {formatPressure(trainingMath.topO2PartialPressurePsi, settings.pressureUnit, 1)}</li>
                 <li>Final O2% = (PPH + PPTMx) / PW = ({formatPressure(trainingMath.startO2PartialPressurePsi, settings.pressureUnit, 1)} + {formatPressure(trainingMath.topO2PartialPressurePsi, settings.pressureUnit, 1)}) / {formatPressure(trainingMath.finalPressurePsi, settings.pressureUnit)} = {formatResultMixPercentage(result.finalO2)}</li>
-                <li>O2 points = start pressure x start O2% + added pressure x top-off O2% = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber((topOff.startO2 ?? 32), 1)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(selectedTopGas.o2, 1)} = {formatNumber(trainingMath.totalO2PointsDisplay, 0)}</li>
+                <li>O2 points = start pressure x start O2% + added pressure x top-off O2% = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber(startMix.o2, 1)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(selectedTopGas.o2, 1)} = {formatNumber(trainingMath.totalO2PointsDisplay, 0)}</li>
                 <li>Final O2% = O2 points / final pressure = {formatNumber(trainingMath.totalO2PointsDisplay, 0)} / {formatNumber(trainingMath.finalPressureDisplay, 1)} = {formatResultMixPercentage(result.finalO2)}</li>
-                <li>He points = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber((topOff.startHe ?? 0), 1)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(selectedTopGas.he, 1)} = {formatNumber(trainingMath.totalHePointsDisplay, 0)}; final He = {formatResultMixPercentage(result.finalHe)}</li>
+                <li>He points = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber(startMix.he, 1)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(selectedTopGas.he, 1)} = {formatNumber(trainingMath.totalHePointsDisplay, 0)}; final He = {formatResultMixPercentage(result.finalHe)}</li>
                 <li>N2 points = {formatPressure(trainingMath.startPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.startN2Fraction * 100, 1)} + {formatPressure(trainingMath.addedPressurePsi, settings.pressureUnit)} x {formatNumber(trainingMath.topN2Fraction * 100, 1)} = {formatNumber(trainingMath.totalN2PointsDisplay, 0)}; final N2 = {formatResultMixPercentage(result.finalN2)}</li>
               </ul>
             </TrainingMathPanel>
@@ -876,7 +910,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
 
                       const targetO2 = Number(e.target.value) / 100;
                       const topO2 = selectedTopGas?.o2 ?? 0;
-                      const startO2 = (topOff.startO2 ?? 32) / 100;
+                      const startO2 = startMix.o2 / 100;
 
                       const pTotal = fromDisplayPressure(topOff.finalPressure ?? 3000, settings.pressureUnit);
 
@@ -914,7 +948,7 @@ const TopOffTab = ({ settings, topOffOptions, trainingModeEnabled }: Props): JSX
 
                       const targetHe = Number(e.target.value) / 100;
                       const topHe = selectedTopGas?.he ?? 0;
-                      const startHe = (topOff.startHe ?? 0) / 100;
+                      const startHe = startMix.he / 100;
 
                       const pTotal = fromDisplayPressure(topOff.finalPressure ?? 3000, settings.pressureUnit);
 

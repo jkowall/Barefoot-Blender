@@ -538,7 +538,7 @@ describe("calculateBestMix", () => {
     // Safe N2 = (4) * 0.79 = 3.16 ATA
     // Max N2 fraction = 3.16 / 4 = 0.79
     // He = 1 - 0.35 - 0.79 = -0.14 => 0
-    const result = calculateBestMix(30, 1.4, 30, "m");
+    const result = calculateBestMix(30, 1.4, 30, "m", false);
     expect(result.o2).toBeCloseTo(35, 1);
     expect(result.he).toBeCloseTo(0, 1);
   });
@@ -550,7 +550,7 @@ describe("calculateBestMix", () => {
     // Safe N2 = 4 * 0.79 = 3.16 ATA
     // Max N2 fraction = 3.16 / 7 = 0.4514
     // He = 1 - 0.20 - 0.4514 = 0.3486 => ~35%
-    const result = calculateBestMix(60, 1.4, 30, "m");
+    const result = calculateBestMix(60, 1.4, 30, "m", false);
     expect(result.o2).toBeCloseTo(20, 1);
     expect(result.he).toBeCloseTo(34.9, 1);
   });
@@ -560,7 +560,7 @@ describe("calculateBestMix", () => {
     // O2 ~ 1.4 / 4 = 35%
     // END 100ft = Depth => N2 can be max
     // He should be 0
-    const result = calculateBestMix(100, 1.4, 100, "ft");
+    const result = calculateBestMix(100, 1.4, 100, "ft", false);
     expect(result.o2).toBeCloseTo(34.7, 1);
     expect(result.he).toBeCloseTo(0, 1);
   });
@@ -571,7 +571,7 @@ describe("calculateBestMix", () => {
     // Remaining space: 100 - 20 = 80%.
     // Allowed N2: 79%.
     // So we must use 1% He to avoid exceeding Air's N2 partial pressure.
-    const result = calculateBestMix(60, 1.4, 60, "m");
+    const result = calculateBestMix(60, 1.4, 60, "m", false);
     expect(result.o2).toBeCloseTo(20, 1);
     expect(result.he).toBeCloseTo(1, 1);
   });
@@ -583,7 +583,7 @@ describe("calculateBestMix", () => {
     // Safe N2 = 2 * 0.79 = 1.58 ATA
     // Max N2 fraction = 1.58 / 4 = 0.395
     // He = 1 - 0.35 - 0.395 = 0.255 => 25.5%
-    const result = calculateBestMix(30, 1.4, 10, "m");
+    const result = calculateBestMix(30, 1.4, 10, "m", false);
     expect(result.o2).toBeCloseTo(35, 1);
     expect(result.he).toBeCloseTo(25.5, 1);
   });
@@ -592,9 +592,33 @@ describe("calculateBestMix", () => {
     // Depth 0m = 1 ATA
     // Target PPO2 1.4
     // Calc O2 = 1.4 / 1 = 140% => cap at 100%
-    const result = calculateBestMix(0, 1.4, 30, "m");
+    const result = calculateBestMix(0, 1.4, 30, "m", false);
     expect(result.o2).toBe(100);
     expect(result.he).toBe(0);
+  });
+
+  test("Oxygen narcotic: Depth 60m, PPO2 1.4, END 30m needs more helium", () => {
+    // 60m = 7 ATA, END 30m = 4 ATA. Air is 100% narcotic, so O2 + N2 <= 4 / 7 = 0.5714.
+    // He = 1 - 0.5714 = 0.4286 => 42.86% (N2-only planning gives 34.86%).
+    const result = calculateBestMix(60, 1.4, 30, "m", true);
+    expect(result.o2).toBeCloseTo(20, 2);
+    expect(result.he).toBeCloseTo(42.86, 2);
+  });
+
+  test.each([false, true])("Best Mix meets its max END when oxygen narcotic is %s", (oxygenIsNarcotic) => {
+    const result = calculateBestMix(60, 1.4, 30, "m", oxygenIsNarcotic);
+    expect(result.maxEndMet).toBe(true);
+    expect(calculateEND(result.o2, result.he, 60, "m", oxygenIsNarcotic)).toBeCloseTo(30, 6);
+  });
+
+  test("Oxygen narcotic: fills with helium when O2 alone exceeds the END limit", () => {
+    // 30m = 4 ATA, O2 = 35%. END 0m allows O2 + N2 <= 1 / 4 = 0.25, below the O2 alone.
+    const result = calculateBestMix(30, 1.4, 0, "m", true);
+    expect(result.o2).toBeCloseTo(35, 6);
+    expect(result.he).toBeCloseTo(65, 6);
+    expect(result.maxEndMet).toBe(false);
+    // The mix reaches END (4 * 0.35 - 1) * 10 = 4m, not the requested 0m.
+    expect(calculateEND(result.o2, result.he, 30, "m", true)).toBeCloseTo(4, 6);
   });
 });
 
@@ -1273,10 +1297,28 @@ describe("calculateEND", () => {
   });
 
   test("Air at 30m (Oxygen narcotic)", () => {
-    // 30m = 4 ATA. Air is 100% narcotic.
-    // END = (4 * 1.0 / 0.79 - 1) * 10 = 40.63m
+    // 30m = 4 ATA. Air is 100% narcotic, and so is the air reference.
+    // END = (4 * 1.0 / 1.0 - 1) * 10 = 30m
     const result = calculateEND(21, 0, 30, "m", true);
-    expect(result).toBeCloseTo(40.63, 2);
+    expect(result).toBeCloseTo(30, 6);
+  });
+
+  test.each([21, 32, 36, 50])("Nitrox %i at 30m has END equal to depth when oxygen is narcotic", (o2) => {
+    expect(calculateEND(o2, 0, 30, "m", true)).toBeCloseTo(30, 6);
+  });
+
+  test("Trimix with oxygen narcotic matches (D + 33)(1 - He) - 33", () => {
+    // 100ft = 4.0303 ATA; 21/35 narcotic fraction 0.65 => (4.0303 * 0.65 - 1) * 33 = 53.45ft
+    expect(calculateEND(21, 35, 100, "ft", true)).toBeCloseTo(53.45, 2);
+    // 200ft = 7.0606 ATA; 18/45 narcotic fraction 0.55 => (7.0606 * 0.55 - 1) * 33 = 95.15ft
+    expect(calculateEND(18, 45, 200, "ft", true)).toBeCloseTo(95.15, 2);
+    // 60m = 7 ATA; 21/35 => (7 * 0.65 - 1) * 10 = 35.5m
+    expect(calculateEND(21, 35, 60, "m", true)).toBeCloseTo(35.5, 6);
+  });
+
+  test("Trimix 21/35 at 100ft (Oxygen not narcotic) is unchanged", () => {
+    // (4.0303 * 0.44 / 0.79 - 1) * 33 = 41.08ft
+    expect(calculateEND(21, 35, 100, "ft", false)).toBeCloseTo(41.08, 2);
   });
 
   test("Trimix 21/35 at 60m (Oxygen not narcotic)", () => {

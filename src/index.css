@@ -1432,6 +1432,18 @@ td {
   margin-bottom: 12px;
 }
 
+/* Keep the gas picker wide enough for its O2/He label: full width on narrow phones,
+   with Enabled beside it only once the picker can still be 260px. */
+.gas-source-row > .grid.two:first-child {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.gas-source-row > .grid.two:first-child > .field:first-child {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
 .gas-source-divider {
   border: none;
   border-top: 1px solid rgba(148, 163, 184, 0.2);

@@ -954,6 +954,39 @@ describe("calculateRealGasTopOff", () => {
     expect(corrected.finalHe).toBeCloseTo(0, 6);
   });
 
+  test("chains the logged Multi-Gas stops back to the 15/55 target", () => {
+    // Air, then a 15.2/56 bank, then Helium over 2577 psi of 15.7/55 at 73.5 F (analyzed 14.9/54.8).
+    // [stop psi, gas, expected O2, expected He, precision]; the displayed stops leave the final mix within 0.001.
+    const stages: Array<[number, GasSelection, number, number, number]> = [
+      [2752.5, { id: "air", name: "Air", o2: 21, he: 0 }, 16.0066, 51.8178, 3],
+      [3074.5, { id: "bank", name: "Bank 15.2/56", o2: 15.2, he: 56 }, 15.9322, 52.2039, 3],
+      [3300, { id: "helium", name: "Helium", o2: 0, he: 100 }, 15, 55, 2]
+    ];
+    let start = { pressure: 2577, o2: 15.7, he: 55 };
+    for (const [finalPressure, gas, expectedO2, expectedHe, precision] of stages) {
+      const result = calculateRealGasTopOff(
+        { pressureUnit: "psi" },
+        {
+          startPressure: start.pressure,
+          finalPressure,
+          startO2: start.o2,
+          startHe: start.he,
+          tankSizeCuFt: 80,
+          tankRatedPressurePsi: 3000,
+          startTemperatureF: 73.5,
+          resultTemperatureF: 73.5,
+          topGasId: gas.id
+        },
+        gas
+      );
+      expect(result.success).toBe(true);
+      // Feed the unrounded mix forward; 2-decimal re-entry drifts the final mix to 15.01/55.01.
+      expect(result.finalO2).toBeCloseTo(expectedO2, precision);
+      expect(result.finalHe).toBeCloseTo(expectedHe, precision);
+      start = { pressure: finalPressure, o2: result.finalO2, he: result.finalHe };
+    }
+  });
+
   test("treats a 0 PSI start as 1 atm of start mix, continuous with small residuals", () => {
     const solve = (startPressure: number): RealGasTopOffResult =>
       calculateRealGasTopOff(

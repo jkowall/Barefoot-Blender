@@ -34,6 +34,27 @@ describe("GasSourceRow", () => {
     expect(buttonTag("Move Gas 2 down")).toContain("disabled");
   });
 
+  test("labels each gas with its O2 and He fractions", () => {
+    const markup = renderRow({
+      baseOptions: [
+        { id: "air", name: "Air", o2: 21, he: 0 },
+        { id: "trimix-1555", name: "Trimix 15/55", o2: 15, he: 55 }
+      ]
+    });
+    expect(markup).toContain('value="air"');
+    expect(markup).toContain(">Air (21% O2 / 0% He)</option>");
+    expect(markup).toContain('value="trimix-1555"');
+    expect(markup).toContain(">Trimix 15/55 (15% O2 / 55% He)</option>");
+    expect(markup).toContain('value="custom"');
+    expect(markup).toContain(">Custom (32% O2 / 0% He)</option>");
+  });
+
+  test("labels the custom gas once at two decimals", () => {
+    const markup = renderRow({ source: { id: "custom", enabled: true, customO2: 20.95, customHe: 0 } });
+    expect(markup.split(">Custom (20.95% O2 / 0% He)</option>")).toHaveLength(2);
+    expect(markup).not.toContain("Custom (20.9 O2");
+  });
+
   test("uses a custom bank limit note", () => {
     expect(renderRow({ bankLimitNote: "Real-gas rise limit." })).toContain("Real-gas rise limit.");
   });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { calculateFillCostEstimate } from "../utils/calculations";
+import { calculateFillCostEstimate, type GasSelection } from "../utils/calculations";
 import {
   buildTopOffFillCostPlan,
   calculateTopOffBleedPreview,
@@ -9,11 +9,14 @@ import {
   defaultTopOffStartTemperatureState,
   resolveTopOffResultTemperatureF,
   resolveTopOffSelectedGas,
+  resolveTopOffStartMix,
   resolveTopOffStartTemperatureF,
   syncTopOffInputSelectedGas,
+  updateTopOffInputField,
   updateTopOffStartTemperatureState,
   updateTopOffResultTemperatureState
 } from "./TopOffTab";
+import type { TopOffInput } from "../state/session";
 
 const topOffOptions = [
   { id: "air", name: "Air", o2: 21, he: 0 },
@@ -245,7 +248,7 @@ describe("defaultTopOffResultTemperatureState", () => {
 });
 
 describe("copyTopOffResultToStartInput", () => {
-  test("copies the rounded result mix and goal pressure into the start tank", () => {
+  test("copies the rounded result mix and goal pressure into the start tank and keeps the exact mix", () => {
     const input = {
       startO2: 32,
       startHe: 0,
@@ -272,6 +275,7 @@ describe("copyTopOffResultToStartInput", () => {
       ...input,
       startO2: 22.83,
       startHe: 0,
+      startMixExact: { o2: 22.833333, he: 0.004 },
       startPressure: 3000
     });
   });
@@ -311,6 +315,7 @@ describe("copyTopOffResultToStartInput", () => {
       ...input,
       startO2: 22.83,
       startHe: 0,
+      startMixExact: { o2: 22.833333, he: 0 },
       startPressure: 3000,
       startTemperatureF: 72,
       startTemperatureTouched: true
@@ -345,6 +350,106 @@ describe("copyTopOffResultToStartInput", () => {
     expect(copied.startO2).toBe(84.38);
     expect(copied.startHe).toBe(15.62);
     expect((copied.startO2 ?? 0) + (copied.startHe ?? 0)).toBeLessThanOrEqual(100);
+    expect(resolveTopOffStartMix(copied)).toEqual({ o2: 84.375, he: 15.625 });
+  });
+
+  test("chains GERG-2008 top-offs through the copied start tank without 2-decimal drift", () => {
+    // Field report: 2577 psi of 15.7/55 at 73.5 F, Air to 2752.5, a 15.2/56 bank to 3074.5, Helium to 3300.
+    // Re-entering each stop at 2 decimals ended at 15.0073/55.0065 (15.01/55.01 shown) instead of 15/55.
+    const settings = {
+      pressureUnit: "psi" as const,
+      gasModel: "gerg2008" as const,
+      defaultTankSizeCuFt: 80,
+      tankRatedPressure: 3000
+    };
+    const stages: Array<[number, GasSelection, number, number]> = [
+      [2752.5, { id: "air", name: "Air", o2: 21, he: 0 }, 16.01, 51.82],
+      [3074.5, { id: "bank", name: "Bank 15.2/56", o2: 15.2, he: 56 }, 15.93, 52.2],
+      [3300, { id: "helium", name: "Helium", o2: 0, he: 100 }, 15, 55]
+    ];
+    let input: TopOffInput = {
+      startO2: 15.7,
+      startHe: 55,
+      startPressure: 2577,
+      finalPressure: 2752.5,
+      tankSizeCuFt: 80,
+      tankRatedPressurePsi: 3000,
+      startTemperatureF: 73.5,
+      startTemperatureTouched: true,
+      topGasId: "air"
+    };
+    let exactStart = { pressure: 2577, o2: 15.7, he: 55 };
+    let result = calculateTopOffForModel(settings, input, stages[0][1]);
+
+    for (const [finalPressure, gas, shownO2, shownHe] of stages) {
+      input = { ...input, finalPressure, topGasId: gas.id };
+      result = calculateTopOffForModel(settings, input, gas);
+      const unrounded = calculateTopOffForModel(
+        settings,
+        { ...input, startPressure: exactStart.pressure, startO2: exactStart.o2, startHe: exactStart.he, startMixExact: undefined },
+        gas
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.finalO2).toBeCloseTo(unrounded.finalO2, 9);
+      expect(result.finalHe).toBeCloseTo(unrounded.finalHe, 9);
+
+      input = copyTopOffResultToStartInput(input, result, "psi");
+      // The Start O2/He fields still show 2 decimals.
+      expect(input.startO2).toBe(shownO2);
+      expect(input.startHe).toBe(shownHe);
+      exactStart = { pressure: finalPressure, o2: result.finalO2, he: result.finalHe };
+    }
+
+    expect(result.finalO2).toBeCloseTo(15, 3);
+    expect(result.finalHe).toBeCloseTo(55, 2);
+    expect(result.finalO2.toFixed(2)).toBe("15.00");
+    expect(result.finalHe.toFixed(2)).toBe("55.00");
+  });
+});
+
+describe("resolveTopOffStartMix", () => {
+  const exactInput = {
+    startO2: 16.01,
+    startHe: 51.82,
+    startMixExact: { o2: 16.006646, he: 51.817824 }
+  };
+
+  test("uses the exact copied mix while the start fields show its rounded copy", () => {
+    expect(resolveTopOffStartMix(exactInput)).toEqual({ o2: 16.006646, he: 51.817824 });
+  });
+
+  test("uses the typed start fields once they no longer match the copied mix", () => {
+    expect(resolveTopOffStartMix({ ...exactInput, startO2: 16 })).toEqual({ o2: 16, he: 51.82 });
+    expect(resolveTopOffStartMix({ ...exactInput, startHe: undefined })).toEqual({ o2: 16.01, he: 0 });
+  });
+
+  test("defaults the start mix without a copied mix and ignores a non-finite one", () => {
+    expect(resolveTopOffStartMix({})).toEqual({ o2: 32, he: 0 });
+    expect(resolveTopOffStartMix({ startO2: 0, startHe: 0, startMixExact: { o2: Number.NaN, he: 0 } }))
+      .toEqual({ o2: 0, he: 0 });
+  });
+});
+
+describe("updateTopOffInputField", () => {
+  const input: TopOffInput = {
+    startO2: 16.01,
+    startHe: 51.82,
+    startMixExact: { o2: 16.006646, he: 51.817824 },
+    startPressure: 2752.5,
+    finalPressure: 3074.5,
+    topGasId: "bank"
+  };
+
+  test("drops the exact copied mix when Start O2 or He changes", () => {
+    expect(updateTopOffInputField(input, "startO2", 16).startMixExact).toBeUndefined();
+    expect(updateTopOffInputField(input, "startHe", 51.8).startMixExact).toBeUndefined();
+  });
+
+  test("keeps the exact copied mix for an unchanged blur or other field edits", () => {
+    expect(updateTopOffInputField(input, "startO2", 16.01).startMixExact).toEqual(input.startMixExact);
+    expect(updateTopOffInputField(input, "startPressure", 2700).startMixExact).toEqual(input.startMixExact);
+    expect(updateTopOffInputField(input, "finalPressure", 3300)).toEqual({ ...input, finalPressure: 3300 });
   });
 });
 

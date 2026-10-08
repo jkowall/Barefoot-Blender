@@ -2,6 +2,7 @@ import { useMemo, useState, useId, type FocusEvent, type JSX } from "react";
 import type { SettingsSnapshot } from "../state/settings";
 import { useSessionStore } from "../state/session";
 import {
+  airNarcoticFraction,
   calculateBestMix,
   calculateDensity,
   calculateEAD,
@@ -54,14 +55,16 @@ const UtilitiesTab = ({
         utilities.bestMixDepth ?? 0,
         utilities.bestMixPPO2 ?? settings.defaultMaxPPO2 ?? 1.4,
         utilities.bestMixMaxEND ?? 30, // Default to 30m if not set
-        settings.depthUnit
+        settings.depthUnit,
+        settings.oxygenIsNarcotic
       ),
     [
       utilities.bestMixDepth,
       utilities.bestMixPPO2,
       utilities.bestMixMaxEND,
       settings.defaultMaxPPO2,
-      settings.depthUnit
+      settings.depthUnit,
+      settings.oxygenIsNarcotic
     ]
   );
 
@@ -106,8 +109,17 @@ const UtilitiesTab = ({
   const bestMixPPO2 = utilities.bestMixPPO2 ?? settings.defaultMaxPPO2 ?? 1.4;
   const bestMixMaxEND = utilities.bestMixMaxEND ?? 30;
   const bestMixAmbient = bestMixDepth / perAtm + 1;
-  const bestMixSafeN2Pressure = (bestMixMaxEND / perAtm + 1) * 0.79;
-  const bestMixMaxN2Fraction = bestMixSafeN2Pressure / bestMixAmbient;
+  const referenceNarcoticFraction = airNarcoticFraction(settings.oxygenIsNarcotic);
+  const narcoticLabel = settings.oxygenIsNarcotic ? "O2 + N2" : "N2";
+  const bestMixSafeNarcoticPressure = (bestMixMaxEND / perAtm + 1) * referenceNarcoticFraction;
+  const bestMixMaxNarcoticFraction = bestMixSafeNarcoticPressure / bestMixAmbient;
+  const bestMixReachedEND = calculateEND(
+    bestMixResult.o2,
+    bestMixResult.he,
+    bestMixDepth,
+    settings.depthUnit,
+    settings.oxygenIsNarcotic
+  );
 
   const endO2 = utilities.endO2 ?? 0;
   const endHe = utilities.endHe ?? 0;
@@ -228,14 +240,24 @@ const UtilitiesTab = ({
         </div>
         <div style={{ marginTop: "12px" }}>
           <div>Best Mix: {formatNumber(bestMixResult.o2, 1)}% O2, {formatNumber(bestMixResult.he, 1)}% He</div>
+          <div className="table-note">Oxygen counted as narcotic: {settings.oxygenIsNarcotic ? "Yes" : "No"}</div>
+          {!bestMixResult.maxEndMet && (
+            <div className="warning">
+              Max END cannot be met at this PPO2: the oxygen alone is over the narcotic limit. This mix has an END of {formatNumber(bestMixReachedEND, 1)} {settings.depthUnit}.
+            </div>
+          )}
         </div>
         {trainingModeEnabled && (
           <TrainingMathPanel title="Best Mix Math">
             <ul>
               <li>Ambient pressure = depth / depth-per-atm + 1 = {formatNumber(bestMixDepth, 1)} / {perAtm} + 1 = {formatNumber(bestMixAmbient, 3)} ATA</li>
               <li>O2 percent = target PPO2 / ambient pressure x 100 = {formatNumber(bestMixPPO2, 2)} / {formatNumber(bestMixAmbient, 3)} x 100 = {formatNumber(bestMixResult.o2, 1)}%</li>
-              <li>Max N2 fraction from END = (({formatNumber(bestMixMaxEND, 1)} / {perAtm} + 1) x 0.79) / {formatNumber(bestMixAmbient, 3)} = {formatNumber(bestMixMaxN2Fraction, 3)}</li>
-              <li>He percent = 100 - O2 percent - max N2 percent = {formatNumber(bestMixResult.he, 1)}%</li>
+              <li>Max {narcoticLabel} fraction from END = (({formatNumber(bestMixMaxEND, 1)} / {perAtm} + 1) x {formatNumber(referenceNarcoticFraction, 2)}) / {formatNumber(bestMixAmbient, 3)} = {formatNumber(bestMixMaxNarcoticFraction, 3)}</li>
+              <li>
+                {settings.oxygenIsNarcotic
+                  ? `He percent = 100 - max (O2 + N2) percent${bestMixResult.maxEndMet ? "" : ", limited to 100 - O2 percent"}`
+                  : "He percent = 100 - O2 percent - max N2 percent"} = {formatNumber(bestMixResult.he, 1)}%
+              </li>
             </ul>
           </TrainingMathPanel>
         )}
@@ -309,7 +331,8 @@ const UtilitiesTab = ({
               <li>N2 fraction = max(0, 1 - O2 - He) = max(0, 1 - {formatNumber(endO2Fraction, 3)} - {formatNumber(endHeFraction, 3)}) = {formatNumber(endN2Fraction, 3)}</li>
               <li>Narcotic fraction = {settings.oxygenIsNarcotic ? "O2 + N2" : "N2 only"} = {formatNumber(endNarcoticFraction, 3)}</li>
               <li>Ambient pressure = {formatNumber(endDepth, 1)} / {perAtm} + 1 = {formatNumber(endAmbient, 3)} ATA</li>
-              <li>END = (ambient x narcotic fraction / 0.79 - 1) x {perAtm} = {formatNumber(endResult, 1)} {settings.depthUnit}</li>
+              <li>Air reference = {narcoticLabel} in air = {formatNumber(referenceNarcoticFraction, 2)}</li>
+              <li>END = (ambient x narcotic fraction / {formatNumber(referenceNarcoticFraction, 2)} - 1) x {perAtm} = {formatNumber(endResult, 1)} {settings.depthUnit}</li>
             </ul>
           </TrainingMathPanel>
         )}

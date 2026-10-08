@@ -33,7 +33,7 @@ Order of content:
 
 1. **Start Tank** card – Current mix and pressure.
 2. **Top-Off** card – Selected top-off source, goal pressure, and `Calculate` button.
-3. **Result** card – Final O2 and He. When `GERG-2008` is selected, Start Temp appears in the Start card and Result Temp appears here. Changing Result Temp updates the displayed pressure target only; the mix and fill cost stay fixed. The stop line shows Z, and a note shows the start Z (plus the goal Z when Result Temp differs from Start Temp).
+3. **Result** card – Final O2 and He. When `GERG-2008` is selected, Start Temp appears in the Start card and Result Temp appears here. Changing Result Temp updates the displayed pressure target only; the mix and fill cost stay fixed. The stop line shows Z, and a note shows the start Z (plus the goal Z when Result Temp differs from Start Temp). `Copy Result to Start Tank` moves the result mix, goal pressure, and (in `GERG-2008` mode) Start Temp into the Start Tank card for the next stage of a multi-stage fill. The O2 and He fields show the copied mix at 2 decimals, but calculations keep using the unrounded mix until either field is edited, so chained top-offs do not accumulate rounding.
 4. **Fill Cost** card – Per-fill tank volume, rated pressure, gas volume, and estimated cost. In `GERG-2008` mode the volume comes from solved real-gas moles and a note states the basis.
 5. **Bleed-Down What-If** and **Top-Off Sensitivity** cards – The bleed slider follows the selected gas model; GERG-2008 previews use the same temperature-aware top-off solver as the main result. The alternate-start sensitivity table remains an explicitly labeled ideal pressure-point projection.
 
@@ -41,7 +41,7 @@ Order of content:
 
 1. **Start Tank** card – Starting mix and pressure for partial fills. When `GERG-2008` is selected it also has Start Temp.
 2. **Tank Context** card – Per-fill tank volume and rated pressure.
-3. **Source Gases** card – A Fill Order selector, then 1 to 6 source rows with optional custom mixes and bank pressure limits. `Auto (recommended)` fills helium, then oxygen, then richer mixes, with Air last. `My order (top to bottom)` adds up/down buttons to each row and fills in list order; amounts stay the same in any order and only the stop pressures change. In `GERG-2008` mode a bank limit caps the source's real-gas pressure rise at its stage temperature and fill position.
+3. **Source Gases** card – A Fill Order selector, then 1 to 6 source rows with optional custom mixes and bank pressure limits. Each gas option shows its O2/He fractions, as in the Top-Off and Standard Blend pickers, to two decimals where needed. `Auto (recommended)` fills helium, then oxygen, then richer mixes, with Air last. `My order (top to bottom)` adds up/down buttons to each row and fills in list order; amounts stay the same in any order and only the stop pressures change. In `GERG-2008` mode a bank limit caps the source's real-gas pressure rise at its stage temperature and fill position.
 4. **Target Blend** card – Oxygen, helium, and final pressure fields. When `GERG-2008` is selected it also has Settled Temp, and the target pressure is the settled pressure at that temperature.
 5. **Blend Options** card – Ranked alternatives with estimated cost, then the selected fill plan.
    - Ideal mode: fill order with running stop pressures, added PSI, cu ft, free gas liters, and cost.
@@ -53,7 +53,7 @@ Order of content:
 Cards pair input controls with calculated output:
 - Maximum Operating Depth (shows working & contingency values).
 - Equivalent Air Depth.
-- Best Mix.
+- Best Mix (follows and notes the narcotic oxygen policy, and warns when Max END cannot be met).
 - Equivalent Narcotic Depth (notes narcotic oxygen policy).
 - Gas Density.
 - Tank Conversion for PSI, cu ft, and free gas liters based on tank volume and rated pressure.
@@ -67,7 +67,7 @@ Sections:
 1. **Units** – Pressure (PSI/bar), depth (ft/m), and temperature (F/C).
 2. **Calculation Model** – Defaults new installs to GERG-2008 real-gas corrections for Standard Blend, Top-Off, and Multi-Gas. Ideal partial-pressure math remains selectable for training and comparison, and saved user choices are preserved.
 3. **Defaults** – Max and contingency PPO₂.
-4. **Equivalent Narcotic Gas** – Toggle for oxygen narcotic behavior.
+4. **Equivalent Narcotic Gas** – Toggle for oxygen narcotic behavior in END and Best Mix.
 5. **Custom Banked Gases** – Editable list with name, O₂ %, He %, and delete/add controls.
 6. **Pricing** – Gas prices and tank defaults used to initialize per-fill tank context.
 7. **About** – Safety warning and native subscription summary.
