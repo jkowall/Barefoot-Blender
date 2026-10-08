@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import { configDefaults } from "vitest/config";
 import packageJson from "./package.json";
 
 // The dev server injects inline scripts (React Refresh preamble) and <style> tags for HMR,
@@ -18,6 +19,11 @@ const relaxCspForDevServer = (): Plugin => ({
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version)
+  },
+  test: {
+    // Claude Code git worktrees live under .claude/worktrees/ with their own src/ copies;
+    // without this, `vitest run` and path filters like verify:calc also run those stale tests.
+    exclude: [...configDefaults.exclude, ".claude/**"]
   },
   plugins: [
     relaxCspForDevServer(),
