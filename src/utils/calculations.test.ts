@@ -24,11 +24,15 @@ import {
   cuFtToPressure,
   litersToCuFt,
   pressureToCuFt,
-  summarizeBlendVolumes
+  summarizeBlendVolumes,
+  solveMaxTargetWithoutHelium,
+  solveRequiredStartPressure
 } from "./calculations";
 import type { GasSelection, BlendResult, BlendAlternative } from "./calculations";
 import type { MultiGasInput, StandardBlendInput } from "../state/session";
 import type { GasDefinition } from "../state/settings";
+import { useSessionStore } from "../state/session";
+import { toDisplayPressure } from "./units";
 
 const air: GasSelection = { id: "air", name: "Air", o2: 21, he: 0 };
 const oxygen: GasSelection = { id: "oxygen", name: "Oxygen", o2: 100, he: 0 };
@@ -1678,6 +1682,245 @@ describe("summarizeBlendVolumes", () => {
     expect(summary.helium).toBe(150);
     expect(summary.oxygen).toBe(50);
     expect(summary.topoff).toBe(250);
+  });
+});
+
+describe("Standard Blend reverse solvers", () => {
+  const settingsPsi = { pressureUnit: "psi" as const };
+  const settingsBar = { pressureUnit: "bar" as const };
+  const trimixBank: GasSelection = { id: "tmx-18-45", name: "TMX 18/45", o2: 18, he: 45 };
+  const bank36: GasSelection = { id: "bank-36", name: "Bank 36", o2: 36, he: 0 };
+
+  const blendInputs = (overrides: Partial<StandardBlendInput>): StandardBlendInput => ({
+    startPressure: 0,
+    startO2: 21,
+    startHe: 0,
+    targetPressure: 3000,
+    targetO2: 32,
+    targetHe: 0,
+    topGasId: "air",
+    ...overrides
+  });
+
+  const hasBleed = (blend: BlendResult | null): boolean =>
+    blend?.steps.some((step) => step.kind === "bleed") ?? false;
+
+  const heliumAdded = (blend: BlendResult | null): number =>
+    blend ? summarizeBlendVolumes(blend).helium : Number.NaN;
+
+  describe("solveMaxTargetWithoutHelium", () => {
+    test("fresh-install session defaults reach 32/0 without helium", () => {
+      // The Standard Blend tab passes these defaults through unchanged.
+      const defaults = useSessionStore.getState().standardBlend;
+      const result = solveMaxTargetWithoutHelium(settingsPsi, defaults, air);
+
+      expect(result.success).toBe(true);
+      expect(result.targetHe).toBe(0);
+      expect(result.errors).toHaveLength(0);
+      expect(heliumAdded(result.blend)).toBe(0);
+      expect(hasBleed(result.blend)).toBe(false);
+    });
+
+    test("helium-free partial start stays at 0% He without a bleed", () => {
+      const result = solveMaxTargetWithoutHelium(settingsPsi, blendInputs({ startPressure: 1000 }), air);
+
+      expect(result.success).toBe(true);
+      expect(result.targetHe).toBe(0);
+      expect(hasBleed(result.blend)).toBe(false);
+    });
+
+    test.each([
+      // Air adds no helium, so the target keeps the start tank's helium: startPsi * startHe / 3000.
+      { startPressure: 1000, startO2: 21, startHe: 35, expectedHe: 350 / 30 },
+      { startPressure: 2500, startO2: 21, startHe: 35, expectedHe: 875 / 30 },
+      { startPressure: 1500, startO2: 18, startHe: 20, expectedHe: 10 }
+    ])(
+      "keeps the helium already in $startPressure psi of $startO2/$startHe",
+      ({ startPressure, startO2, startHe, expectedHe }) => {
+        // The answer does not depend on the target He% the user currently has entered.
+        for (const targetHe of [0, 10, 25]) {
+          const inputs = blendInputs({ startPressure, startO2, startHe, targetHe });
+          const result = solveMaxTargetWithoutHelium(settingsPsi, inputs, air);
+
+          expect(result.success).toBe(true);
+          expect(result.targetHe).toBeCloseTo(expectedHe, 6);
+          expect(heliumAdded(result.blend)).toBe(0);
+          expect(hasBleed(result.blend)).toBe(false);
+        }
+      }
+    );
+
+    test("applying the result plans oxygen and Air only", () => {
+      const inputs = blendInputs({ startPressure: 1000, startHe: 35 });
+      const result = solveMaxTargetWithoutHelium(settingsPsi, inputs, air);
+      const applied = calculateStandardBlend(settingsPsi, { ...inputs, targetHe: result.targetHe }, air);
+
+      expect(applied.success).toBe(true);
+      expect(applied.steps.map((step) => step.kind)).toEqual(["oxygen", "topoff"]);
+      expect(applied.steps[0].amount).toBeCloseTo(417.72, 2);
+      expect(applied.steps[1].amount).toBeCloseTo(1582.28, 2);
+    });
+
+    test("bleeds only as far as the start inert gas forces", () => {
+      // 2900 psi of 21/35 holds more He + N2 than 32% O2 at 3000 psi allows;
+      // bleeding to 3000 * 0.68 / 0.79 = 2582.28 psi keeps 903.8 psi He (30.13%).
+      const result = solveMaxTargetWithoutHelium(
+        settingsPsi,
+        blendInputs({ startPressure: 2900, startHe: 35 }),
+        air
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.targetHe).toBeCloseTo(30.1266, 3);
+      expect(result.blend?.bleedPressure).toBeCloseTo(2582.28, 1);
+      expect(heliumAdded(result.blend)).toBeLessThan(0.01);
+    });
+
+    test("bleeds a start mix too rich in oxygen before keeping its helium", () => {
+      // O2 balance with Air: b * (0.50 - 0.21) <= 3000 * (0.32 - 0.21), so b <= 1137.93 psi.
+      const result = solveMaxTargetWithoutHelium(
+        settingsPsi,
+        blendInputs({ startPressure: 2000, startO2: 50, startHe: 20 }),
+        air
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.targetHe).toBeCloseTo(7.5862, 3);
+      expect(result.blend?.bleedPressure).toBeCloseTo(1137.93, 1);
+      expect(heliumAdded(result.blend)).toBeLessThan(0.01);
+    });
+
+    test("counts helium carried by a trimix top gas", () => {
+      // 1000 psi Air + O2 + TMX 18/45: top-off = (3000 * 0.68 - 1000 * 0.79) / 0.82 = 1524.39 psi.
+      const result = solveMaxTargetWithoutHelium(settingsPsi, blendInputs({ startPressure: 1000 }), trimixBank);
+
+      expect(result.success).toBe(true);
+      expect(result.targetHe).toBeCloseTo((1524.39 * 45) / 3000, 2);
+      expect(heliumAdded(result.blend)).toBe(0);
+      expect(hasBleed(result.blend)).toBe(false);
+    });
+
+    test("solves in bar", () => {
+      const result = solveMaxTargetWithoutHelium(
+        settingsBar,
+        blendInputs({ startPressure: 100, startHe: 35, targetPressure: 200 }),
+        air
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.targetHe).toBeCloseTo(17.5, 6);
+    });
+
+    test("fails when the top gas is too rich in oxygen to dilute from an empty tank", () => {
+      const result = solveMaxTargetWithoutHelium(settingsPsi, blendInputs({}), bank36);
+
+      expect(result.success).toBe(false);
+      expect(result.errors).toEqual(["Unable to achieve a target mix without helium addition."]);
+    });
+
+    test("fails when Standard Blend would add helium rather than bleed", () => {
+      // Only a bleed to 600 psi makes 26/40 helium-free here; Standard Blend instead keeps
+      // the start gas and adds helium, so no applied He% would plan without helium.
+      const heRichBank: GasSelection = { id: "tmx-25-50", name: "TMX 25/50", o2: 25, he: 50 };
+      const result = solveMaxTargetWithoutHelium(
+        settingsPsi,
+        blendInputs({ startPressure: 1000, startO2: 30, targetO2: 26 }),
+        heRichBank
+      );
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("solveRequiredStartPressure", () => {
+    test("fresh-install session defaults already work from the current start", () => {
+      const defaults = useSessionStore.getState().standardBlend;
+      const result = solveRequiredStartPressure(settingsPsi, defaults, air);
+
+      expect(result.success).toBe(true);
+      expect(result.startPressurePsi).toBe(0);
+      expect(heliumAdded(result.blend)).toBe(0);
+    });
+
+    test("finds the start pressure that holds the target helium", () => {
+      // 32/10 at 3000 psi needs 300 psi He: 300 / 0.35 = 857.14 psi of 21/35.
+      const result = solveRequiredStartPressure(
+        settingsPsi,
+        blendInputs({ startPressure: 1000, startHe: 35, targetHe: 10 }),
+        air
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.startPressurePsi).toBeCloseTo(3000 / 3.5, 6);
+      expect(heliumAdded(result.blend)).toBe(0);
+      expect(hasBleed(result.blend)).toBe(false);
+    });
+
+    test("returns the current start when it already matches", () => {
+      const result = solveRequiredStartPressure(
+        settingsPsi,
+        blendInputs({ startPressure: 1500, startO2: 18, startHe: 20, targetHe: 10 }),
+        air
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.startPressurePsi).toBeCloseTo(1500, 6);
+    });
+
+    test("solves in bar", () => {
+      // 200 bar * 0.10 / 0.35 = 57.14 bar.
+      const result = solveRequiredStartPressure(
+        settingsBar,
+        blendInputs({ startPressure: 50, startHe: 35, targetPressure: 200, targetHe: 10 }),
+        air
+      );
+
+      expect(result.success).toBe(true);
+      expect(toDisplayPressure(result.startPressurePsi, "bar")).toBeCloseTo(200 / 3.5, 6);
+    });
+
+    test("lowers a nitrox start that leaves no room for oxygen", () => {
+      const result = solveRequiredStartPressure(settingsPsi, blendInputs({ startPressure: 2900 }), air);
+
+      expect(result.success).toBe(true);
+      expect(result.startPressurePsi).toBeCloseTo((3000 * 0.68) / 0.79, 6);
+      expect(hasBleed(result.blend)).toBe(false);
+    });
+
+    test("raises an empty start that a rich top gas cannot dilute", () => {
+      // Bank 36 to 32%: b * (0.21 - 0.36) <= 3000 * (0.32 - 0.36), so b >= 800 psi of Air.
+      const result = solveRequiredStartPressure(settingsPsi, blendInputs({}), bank36);
+
+      expect(result.success).toBe(true);
+      expect(result.startPressurePsi).toBeCloseTo(800, 6);
+    });
+
+    test("accounts for helium in a trimix top gas", () => {
+      // 900 psi He from TMX 18/45 means 2000 psi top-off; the O2 balance leaves 506.33 psi of Air.
+      const result = solveRequiredStartPressure(
+        settingsPsi,
+        blendInputs({ startPressure: 500, targetHe: 30 }),
+        trimixBank
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.startPressurePsi).toBeCloseTo(400 / 0.79, 6);
+      expect(heliumAdded(result.blend)).toBe(0);
+    });
+
+    test.each([
+      { startHe: 35, targetHe: 40 },
+      { startHe: 0, targetHe: 10 }
+    ])("fails when $targetHe% He needs more than the start mix holds ($startHe% He)", ({ startHe, targetHe }) => {
+      const result = solveRequiredStartPressure(
+        settingsPsi,
+        blendInputs({ startPressure: 1000, startHe, targetHe }),
+        air
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.errors).toEqual(["Target cannot be met without adding helium at full cylinder pressure."]);
+    });
   });
 });
 

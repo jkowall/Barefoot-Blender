@@ -35,6 +35,24 @@ Module: `projectTopOffChart`
 - Marks scenarios as "Drain" when infeasible or negative.
 - Returns PSI values; UI reconverts to the user's unit selection.
 
+### Reverse Solvers
+
+Modules: `solveRequiredStartPressure`, `solveMaxTargetWithoutHelium`
+
+Both solve the helium-free fills exactly: start gas at pressure `b` plus oxygen and top gas only. With target O₂ and pressure fixed, the top-off, oxygen, and resulting target He fraction are linear in `b`:
+
+```
+T(b)  = (P_target * (1 - O2_target) - b * (1 - O2_start)) / (1 - O2_top)
+O2(b) = P_target - b - T(b)
+He(b) = (b * He_start + T(b) * He_top) / P_target
+```
+
+Requiring `T(b) >= 0`, `O2(b) >= 0`, and `0 <= b <= P_target` gives an interval of usable start pressures. A top gas with no nitrogen is never used by the planner, so for those gases `T(b) = 0` and the start's He + N₂ must equal the target's.
+
+- **Required Start Pressure (no helium)** solves `He(b) = He_target` for `b`. When the target's helium does not depend on `b` (for example nitrox from Air), it returns the usable start pressure nearest the current one.
+- **Max Target Without Helium** evaluates `He(b)` at the current start pressure, or at the highest usable pressure when the start must be bled anyway (more inert gas or O₂ than the target allows). With a helium-free top gas this is the helium already in the tank diluted to the target pressure; lower He% targets need a bleed first. The panel shows the bleed pressure when one is required.
+- Each answer is re-run through `calculateStandardBlend` and rejected if that plan still adds helium. This covers the one case where a helium-free fill exists only after extra bleeding (a top gas whose inert gas is richer in helium than the start's, plus a start too rich in O₂); the planner adds helium there instead of bleeding.
+
 ### Top-Off What-If
 
 Module: `src/utils/calculations.ts` (`calculateTopOffBlend`)

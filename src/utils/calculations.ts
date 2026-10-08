@@ -514,6 +514,79 @@ export const projectTopOffChart = (
   });
 };
 
+// Helium a reverse-solver plan may still show after calculateStandardBlend's bleed bisection.
+const HELIUM_FREE_TOLERANCE_PSI = 0.01;
+
+// Fills that add only oxygen and top gas to a start mix at pressure b (PSI) form a
+// one-parameter family. The added amounts and the resulting target He fraction are
+// affine in b, so the start pressures that work form an interval and are solved exactly.
+// A top gas without nitrogen is never used, matching solveBlendInternal, so the start's
+// inert gas (He + N2) must then equal the target's.
+type HeliumFreeFamily = {
+  minStartPsi: number;
+  maxStartPsi: number;
+  // Target He fraction reached from start pressure b: heFractionAtZero + heFractionPerPsi * b.
+  heFractionAtZero: number;
+  heFractionPerPsi: number;
+};
+
+const solveHeliumFreeFamily = (
+  targetPressurePsi: number,
+  startO2Fraction: number,
+  startHeFraction: number,
+  targetO2Fraction: number,
+  topGas: GasSelection
+): HeliumFreeFamily | null => {
+  const startInert = 1 - startO2Fraction;
+  const targetInert = 1 - targetO2Fraction;
+  const topO2Fraction = fraction(topGas.o2);
+  const topHeFraction = fraction(topGas.he);
+  const topInert = 1 - topO2Fraction;
+  const topUsable = 1 - topO2Fraction - topHeFraction > tolerance;
+
+  // Top-off and oxygen as value(b) = atZero + perPsi * b.
+  const topoffAtZero = topUsable ? (targetPressurePsi * targetInert) / topInert : 0;
+  const topoffPerPsi = topUsable ? -startInert / topInert : 0;
+  const oxygenAtZero = targetPressurePsi - topoffAtZero;
+  const oxygenPerPsi = -1 - topoffPerPsi;
+
+  let minStartPsi = 0;
+  let maxStartPsi = targetPressurePsi;
+  // Narrow [minStartPsi, maxStartPsi] to the b where atZero + perPsi * b >= 0.
+  const requireNonNegative = (atZero: number, perPsi: number): boolean => {
+    if (Math.abs(perPsi) <= tolerance) {
+      return atZero >= -tolerance;
+    }
+    const boundary = -atZero / perPsi;
+    if (perPsi > 0) {
+      minStartPsi = Math.max(minStartPsi, boundary);
+    } else {
+      maxStartPsi = Math.min(maxStartPsi, boundary);
+    }
+    return true;
+  };
+
+  const inertAtZero = targetPressurePsi * targetInert;
+  const feasible =
+    requireNonNegative(oxygenAtZero, oxygenPerPsi) &&
+    requireNonNegative(inertAtZero, -startInert) &&
+    (topUsable || requireNonNegative(-inertAtZero, startInert));
+
+  if (!feasible || minStartPsi > maxStartPsi + tolerance) {
+    return null;
+  }
+
+  return {
+    minStartPsi,
+    maxStartPsi: Math.max(minStartPsi, maxStartPsi),
+    heFractionAtZero: (topoffAtZero * topHeFraction) / targetPressurePsi,
+    heFractionPerPsi: (startHeFraction + topoffPerPsi * topHeFraction) / targetPressurePsi
+  };
+};
+
+const addsHelium = (blend: BlendResult): boolean =>
+  summarizeBlendVolumes(blend).helium > HELIUM_FREE_TOLERANCE_PSI;
+
 export type StartPressureSolveResult = {
   success: boolean;
   startPressurePsi: number;
@@ -522,90 +595,78 @@ export type StartPressureSolveResult = {
   errors: string[];
 };
 
+// Start pressure of the current start mix from which the target blends with oxygen and
+// top gas alone. When helium pins a single start pressure, that pressure is returned;
+// when the target's helium does not depend on it (for example nitrox from Air), the
+// working start pressure nearest the current one is returned.
 export const solveRequiredStartPressure = (
   settings: { pressureUnit: PressureUnit },
   inputs: StandardBlendInput,
   topGas: GasSelection
 ): StartPressureSolveResult => {
-  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure, settings.pressureUnit);
+  const failure = (message: string): StartPressureSolveResult => ({
+    success: false,
+    startPressurePsi: 0,
+    blend: null,
+    warnings: [],
+    errors: [message]
+  });
+
+  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure ?? 0, settings.pressureUnit);
   if (targetPressurePsi <= tolerance) {
-    return {
-      success: false,
-      startPressurePsi: 0,
-      blend: null,
-      warnings: [],
-      errors: ["Target pressure must be greater than zero."]
-    };
+    return failure("Target pressure must be greater than zero.");
   }
 
-  const fractions: BlendFractions = {
-    startO2Fraction: fraction(inputs.startO2 ?? 21),
-    startHeFraction: fraction(inputs.startHe ?? 0),
-    startN2Fraction: Math.max(0, 1 - fraction(inputs.startO2 ?? 21) - fraction(inputs.startHe ?? 0)),
-    targetO2Fraction: fraction(inputs.targetO2 ?? 32),
-    targetHeFraction: fraction(inputs.targetHe ?? 0),
-    targetN2: 1 - fraction(inputs.targetO2 ?? 32) - fraction(inputs.targetHe ?? 0),
-    topO2Fraction: fraction(topGas.o2),
-    topHeFraction: fraction(topGas.he),
-    topN2Fraction: Math.max(0, 1 - fraction(topGas.o2) - fraction(topGas.he))
-  };
+  const tooLittleHelium = "Target cannot be met without adding helium at full cylinder pressure.";
+  const unsolvable = "Unable to determine required start pressure without helium addition.";
 
-  const upper = solveBlendInternal(targetPressurePsi, targetPressurePsi, fractions);
-  if (!upper.success || (upper.helium ?? 0) > tolerance) {
-    return {
-      success: false,
-      startPressurePsi: 0,
-      blend: null,
-      warnings: [],
-      errors: ["Target cannot be met without adding helium at full cylinder pressure."]
-    };
+  const family = solveHeliumFreeFamily(
+    targetPressurePsi,
+    fraction(inputs.startO2 ?? 21),
+    fraction(inputs.startHe ?? 0),
+    fraction(inputs.targetO2 ?? 32),
+    topGas
+  );
+  if (!family) {
+    return failure(unsolvable);
   }
 
-  let low = 0;
-  let high = targetPressurePsi;
-  let bestStartPsi: number = targetPressurePsi;
+  const { minStartPsi, maxStartPsi, heFractionAtZero, heFractionPerPsi } = family;
+  const targetHeFraction = fraction(inputs.targetHe ?? 0);
+  const heAt = (startPsi: number): number => heFractionAtZero + heFractionPerPsi * startPsi;
+  const reachableHeMax = Math.max(heAt(minStartPsi), heAt(maxStartPsi));
+  const reachableHeMin = Math.min(heAt(minStartPsi), heAt(maxStartPsi));
 
-  for (let i = 0; i < 25; i += 1) {
-    if (high - low < tolerance) break;
-    const mid = (low + high) / 2;
-    const attempt = solveBlendInternal(mid, targetPressurePsi, fractions);
-    if (!attempt.success || attempt.requiresBleed) {
-      high = mid;
-      continue;
-    }
-
-    if ((attempt.helium ?? 0) <= tolerance) {
-      bestStartPsi = mid;
-      low = mid;
-    } else {
-      high = mid;
-    }
+  if (targetHeFraction > reachableHeMax + tolerance) {
+    return failure(tooLittleHelium);
+  }
+  if (targetHeFraction < reachableHeMin - tolerance) {
+    return failure(unsolvable);
   }
 
-  const computeCandidateBlend = (startPsi: number): BlendResult => {
-    const candidate: StandardBlendInput = {
-      ...inputs,
-      startPressure: toDisplayPressure(startPsi, settings.pressureUnit)
-    };
-    return calculateStandardBlend(settings, candidate, topGas);
-  };
+  const currentStartPsi = fromDisplayPressure(inputs.startPressure ?? 0, settings.pressureUnit);
+  const startPsi =
+    Math.abs(heFractionPerPsi * targetPressurePsi) <= tolerance
+      ? Math.min(maxStartPsi, Math.max(minStartPsi, currentStartPsi))
+      : Math.min(
+          maxStartPsi,
+          Math.max(minStartPsi, (targetHeFraction - heFractionAtZero) / heFractionPerPsi)
+        );
 
-  const bestResult = computeCandidateBlend(bestStartPsi);
-  if (!bestResult.success) {
-    return {
-      success: false,
-      startPressurePsi: 0,
-      blend: null,
-      warnings: [],
-      errors: ["Unable to determine required start pressure without helium addition."]
-    };
+  const blend = calculateStandardBlend(
+    settings,
+    { ...inputs, startPressure: toDisplayPressure(startPsi, settings.pressureUnit) },
+    topGas
+  );
+  if (!blend.success || addsHelium(blend)) {
+    return failure(unsolvable);
   }
 
   return {
     success: true,
-    startPressurePsi: bestStartPsi,
-    blend: bestResult,
-    warnings: bestResult.warnings,
+    startPressurePsi: startPsi,
+    blend,
+    warnings: blend.warnings,
     errors: []
   };
 };
@@ -618,12 +679,18 @@ export type NoHeliumTargetResult = {
   errors: string[];
 };
 
+// Highest target He% (target O2 and pressure held) that the current start tank reaches
+// with oxygen and top gas alone, using the least bleed-down Standard Blend would plan.
+// With a helium-free top gas this is the helium already in the tank, diluted to the
+// target pressure; lower He% targets are reachable by bleeding first. The returned blend
+// includes a bleed step when the start mix must be bled anyway.
 export const solveMaxTargetWithoutHelium = (
   settings: { pressureUnit: PressureUnit },
   inputs: StandardBlendInput,
   topGas: GasSelection
 ): NoHeliumTargetResult => {
-  const maxHe = Math.max(0, Math.min(100 - inputs.targetO2, 100));
+  const targetO2 = inputs.targetO2 ?? 32;
+  const maxHe = Math.max(0, Math.min(100 - targetO2, 100));
   if (maxHe <= tolerance) {
     return {
       success: true,
@@ -634,48 +701,46 @@ export const solveMaxTargetWithoutHelium = (
     };
   }
 
-  let low = 0;
-  let high = maxHe;
-  let best: { he: number; result: BlendResult } | null = null;
+  const failure = (message: string): NoHeliumTargetResult => ({
+    success: false,
+    targetHe: 0,
+    blend: null,
+    warnings: [],
+    errors: [message]
+  });
 
-  for (let i = 0; i < 25; i += 1) {
-    if (high - low < tolerance) break;
-    const mid = (low + high) / 2;
-    const candidate: StandardBlendInput = {
-      ...inputs,
-      targetHe: mid
-    };
-    const attempt = calculateStandardBlend(settings, candidate, topGas);
-
-    if (!attempt.success || attempt.steps.some((step) => step.kind === "bleed")) {
-      high = mid;
-      continue;
-    }
-
-    const volumes = summarizeBlendVolumes(attempt);
-    if (volumes.helium <= tolerance) {
-      best = { he: mid, result: attempt };
-      low = mid;
-    } else {
-      high = mid;
-    }
+  const targetPressurePsi = fromDisplayPressure(inputs.targetPressure ?? 0, settings.pressureUnit);
+  if (targetPressurePsi <= tolerance) {
+    return failure("Target pressure must be greater than zero.");
   }
 
-  if (!best) {
-    return {
-      success: false,
-      targetHe: 0,
-      blend: null,
-      warnings: [],
-      errors: ["Unable to achieve a target mix without helium addition."]
-    };
+  const unreachable = "Unable to achieve a target mix without helium addition.";
+  const family = solveHeliumFreeFamily(
+    targetPressurePsi,
+    fraction(inputs.startO2 ?? 21),
+    fraction(inputs.startHe ?? 0),
+    fraction(targetO2),
+    topGas
+  );
+  const startPressurePsi = fromDisplayPressure(inputs.startPressure ?? 0, settings.pressureUnit);
+  if (!family || family.minStartPsi > startPressurePsi + tolerance) {
+    return failure(unreachable);
+  }
+
+  const fillFromPsi = Math.min(family.maxStartPsi, startPressurePsi);
+  const heFraction = family.heFractionAtZero + family.heFractionPerPsi * fillFromPsi;
+  const targetHe = Math.min(maxHe, Math.max(0, heFraction * 100));
+
+  const blend = calculateStandardBlend(settings, { ...inputs, targetHe }, topGas);
+  if (!blend.success || addsHelium(blend)) {
+    return failure(unreachable);
   }
 
   return {
     success: true,
-    targetHe: best.he,
-    blend: best.result,
-    warnings: best.result.warnings,
+    targetHe,
+    blend,
+    warnings: blend.warnings,
     errors: []
   };
 };
