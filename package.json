@@ -38,7 +38,7 @@
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.5.2",
     "@capacitor/ios": "^8.5.2",
-    "@eslint-react/eslint-plugin": "^5.14.8",
+    "@eslint-react/eslint-plugin": "^5.26.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.1",
     "@types/react": "19.3.0",
