@@ -11,9 +11,9 @@ const relaxCspForDevServer = (): Plugin => ({
   apply: "serve",
   transformIndexHtml: (html) =>
     html
-      .replace("script-src 'self';", "script-src 'self' 'unsafe-inline';")
+      .replace("script-src 'self' ", "script-src 'self' 'unsafe-inline' ")
       .replace("style-src 'self';", "style-src 'self' 'unsafe-inline';")
-      .replace("connect-src 'self';", "connect-src 'self' ws: wss:;")
+      .replace("connect-src 'self' ", "connect-src 'self' ws: wss: ")
 });
 
 export default defineConfig({
