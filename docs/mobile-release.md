@@ -188,6 +188,7 @@ jarsigner -verify -verbose -certs app/build/outputs/bundle/release/app-release.a
 - Safety copy: users must analyze final gas with calibrated oxygen and helium analyzers.
 - Educational feature copy: mention Training Mode as an optional explanation layer that shows classroom-style hand math, including pressure-percent worksheets and Pearson-square style checks where applicable.
 - Privacy disclosures: local settings/history, purchase/subscription data through Apple/Google/RevenueCat, no ads, no health data collection.
+- Website analytics: `https://trimix-blender.com` uses Cloudflare Web Analytics (cookieless, aggregate page views). Cloudflare injects the beacon into HTML served from its edge, so the bundled native apps never load it, and the App Store App Privacy and Google Play Data safety answers do not need an analytics entry for it. Revisit those answers if analytics is ever added inside the native apps.
 
 ## Validation
 
