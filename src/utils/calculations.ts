@@ -324,8 +324,10 @@ const leastBleedPressurePsi = (
       { atZero: dHe.atZero - topHeFraction * topoff.atZero, perPsi: dHe.perPsi - topHeFraction * topoff.perPsi },
       { atZero: dO2.atZero - topO2Fraction * topoff.atZero, perPsi: dO2.perPsi - topO2Fraction * topoff.perPsi }
     );
-  } else if (moves(topN2Needed.perPsi)) {
-    const exactPsi = -topN2Needed.atZero / topN2Needed.perPsi;
+  } else if (moves(dN2.perPsi)) {
+    // dN2 is topN2Needed rounded differently; pinning with dN2's own coefficients puts the pin
+    // exactly on dN2's cap below, so rounding cannot leave an empty range.
+    const exactPsi = -dN2.atZero / dN2.perPsi;
     minPsi = Math.max(minPsi, exactPsi);
     maxPsi = Math.min(maxPsi, exactPsi);
   }

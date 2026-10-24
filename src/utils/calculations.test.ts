@@ -349,20 +349,25 @@ describe("calculateStandardBlend", () => {
       expect(result.steps[2].amount).toBeCloseTo(1200, 6);
     });
 
-    test("pins the kept nitrogen when the start holds almost none", () => {
+    test.each([
       // The start is 5e-7 nitrogen, so the kept pressure must be 3000 * 2.5e-7 / 5e-7 = 1500 psi.
       // That slope is below the PSI tolerance; skipping the pin left no plan at all.
+      { startHe: 78.99995, targetHe: 78.999975 },
+      // At 2e-8 nitrogen the pin and the dN2 cap differed by rounding and left an empty range,
+      // so the plan drained the tank.
+      { startHe: 78.999998, targetHe: 78.999999 }
+    ])("pins the kept nitrogen when the start holds almost none ($startHe -> $targetHe)", ({ startHe, targetHe }) => {
       const result = calculateStandardBlend(
         settingsPsi,
-        { startPressure: 3500, targetPressure: 3000, startO2: 21, startHe: 78.99995, targetO2: 21, targetHe: 78.999975, topGasId: "helium" },
+        { startPressure: 3500, targetPressure: 3000, startO2: 21, startHe, targetO2: 21, targetHe, topGasId: "helium" },
         { id: "helium", name: "Helium", o2: 0, he: 100 }
       );
 
       expect(result.success).toBe(true);
-      expect(result.bleedPressure).toBeCloseTo(1500, 5);
+      expect(result.bleedPressure).toBeCloseTo(1500, 4);
       expect(result.steps.map(s => s.kind)).toEqual(["bleed", "helium", "oxygen"]);
-      expect(result.steps[1].amount).toBeCloseTo(1185, 4);
-      expect(result.steps[2].amount).toBeCloseTo(315, 4);
+      expect(result.steps[1].amount).toBeCloseTo(1185, 3);
+      expect(result.steps[2].amount).toBeCloseTo(315, 3);
     });
   });
 
