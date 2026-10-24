@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **Standard Blend Bleed Search**: Standard Blend now finds a bleed-down plan whenever one exists. The search halved the start pressure and assumed that keeping less start gas always helps, but with a top-off gas richer in O2 than the target, keeping too little leaves the top-off too rich. 3500 psi of Air to 25/0 at 3000 psi with an EAN32 bank reported "Bleed-down required" with no plan; it now bleeds to 2848.1 psi and adds 151.9 psi of oxygen. Oxygen, Helium, and heliox top-off gases now also get a bleed plan when the start holds more nitrogen than the target needs: 3000 psi of Air to 32/0 with Oxygen bleeds to 2582.3 psi and adds 417.7 psi of oxygen. A start that already holds the target mix bleeds to exactly the target pressure, and an invalid mix such as 60/50 now shows its mix error when the start is above the target pressure. Max Target Without Helium checks its answer with the same planner, so it now answers these cases too instead of reporting that the target needs helium. Plans that already worked are unchanged.
+
 ## [1.2.1] - 2026-10-08
 
 Released to the web only; the native apps stay on 1.2.0 until the next native release.

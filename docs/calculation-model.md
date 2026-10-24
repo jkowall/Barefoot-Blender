@@ -14,17 +14,17 @@ Inputs:
 Steps:
 1. Convert displayed pressures into PSI when the user is working in bar.
 2. Compute net oxygen, helium, and nitrogen partial pressure deltas between start and target states.
-3. Validate fractions (0 ≤ gas ≤ 100 and O₂ + He ≤ 100).
+3. Validate fractions (0 ≤ gas ≤ 100 and O₂ + He ≤ 100). Validation runs before the bleed-down check, so an invalid mix reports its error even when the start pressure is above the target pressure.
 4. Solve the linear system:
    - ΔO₂ = O₂_added + O₂_top
    - ΔHe = He_added + He_top
    - ΔN₂ = N₂_top
 
    where top-gas fractions distribute across the added top-off pressure.
-5. If the solution requires negative additions or cannot satisfy the target composition, trigger **bleed-down** search:
-   - Perform a binary search on a lower start pressure.
-   - Re-run the solver until a feasible plan is found.
-   - Snap to the exact bleed pressure. Each addition is linear in the start pressure, so the highest workable start is where the first addition that shrinks as the start rises reaches zero. That addition then drops out of the plan instead of showing as a few millionths of a PSI.
+5. If the solution requires negative additions or cannot satisfy the target composition, solve a **bleed-down**:
+   - Find the range of start pressures to keep in closed form. Every amount the solver checks (ΔO₂, ΔHe, ΔN₂, and the helium, oxygen, and top-off additions) is linear in the kept pressure, so the workable kept pressures form one range. An amount that shrinks as more start gas is kept caps the range. An amount that grows sets a floor: oxygen does when the top gas is richer in O₂ than the target (an EAN32 bank for a 25% target), because keeping too little start gas leaves the top-off too rich. A nitrogen-free top gas (Oxygen, Helium, or heliox) cannot add nitrogen, so the kept gas must hold exactly the nitrogen the target needs, which pins the range to one pressure.
+   - Bleed to the top of that range, capped at the start and target pressures, so the plan keeps as much start gas as possible. Re-run the solver there to confirm the plan. The addition that limits the range is zero at its top, so it drops out of the plan. When the start already holds the target mix, the plan is the bleed to the target pressure alone.
+   - If no kept pressure works, fall back to draining the tank completely when an empty-tank fill works.
    - Omit additions of 0.01 PSI or less from the bleed plan. Targets that nearly put two limits on the same bleed pressure (for example a He% rounded to 4 decimals) leave thousandths of a PSI that no one can meter.
    - Output an explicit bleed instruction (`BLEED tank down to ...`).
 6. Emit warnings for hypoxic (<18% O₂) and high-oxygen (>40% O₂) mixes.
