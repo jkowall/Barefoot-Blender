@@ -332,6 +332,40 @@ describe("calculateStandardBlend", () => {
     });
   });
 
+  describe("bleed-down limits that barely move with the kept pressure", () => {
+    test("keeps the oxygen limit when its slope is below the PSI tolerance", () => {
+      // Oxygen to add falls by only 1.3e-7 psi per psi kept, but still crosses zero at 1500 psi:
+      // 1500 * 0.202 + 1200 * 0.2095 = 554.4 = 18.48% of 3000. Dropping that limit drained the tank.
+      const result = calculateStandardBlend(
+        settingsPsi,
+        { startPressure: 3500, targetPressure: 3000, startO2: 20.2, startHe: 3.58, targetO2: 18.48, targetHe: 11.79, topGasId: "air2095" },
+        { id: "air2095", name: "Air 20.95", o2: 20.95, he: 0 }
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.bleedPressure).toBeCloseTo(1500, 6);
+      expect(result.steps.map(s => s.kind)).toEqual(["bleed", "helium", "topoff"]);
+      expect(result.steps[1].amount).toBeCloseTo(300, 6);
+      expect(result.steps[2].amount).toBeCloseTo(1200, 6);
+    });
+
+    test("pins the kept nitrogen when the start holds almost none", () => {
+      // The start is 5e-7 nitrogen, so the kept pressure must be 3000 * 2.5e-7 / 5e-7 = 1500 psi.
+      // That slope is below the PSI tolerance; skipping the pin left no plan at all.
+      const result = calculateStandardBlend(
+        settingsPsi,
+        { startPressure: 3500, targetPressure: 3000, startO2: 21, startHe: 78.99995, targetO2: 21, targetHe: 78.999975, topGasId: "helium" },
+        { id: "helium", name: "Helium", o2: 0, he: 100 }
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.bleedPressure).toBeCloseTo(1500, 5);
+      expect(result.steps.map(s => s.kind)).toEqual(["bleed", "helium", "oxygen"]);
+      expect(result.steps[1].amount).toBeCloseTo(1185, 4);
+      expect(result.steps[2].amount).toBeCloseTo(315, 4);
+    });
+  });
+
   test("Bleed plan with a nitrogen-free top gas keeps exactly the nitrogen the target needs", () => {
     // Oxygen cannot add nitrogen, so the kept Air must hold 0.68 * 3000 psi of it: 2040 / 0.79.
     const result = calculateStandardBlend(

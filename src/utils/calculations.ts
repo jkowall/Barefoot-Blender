@@ -282,8 +282,8 @@ type AffineInStartPsi = { atZero: number; perPsi: number };
 // start pressure b, so the workable pressures form one range: an amount that falls as b rises caps
 // it, and one that rises with b (oxygen when the top gas is richer in O2 than the target) floors
 // it. A nitrogen-free top gas cannot add the nitrogen the target needs, so the start must hold
-// exactly that much, which pins b to a single pressure. Amounts that barely move with b set no
-// limit here; solveBlendInternal still checks them.
+// exactly that much, which pins b to a single pressure. An amount that moves by no more than
+// tolerance across [0, ceilingPsi] sets no limit here; solveBlendInternal still checks it.
 const leastBleedPressurePsi = (
   targetPressure: number,
   fractions: BlendFractions,
@@ -310,6 +310,10 @@ const leastBleedPressurePsi = (
     perPsi: -1 - dHe.perPsi - dO2.perPsi
   };
 
+  // Whether an amount moves by more than tolerance across the range. A per-PSI cutoff would drop
+  // slopes such as -1.3e-7 that still move an addition by 4e-4 psi over 3000 psi.
+  const moves = (perPsi: number): boolean => Math.abs(perPsi) * ceilingPsi > tolerance;
+
   let minPsi = 0;
   let maxPsi = ceilingPsi;
   const amounts = [dO2, dHe, dN2];
@@ -320,16 +324,19 @@ const leastBleedPressurePsi = (
       { atZero: dHe.atZero - topHeFraction * topoff.atZero, perPsi: dHe.perPsi - topHeFraction * topoff.perPsi },
       { atZero: dO2.atZero - topO2Fraction * topoff.atZero, perPsi: dO2.perPsi - topO2Fraction * topoff.perPsi }
     );
-  } else if (Math.abs(topN2Needed.perPsi) > tolerance) {
+  } else if (moves(topN2Needed.perPsi)) {
     const exactPsi = -topN2Needed.atZero / topN2Needed.perPsi;
     minPsi = Math.max(minPsi, exactPsi);
     maxPsi = Math.min(maxPsi, exactPsi);
   }
 
   for (const { atZero, perPsi } of amounts) {
-    if (perPsi < -tolerance) {
+    if (!moves(perPsi)) {
+      continue;
+    }
+    if (perPsi < 0) {
       maxPsi = Math.min(maxPsi, -atZero / perPsi);
-    } else if (perPsi > tolerance) {
+    } else {
       minPsi = Math.max(minPsi, -atZero / perPsi);
     }
   }
