@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@capacitor/core": "^8.5.2",
-    "@revenuecat/purchases-capacitor": "^13.4.0",
+    "@revenuecat/purchases-capacitor": "^13.7.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "workbox-window": "^7.4.1",
