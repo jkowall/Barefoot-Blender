@@ -27,7 +27,7 @@
     "mobile:android:debug": "npm run build:mobile:debug && cap open android"
   },
   "dependencies": {
-    "@capacitor/core": "^8.5.2",
+    "@capacitor/core": "^8.5.3",
     "@revenuecat/purchases-capacitor": "^13.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
